@@ -1,4 +1,4 @@
-import { assertKnowledgeMapCoverage, knowledgeMapArticleTargets } from "./knowledgeMapCoverage.js";
+import { assertKnowledgeMapCoverage, knowledgeMapArticleTargets, packageMenuTargets } from "./knowledgeMapCoverage.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { projectKnowledgeMap, knowledgeMapTargetKey, type PackageDefinition, type KnowledgeMap } from "@c4a/context";
@@ -29,7 +29,8 @@ export async function writePackageKnowledgeMap(input: {
   projectRoot: string; pkg: PackageDefinition; selected: readonly ApprovedKnowledgeFile[];
   structure: KnowledgeMap | undefined;
 }) {
-  assertKnowledgeMapCoverage(input.structure, knowledgeMapArticleTargets(input.selected));
+  const menu = packageMenuTargets([input.pkg]);
+  assertKnowledgeMapCoverage(input.structure, knowledgeMapArticleTargets(input.selected).filter(target => !menu.has(target.artifact_ref)));
   if (input.structure === undefined || input.pkg.kind !== "package.kb") return [];
   const projected = projectKnowledgeMap(input.structure, packageKnowledgeMapTargets(input.pkg, input.selected));
   // Website-only pages are intentionally unavailable in the knowledge package.

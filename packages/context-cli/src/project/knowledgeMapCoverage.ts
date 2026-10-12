@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { validateArticleStructureEntries, type ArticleStructureEntry, type KnowledgeMap } from "@c4a/context";
+import { validateArticleStructureEntries, type ArticleStructureEntry, type KnowledgeMap, type PackageDefinition } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readApprovedKnowledgeMetadataIndex, hydrateApprovedKnowledgeMarkdown } from "./approvedKnowledgeMetadata.js";
@@ -9,6 +9,11 @@ import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
 export type KnowledgeMapArticleTarget = { artifact_ref: string; section_keys: string[]; title?: string };
+/** Articles a website places in its More menu; the knowledge map does not need to bind them. */
+export function packageMenuTargets(packages: readonly PackageDefinition[]): Set<string> {
+  return new Set(packages.flatMap(pkg => pkg.kind === "package.kb"
+    ? (pkg.site?.more ?? []).flatMap(item => item.target ? [item.target.artifact_ref] : []) : []));
+}
 export function knowledgeMapArticleTargets(files: readonly { content: string; article?: ArticleStructureEntry | undefined }[]): KnowledgeMapArticleTarget[] {
   return files.flatMap(file => {
     const meta = parseKnowledgeFrontmatter(file.content);

@@ -1,5 +1,5 @@
 import { loadReviewCandidateAuthority } from "./reviewCandidateAuthority.js";
-import { approvedKnowledgeMapTargets, assertKnowledgeMapCoverage, type KnowledgeMapArticleTarget } from "./knowledgeMapCoverage.js";
+import { approvedKnowledgeMapTargets, assertKnowledgeMapCoverage, packageMenuTargets, type KnowledgeMapArticleTarget } from "./knowledgeMapCoverage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
@@ -22,6 +22,12 @@ async function optionalText(root: string, path: string): Promise<string | undefi
 export async function readKnowledgeMap(root: string): Promise<KnowledgeMap | undefined> {
   const content = await optionalText(root, KNOWLEDGE_MAP_PATH);
   return content === undefined ? undefined : validateKnowledgeMap(parse(content));
+}
+/** More menu targets declared by the project's website packages. */
+export async function projectMenuTargets(root: string): Promise<Set<string>> {
+  const { isContextProjectRoot, loadContextProjectModule } = await import("./workspace.js");
+  if (!isContextProjectRoot(root)) return new Set();
+  return packageMenuTargets((await loadContextProjectModule(root)).project.packages);
 }
 
 /** Read-only, patch-ready navigation state, available before generating a report. */
@@ -59,7 +65,8 @@ export async function acceptStructureDecision(input: {
     const next = input.knowledge_map === undefined ? current : updateKnowledgeMap(current, input.knowledge_map);
     if (input.article_targets !== undefined) {
       const known = [...await approvedKnowledgeMapTargets(input.projectRoot), ...input.article_targets];
-      assertKnowledgeMapCoverage(next, known, { known, require_update: true, has_update: input.knowledge_map !== undefined, revision: input.revision, current_revision: current?.revision ?? null });
+      const menu = await projectMenuTargets(input.projectRoot);
+      assertKnowledgeMapCoverage(next, known.filter(target => !menu.has(target.artifact_ref)), { known, require_update: true, has_update: input.knowledge_map !== undefined, revision: input.revision, current_revision: current?.revision ?? null });
     }
     const writes = [{ path: input.decisionPath, content: canonicalIndexerJson({ revision: input.revision, decision: "approved" }) }];
     if (input.knowledge_map !== undefined) writes.push({ path: KNOWLEDGE_MAP_PATH, content: stringify(next) });
@@ -89,7 +96,9 @@ export async function applyKnowledgeMapUpdate(projectRoot: string, update: Knowl
       artifact_ref: candidate.article_id, title: candidate.review.title,
       section_keys: candidate.indexer_candidate.sections.map(section => section.section_key),
     }));
-    assertKnowledgeMapCoverage(next, approved, { known: [...approved, ...planned, ...accepted], current_revision: current?.revision ?? null });
+    const menu = await projectMenuTargets(projectRoot);
+    assertKnowledgeMapCoverage(next, approved.filter(target => !menu.has(target.artifact_ref)),
+      { known: [...approved, ...planned, ...accepted], current_revision: current?.revision ?? null });
     const content = stringify(next);
     const previous = await optionalText(projectRoot, KNOWLEDGE_MAP_PATH);
     await runDurableMultiFileTransaction({ projectRoot, kind: "adjust-knowledge-map", proposal_digest: next.revision,

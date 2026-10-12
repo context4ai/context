@@ -13,7 +13,7 @@ import { saveReviewReportScope } from "./reviewReportScope.js";
 import { REVIEW_SITE_CLIENT } from "./reviewSiteClient.js";
 import { REVIEW_SITE_STYLES } from "./reviewSiteStyles.js";
 
-import { readKnowledgeMap, KNOWLEDGE_MAP_PATH } from "./knowledgeMap.js";
+import { projectMenuTargets, readKnowledgeMap, KNOWLEDGE_MAP_PATH } from "./knowledgeMap.js";
 
 const REVIEW_HTML_ROOT = join(".tmp", "context-runtime", "review");
 
@@ -106,7 +106,8 @@ export async function writeReviewHtml(input: {
   }
   await writeFile(outPath, renderReviewHtml(model, diagramScript), "utf8");
   await saveReviewReportScope(input.projectRoot, reviewScope, candidates, model.baselineHash);
-  const unplaced = model.pages.filter(page => page.candidate_id &&
+  const menu = await projectMenuTargets(input.projectRoot);
+  const unplaced = model.pages.filter(page => page.candidate_id && !menu.has(page.id) &&
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));
   return {
