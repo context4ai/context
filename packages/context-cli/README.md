@@ -21,9 +21,9 @@ See the [plugin ABI and build instructions](../context-evidence-wasm/README.md).
 
 `@c4a/context-cli` ships the local runtime and Agent integration for the
 Context knowledge production workflow. Despite the package name, its primary
-user experience is not a terminal command catalog: users invoke one Agent
-entry, describe the knowledge they want, and follow the decisions explained in
-conversation.
+user experience is not a terminal command catalog: users invoke the production
+Agent entry, describe the knowledge they want, and follow the decisions
+explained in conversation.
 
 The runtime performs deterministic work—workspace observation, source capture,
 code indexing, evidence validation, candidate staging, review application,
@@ -58,9 +58,12 @@ host-namespaced Context entry and projects `context-code-indexer` and
 `context-sessions-indexer` as unnamespaced lifecycle Provider Skills for
 Claude, Codex, and Cursor.
 
-The public community entry is `/c4a:context`. It creates a requested workspace,
-locates an existing workspace, or resumes the current workflow. Users should
-start with intent, not internal commands:
+The production entry is `/c4a:context`. It creates a requested workspace,
+locates an existing workspace, or resumes the current workflow. The other public
+entries are `/c4a:context-plan`, `/c4a:context-inspect-search` and
+`/c4a:context-repo-content` (Cursor: `/c4a-context-*`); see the
+[plugin contract](../../plugins/context/README.md). Users should start with
+intent, not internal commands:
 
 ```text
 /c4a:context Turn these product documents and this repository into a reviewed

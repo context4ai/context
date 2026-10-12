@@ -6,9 +6,11 @@
 Most users work through the Context Agent and CLI; project authors use this
 package to declare source capture and package output.
 
-Knowledge authoring has one path: `src/indexers.yaml` selects Indexer Providers
-and owns requirements, profiles, scopes, and customization. Code and Markdown
-knowledge are not produced by project phases in `src/index.ts`.
+Knowledge authoring has one path through the Indexer lifecycle.
+`src/indexers.yaml` holds only the confirmed reader requirements, authorized
+sources and exclusions; installed Indexer Skills are chosen per task in the
+temporary production plan. Code and Markdown knowledge are not produced by
+project phases in `src/index.ts`.
 
 ## Project boundary
 

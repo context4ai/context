@@ -12,16 +12,22 @@ graph TD
   context["@c4a/context"]
   extract["@c4a/extract"]
   extractTs["@c4a/extract-ts"]
+  extractGo["@c4a/extract-go"]
+  parsers["@c4a/extract-{rush,mdx,proto,thrift,contract,sql,style}"]
   tui["@c4a/tui"]
   contextCli["@c4a/context-cli"]
   devCli["@c4a/dev-cli"]
 
   extract --> core
   extractTs --> extract
+  extractGo --> extract
+  parsers --> core
   contextCli --> context
   contextCli -. build-time bundle .-> core
   contextCli -. build-time bundle .-> extract
   contextCli -. build-time bundle .-> extractTs
+  contextCli -. build-time bundle .-> extractGo
+  contextCli -. build-time bundle .-> parsers
   devCli --> core
   devCli --> tui
 ```

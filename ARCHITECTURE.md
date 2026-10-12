@@ -59,14 +59,17 @@ packages/context        SDK: project definition, sources, phases, package config
        │
 packages/context-cli    CLI: workspace lifecycle, validation, review, build
        ▲       ▲
-       │       │
-packages/extract-ts ────┘       TypeScript / TSX code extraction plugin
-       ▲
+       │       └──────── extraction packages (bundled at build time)
+       │                 extract-ts, extract-go     → extract → core
+       │                 extract-rush, extract-mdx,
+       │                 extract-proto, extract-thrift,
+       │                 extract-contract, extract-sql,
+       │                 extract-style              → core
        │
-packages/extract        extraction protocol, scanning, parser helpers, snapshots
-
 @c4a/agent-graph       model-free workflow contract evaluation and resources
+packages/extract        extraction protocol, scanning, parser helpers, snapshots
 packages/core           shared schemas/utilities used by dev and extraction code
+packages/context-evidence-wasm  Source Graph read plugin (Wasm), installed by `context evidence`
 packages/tui            Ink terminal components
 packages/dev-cli ──────► build/link/publish/development menu
 ```
@@ -78,7 +81,11 @@ Modification blast radius:
   formats, review/apply behavior, and package output.
 - `@c4a/agent-graph` is an external runtime dependency used only by the bundled
   Context workflow adapter; Context owns its Provider and host bindings.
-- `packages/extract` and `packages/extract-ts` affect codegraph extraction.
+- `packages/extract` and the `packages/extract-*` parsers affect code
+  extraction for their languages and formats; see
+  [code extractors](packages/context/docs/reference/code-extractors.md).
+- `packages/context-evidence-wasm` affects source enrichment of Source Graph
+  reads only; it does not change local retrieval or production.
 - `packages/tui` and `packages/dev-cli` only affect development tooling.
 
 ## Runtime & Build
@@ -117,13 +124,12 @@ init
   └── creates project-local workspace, src/index.ts, AGENTS.md, templates
 
 source add / capture
-  └── declares local/Lark/repo sources and snapshots source evidence
+  └── declares repo/file/Lark sources, imports managed notes and sessions,
+      and snapshots source evidence
 
-align
-  └── reads evidence views and writes context.structure.v1 drafts
-
-compile
-  └── turns confirmed structure sections into source-mirrored draft pages
+run-indexer-lifecycle
+  └── selected Indexer Providers investigate authorized inputs and write
+      the current Candidate batch
 
 review
   └── approval authority boundary; apply writes approved knowledge pages
@@ -136,6 +142,10 @@ build
 
 verify
   └── validates source refs, frontmatter, approved structure, and package state
+
+update / revise / version
+  └── locate knowledge affected by source changes, repair one page through
+      the Indexer lifecycle, and record the workspace SemVer and changelog
 ```
 
 The main state directories are:
@@ -155,7 +165,8 @@ The SDK package is the project declaration surface. A workspace `src/index.ts`
 uses `defineProject()` to declare:
 
 - `sources`: stable source handles such as repo, file, or Lark sources.
-- `phases`: capture, extraction, prose align, prose compile, and review checks.
+- `phases`: capture and custom non-knowledge orchestration; knowledge authoring
+  starts from the Indexer registry (see [Indexer Lifecycle](#indexer-lifecycle)).
 - `packages`: portable outputs such as knowledge-base packages and LLM bundles.
 
 Key SDK modules:
@@ -183,16 +194,24 @@ Important identity concepts:
 
 | Command | Backing module | Purpose |
 |---|---|---|
+| `context entry` | `project/workflow/*` | Resolve initialization, workspace relocation, or current workflow evaluation for the Agent entry |
 | `context init` | `project/workspace.ts` | Create project-local workspace files |
 | `context plugin ...` | `project/pluginInstall.ts` | Install or inspect bundled agent plugins |
+| `context evidence ...` | `commands/evidenceCommands.ts` | Install or inspect the repository evidence Wasm plugin |
 | `context status` | `project/status*.ts`, `project/workflow/*` | Observe facts, evaluate the Provider, and return the current route/resources |
-| `context source ...` | `project/sourceCommands.ts` | Declare, inspect, and manage sources |
-| `context indexer ...` | `project/indexerCommands.ts`, `project/indexer*.ts` | Confirm requirements, resolve Providers, run/recover worksets, reconcile, audit, and compile Candidates |
-| `context run <phase>` | `project/run.ts` | Execute capture and any explicitly declared legacy extraction/align/compile phase |
-| `context review ...` | `project/review*.ts` | Review HTML, approve/reject, re-pin, deprecate |
+| `context resource ...`, `context action ...` | `commands/resourceCommands.ts`, `commands/actionCommands.ts` | Read and acknowledge Route resources; complete the selected semantic or Gate action |
+| `context source ...` | `project/sourceCommands.ts` | Discover, fetch, import, register, restore, rename, and remove sources |
+| `context run <phase>` | `project/run.ts` | Inspect or run a declared capture or custom phase |
+| `context update`, `context revise <target>` | `commands/documentRevisionCommands.ts`, `project/knowledgeUpdate*.ts` | Inspect source changes against approved knowledge; repair one Candidate or approved page through the Indexer lifecycle |
+| `context task ...` | `project/task*.ts` | Explicit current-task recovery |
+| `context review ...` | `project/review*.ts` | `html`, `list`, `apply`, `approve`, `approve-all`, `reject`, `deprecate` |
 | `context close` | `project/close.ts` | Derive approved structure and run final checks |
-| `context build` | `project/packageBuilder.ts` | Produce package output and inventory |
+| `context build`, `context package ...` | `project/packageBuilder.ts` | Produce package output and inventory; inspect or resolve package configuration |
+| `context translate ...` | `commands/translateCommands.ts` | Translate approved knowledge for `site.locales` |
+| `context version ...` | `commands/versionCommands.ts` | Inspect formal changes and record the workspace SemVer and changelog |
 | `context verify` | `project/verify*.ts` | Validate approved workspace state |
+| `context indexer ...` | `project/indexerCommands.ts` | List bundled Skills (`catalog`) or inspect a benchmark result |
+| `context debug ...`, `context clean-cache` | `commands/debugCommands.ts`, `commands/cleanClaudePluginCache.ts` | Workspace-local traces; orphaned plugin cache cleanup |
 
 All user-visible failures are normalized through `ContextError` and
 `cliFeedback.ts`. Workspace routing authority is `workflow.current`; the
@@ -228,7 +247,8 @@ requirements, Provider, workset, Result, ledger, layout, audit, and Host ABI
 contracts. `packages/context-cli/src/project/indexer*.ts` owns project
 persistence, Provider resolution/staging, execution recovery, reconciliation,
 layout/audit and Candidate compile. Provider instructions and templates live in
-the bundled `context-code-indexer` and `context-markdown-indexer` Skills; the
+the bundled `context-code-indexer`, `context-markdown-indexer`,
+`context-note-indexer` and `context-sessions-indexer` Skills; the
 CLI does not hard-code their editorial or technology-specific authoring logic.
 
 The default Graph does not route through the retired extraction, prose-align,
@@ -249,7 +269,7 @@ current-conversation managed mode uses one revision-bound atomic approval.
 | `reviewApply.ts` | Apply approved/rejected decisions |
 | `reviewShared.ts` | Candidate snapshots, scope hashes, identity helpers |
 | `reviewSourceExcerpts.ts` | Review evidence excerpts |
-| `reviewMaintenance.ts` | Re-pin and deprecate maintenance commands |
+| `reviewMaintenance.ts` | Deprecate an approved page without deleting it |
 | `candidateIdentity.ts` | Candidate/ViewRef identity helpers |
 
 Approved Markdown stores stable identity in frontmatter and source-backed
@@ -338,9 +358,11 @@ Artifacts; Review/apply then writes readable approved knowledge pages.
 ## Agent Entries And Workflow Provider
 
 The CLI plugin source lives under `plugins/context` at the repository root.
-It contains one public `context` entry Skill plus manifests/assets.
-It delegates workspace bootstrap to `context entry` and lifecycle routing to
-Agent Graph. Build derives host-specific entries under
+It contains four public entry Skills (`context`, `context-plan`,
+`context-inspect-search`, `context-repo-content`), the four Indexer Provider
+Skills, `context-indexer-create`, and manifests/assets. The `context` entry
+delegates workspace bootstrap to `context entry` and lifecycle routing to
+Agent Graph; the other public Skills hand production work back to it. Build derives host-specific entries under
 `packages/context-cli/dist/plugins`.
 
 The lifecycle contract lives under `packages/context-cli/context-workflow`: a
@@ -353,7 +375,9 @@ Important areas:
 
 | Path | Role |
 |---|---|
-| `plugins/context/skills/context` | Single thin public Context entry |
+| `plugins/context/skills/context` | Thin public production entry |
+| `plugins/context/skills/context-{plan,inspect-search,repo-content}` | Public planning, query, and same-repository content entries |
+| `plugins/context/skills/context-*-indexer`, `context-indexer-create` | Indexer Providers selected by the workflow, and the Indexer authoring Skill |
 | `plugins/context/assets` | Plugin brand assets |
 | `context-workflow/graphs` | Stable task and gate graph |
 | `context-workflow/actions` | Host-resolved action contracts |

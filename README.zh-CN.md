@@ -40,8 +40,8 @@ npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-重启或刷新 Agent 宿主，然后调用 `/c4a:context`。这是创建新工作区和继续已有
-工作区的唯一公开入口。无需先学习生命周期命令，直接用自然语言说明知识目标即可，
+重启或刷新 Agent 宿主，然后调用 `/c4a:context`。这个生产入口既能创建新工作区，
+也能继续已有工作区。无需先学习生命周期命令，直接用自然语言说明知识目标即可，
 例如：
 
 ```text
@@ -52,6 +52,12 @@ context plugin install
 安装的入口只保留启动契约；Context 运行时会提供完整的工作流说明、Schema、代码
 索引能力和当前下一步动作。如果本机缺少 `context` 运行时，入口会给出安装恢复
 方法，不会猜测状态或只初始化一半工作区。
+
+同一次安装还提供三个公开入口：`/c4a:context-plan` 规划大型项目和大范围的来源
+更新，`/c4a:context-inspect-search` 基于知识回答问题并追溯到来源，
+`/c4a:context-repo-content` 维护同仓库的文档和技能，不启动知识生产。代码、
+Markdown、笔记和会话四个 Indexer 技能由工作流选用，不直接调用。详见
+[插件契约](./plugins/context/README_CN.md)。
 
 ## 一套工作流，多种知识
 
@@ -129,6 +135,13 @@ Context 在生成完整本地产物后结束。将产物发布到托管知识服
 | `@c4a/extract-ts` | TypeScript/JavaScript 与 TSX/JSX 结构提取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
 | `@c4a/extract-go` | 可选 Go 结构提取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
 | `@c4a/extract-rush` | 可选 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
+| `@c4a/extract-mdx` | 可选 MDX 组件与示例目录 | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
+| `@c4a/extract-proto` | 可选 Protocol Buffers IDL 目录 | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
+| `@c4a/extract-thrift` | 可选 Apache Thrift IDL 目录 | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
+| `@c4a/extract-contract` | 可选 OpenAPI 与 GraphQL 契约目录 | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
+| `@c4a/extract-sql` | 可选按方言绑定的 SQL 证据 | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
+| `@c4a/extract-style` | 可选 CSS 与 SCSS 证据 | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
+| `context-evidence-wasm` | 为 Source Graph 读取附加已登记章节来源的插件 | [English](./packages/context-evidence-wasm/README.md) |
 | `@c4a/dev-cli` | 仓库开发和发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
 | `@c4a/tui` | 开发工具共用的终端组件 | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
 

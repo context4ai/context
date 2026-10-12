@@ -184,7 +184,10 @@ may be rebuilt; it is not an authoring source.
 the same build, beside the KB directory. `<base>` removes one trailing `-kb`
 from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,
 `lang`, a deployment `base` path, an optional top-bar `titleLink`, and an
-optional `home` presentation. `home`
+optional `home` presentation. Navigation and language fields are `nav`, `more`,
+`socialLinks`, `locales` and `localePreferenceKey`; see
+[Package Outputs](../guides/package-outputs.md) and
+[Site translation](../guides/site-translation.md). `home`
 accepts `title`, `slogan`, `description`, hero `actions`, and `resources` shown
 below the generated site map. Each resource needs an `href`, a copyable
 `command`, or both. Omit unknown resources; the builder never invents service
@@ -192,8 +195,8 @@ or repository links. Knowledge map is projected from
 `src/knowledge-map.yaml` independently of KB directories; see
 [Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 
-`site.extensions` optionally names a trusted `src/site` root, homepage and floating
-`slots`, and custom Markdown `pages`. Place custom pages in the same knowledge map
+`site.extensions` optionally names a trusted `src/site` root, homepage, footer,
+brand and floating `slots`, and custom Markdown `pages`. Place custom pages in the same knowledge map
 with `target.artifact_ref: "site:<page-key>"`. See
 [Page content customization](../guides/page-customization.md) for the configuration
 and the boundary between presentation code and approved knowledge.

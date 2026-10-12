@@ -49,10 +49,10 @@ npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-Restart or refresh the Agent host, then invoke `/c4a:context`. This is the
-single public entry for both new and existing workspaces. You do not need to
-learn the lifecycle commands first; describe the knowledge goal in normal
-language, for example:
+Restart or refresh the Agent host, then invoke `/c4a:context`. This production
+entry serves both new and existing workspaces. You do not need to learn the
+lifecycle commands first; describe the knowledge goal in normal language, for
+example:
 
 ```text
 /c4a:context Build an Agent knowledge package from this repository and our
@@ -64,6 +64,14 @@ The installed entry contains the bootstrap contract, while the Context runtime
 provides the complete workflow guidance, schemas, code-indexing capabilities,
 and current next action. If the `context` runtime is missing, the entry explains
 how to install it instead of guessing or partially initializing a workspace.
+
+The same installation adds three more public entries: `/c4a:context-plan` plans
+large projects and broad source updates, `/c4a:context-inspect-search` answers
+questions from knowledge and traces them to their sources, and
+`/c4a:context-repo-content` maintains same-repository docs and Skills without
+starting production. The Code, Markdown, Note and Sessions Indexer Skills are
+selected by the workflow rather than invoked directly. See the
+[plugin contract](./plugins/context/README.md).
 
 ## One workflow, several kinds of knowledge
 
@@ -155,6 +163,13 @@ upload path when available instead of reconstructing a remote installation.
 | `@c4a/extract-ts` | TypeScript/JavaScript and TSX/JSX structure extraction | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
 | `@c4a/extract-go` | Optional Go structure extraction | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
 | `@c4a/extract-rush` | Optional Rush workspace structure index | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
+| `@c4a/extract-mdx` | Optional MDX component and example catalog | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
+| `@c4a/extract-proto` | Optional Protocol Buffers IDL catalog | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
+| `@c4a/extract-thrift` | Optional Apache Thrift IDL catalog | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
+| `@c4a/extract-contract` | Optional OpenAPI and GraphQL contract catalog | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
+| `@c4a/extract-sql` | Optional dialect-bound SQL evidence | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
+| `@c4a/extract-style` | Optional CSS and SCSS evidence | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
+| `context-evidence-wasm` | Source Graph read plugin that attaches registered section sources | [English](./packages/context-evidence-wasm/README.md) |
 | `@c4a/dev-cli` | Repository development and release menu | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
 | `@c4a/tui` | Shared terminal components for development tools | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
 
