@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile, rm, symlink, cp, access, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, posix } from "node:path";
-import { loadSourcesRegistry, projectKnowledgeMap, knowledgeMapTargetKey, type PackageDefinition, type KnowledgeMap, type ProjectedKnowledgeMapEntry } from "@c4a/context";
+import { loadSourcesRegistry, projectKnowledgeMap, knowledgeMapTargetKey, type PackageDefinition, type PackageSiteDefinition, type KnowledgeMap, type ProjectedKnowledgeMapEntry } from "@c4a/context";
 import { walkPackageFiles } from "./packageBuildReceipt.js";
 import { packageKnowledgeOutputPath } from "./packageDistribution.js";
 import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
@@ -27,7 +27,7 @@ import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, res
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v48-reader-locales:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v49-locale-home-fallback:${createHash("sha256")
   .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -165,6 +165,25 @@ async function compileSite(root: string, outDir: string) {
       else reject(new Error(`Website build failed (${signal ?? code}). Existing package was preserved. Fix the reported rendering error and rerun context build.\n${tail}`));
     });
   });
+}
+
+/** Each homepage field falls back from the reader language to the site's own setting, then to the built-in default. */
+export function siteHomeHero(options: PackageSiteDefinition,
+  input: { tag: string; primary: string; packageName: string; firstSection: string }) {
+  const chinese = input.tag.toLowerCase().startsWith("zh");
+  const locale = input.tag === input.primary ? undefined : options.locales?.[input.tag];
+  const own = locale?.home;
+  const featured = (own?.resources ?? options.home?.resources ?? []).filter(resource => resource.featured && resource.href);
+  return {
+    name: own?.title ?? locale?.title ?? options.home?.title ?? options.title ?? input.packageName,
+    text: own?.slogan ?? options.home?.slogan ?? (chinese ? "从知识地图开始探索" : "Explore from the knowledge map"),
+    tagline: own?.description ?? locale?.description ?? options.home?.description ?? options.description ?? "",
+    actions: own?.actions ?? options.home?.actions ?? [
+      { theme: "brand" as const, text: chinese ? "浏览知识" : "Browse knowledge", link: input.firstSection },
+      ...featured.map(resource => ({ theme: "alt" as const, text: resource.title, link: resource.href! })),
+      { theme: "alt" as const, text: "LLM Docs", link: "/llms/index.html" },
+    ],
+  };
 }
 
 export async function writePackageSite(input: {
@@ -306,24 +325,8 @@ export async function writePackageSite(input: {
       }));
     }
     const firstSection = sections[0]?.href ?? "/llms/index.html";
-    const heroFor = (tag: string) => {
-      const chinese = tag.toLowerCase().startsWith("zh");
-      const locale = tag === readers.primary ? undefined : options.locales?.[tag];
-      const home = locale ? locale.home : options.home;
-      const featured = (home?.resources ?? options.home?.resources ?? []).filter(resource => resource.featured && resource.href);
-      return {
-        name: (locale ? locale.home?.title ?? locale.title : options.home?.title) ?? options.title ?? pkg.name,
-        text: home?.slogan ?? (chinese ? "从知识地图开始探索" : "Explore from the knowledge map"),
-        tagline: (locale ? locale.home?.description ?? locale.description : options.home?.description ?? options.description) ?? "",
-        actions: home?.actions ?? [
-          { theme: "brand" as const, text: chinese ? "浏览知识" : "Browse knowledge", link: firstSection },
-          ...featured.map(resource => ({ theme: "alt" as const, text: resource.title, link: resource.href! })),
-          { theme: "alt" as const, text: "LLM Docs", link: "/llms/index.html" },
-        ],
-      };
-    };
     const heroTags = readers.translated ? readers.tags : [readers.primary];
-    const heroes = new Map(heroTags.map(tag => [tag, heroFor(tag)]));
+    const heroes = new Map(heroTags.map(tag => [tag, siteHomeHero(options, { tag, primary: readers.primary, packageName: pkg.name, firstSection })]));
     const hero = { name: localizedHtml(heroTags, tag => heroes.get(tag)!.name), text: localizedHtml(heroTags, tag => heroes.get(tag)!.text),
       tagline: localizedHtml(heroTags, tag => heroes.get(tag)!.tagline), actions: heroes.get(readers.primary)!.actions };
     const heroActions = readers.translated ? `contextHeroActions: ${JSON.stringify(Object.fromEntries([...heroes].map(([tag, value]) => [tag, value.actions])))}\n` : "";
