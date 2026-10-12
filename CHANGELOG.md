@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.62 - 2026-10-13
+
+- Approved articles targeted by `site.more` no longer need a knowledge map entry: package builds, knowledge map adjustments and structure approval accept them, and review reports no longer list them as unplaced.
+- The README, contributing, support and development guides now link to the documentation site at context4ai.org and describe the Context ecosystem.
+
 ## 0.7.61 - 2026-10-12
 
 - Apply a reader's saved light or dark choice from the first paint of a knowledge website; pages no longer flash the system scheme before loading.

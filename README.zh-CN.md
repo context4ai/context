@@ -5,167 +5,135 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](./package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-Context 是一套专为 Agent 打造的知识生产工作流。它将飞书文档、本地
-Markdown、代码仓库和人工整理的业务资料转化为结构化、可溯源的知识，再构建为
-Agent 知识包、LLM 文档或 Skills。
+**面向研发团队与 AI Agent 的知识工作流。**
 
-用户说明要生产什么知识、资料在哪里；Agent 阅读证据、设计结构并解释关键决策；
-Context 负责让整个过程合法且可重复：登记来源边界、检查证据覆盖、暂存可审查
-候选、保留来源关系、验证正式知识，并构建用户选择的产物。
+Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版本的知识，每条结论都能追溯到来源。Agent 先读知识，需要精确细节时再沿证据链读取原文。
 
-> 从知识目标开始，而不是从命令清单开始。
+[文档](https://context4ai.org/context/) ·
+[快速开始](https://context4ai.org/context/pages/2d2cb920187a515c51a72c1c7b071ab6.html) ·
+[English](./README.md) ·
+[参与贡献](./CONTRIBUTING.md) ·
+[发布说明](./CHANGELOG.md)
 
-[English](./README.md) · [SDK 指南](./packages/context/README.zh-CN.md) · [Agent 接入](./packages/context-cli/README.zh-CN.md) · [开发指南](./DEVELOPMENT.md)
+文档站与英文共用同一地址，按浏览器语言或手动选择显示中文。
 
-## 可以生产什么
+## 为什么用 Context
 
-当知识已经存在，但还不能直接被 Agent 稳定消费时，Context 可以帮助完成：
+- **知识即索引。** Indexer 技能从每类来源、每种技术栈中抽取要点，形成紧凑的知识库（通常约为来源体积的百分之一），并登记每条结论的出处。
+- **可追溯的证据。** 每个小节记录文件、行范围和版本，Agent 可以远程读取原文，不必重新克隆和检索。见[证据链](https://context4ai.org/context/pages/d2f41bdf9360d05ff944e1b475267498.html)。
+- **工作流，而不是一次性摘要。** 来源、结构、草稿、审阅与构建都是有记录的明确步骤；团队可以在数月内反复暂停、恢复、审阅和更新同一个工作区。
+- **更新与版本。** 来源变化时，Context 比较变化内容，只更新受影响的页面，并记录版本与变更日志。
+- **一个工作区，多种产物。** Agent 知识包、多语言文档站、LLM 文档与知识包技能。
 
-- 把产品、架构、运营、SOP 或 FAQ 文档整理为可导航的知识库；
-- 将代码结构与说明文档关联起来，同时保留精确的来源证据；
-- 把多个仓库和多组文档汇总为一份经过审核的知识包；
-- 产出 `wikis/`、`guides/`、`rules/`、`feats/`、聚合后的 LLM 文本或项目专属
-  Skills；
-- 来源发生变化后更新已有知识工作区，而不是依赖对话记忆从头重做。
+在大型团队与生产 Monorepo 的真实开发者问题上，与纯 LLM Wiki 方案相比，使用 Context 知识的 Agent 完整解决的问题更多，耗时不到一半，成本约为九分之一。方法与结果见[知识检索测评](https://context4ai.org/context/pages/06602fd2c6c83d3113540066149a34b9.html)。
 
-Context 不是一次性摘要工具。来源快照、审核状态、正式知识和构建清单都保存在
-本地工作区中，因此结果可以查看、纳入版本管理并在以后持续更新。
+## 快速开始
 
-## 从 Agent 开始使用
-
-只需安装一次 Context Agent 接入：
+安装 CLI 与 Agent 插件（一次即可）。插件会安装到本机可用的 Claude Code、Codex 与 Cursor：
 
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-重启或刷新 Agent 宿主，然后调用 `/c4a:context`。这个生产入口既能创建新工作区，
-也能继续已有工作区。无需先学习生命周期命令，直接用自然语言说明知识目标即可，
-例如：
+重启 Agent 会话，用自然语言说明想要的知识：
 
 ```text
-/c4a:context 请把当前仓库和架构文档整理成 Agent 知识包，代码引用必须可追溯，
-最终结构在批准前先让我确认。
+/c4a:context 基于这个仓库和我们的架构文档构建一个 Agent 知识包。代码引用要可追溯，
+最终结构批准前先问我。
 ```
 
-安装的入口只保留启动契约；Context 运行时会提供完整的工作流说明、Schema、代码
-索引能力和当前下一步动作。如果本机缺少 `context` 运行时，入口会给出安装恢复
-方法，不会猜测状态或只初始化一半工作区。
+无需先学习生命周期命令。Agent 按工作流推进，需要你决定时会询问，并汇报产出。继续阅读[安装](https://context4ai.org/context/pages/53535d85f2a932c36ba6afe78b0443ee.html)与[工作流概览](https://context4ai.org/context/pages/eaa1f43a31890e05489116bf68a03f9b.html)。
 
-同一次安装还提供三个公开入口：`/c4a:context-plan` 规划大型项目和大范围的来源
-更新，`/c4a:context-inspect-search` 基于知识回答问题并追溯到来源，
-`/c4a:context-repo-content` 维护同仓库的文档和技能，不启动知识生产。代码、
-Markdown、笔记和会话四个 Indexer 技能由工作流选用，不直接调用。详见
-[插件契约](./plugins/context/README_CN.md)。
-
-## 一套工作流，多种知识
-
-![Context 知识生产工作流](./assets/context-workflow.zh-CN.svg)
-
-你可以[观看真实运行的脱敏交互式回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)，更直观地了解整个知识构建过程及其[实现原理](https://github.com/context4ai/context/blob/main/docs/zh-CN/case-studies/agent-graph-workflow.md)。
-
-具体路径会随来源和产物变化，但长期稳定的工作流是：
-
-1. **确认目标和来源边界。** 决定哪些仓库、文档或人工资料属于本次范围。
-2. **采集证据。** 保存文档正文、内嵌资源、代码符号、关系和来源指纹。
-3. **设计知识结构。** Agent 阅读当前选中的证据，提出语义分类、Node 和 Section，
-   由用户确认。
-4. **编译可审查知识。** 草稿始终绑定来源证据，并接受覆盖度、连续性、身份和
-   过期输入检查。
-5. **审核并关闭本轮。** 已批准决定写成持久 Markdown 和关闭后的结构投影；被
-   拒绝候选只保留最小指纹，避免未变化内容反复出现。
-6. **验证并构建。** Context 验证正式工作区，再生成声明好的知识包或文档产物。
-
-这不是一条固定脚本。当前工作区事实会选择下一条合法 Route，Agent 只加载这条
-Route 需要的操作说明和资源。再次进入同一工作区时，流程从真实状态继续，而不是
-重放历史对话。
-
-## 职责边界
-
-| 参与方 | 负责内容 |
+| 入口 | 用途 |
 |---|---|
-| **用户** | 知识目标、来源权限、范围、结构选择、审核决定和产物意图 |
-| **Agent** | 阅读证据、语义判断、提出结构和内容、解释决策，以及按当前路线编辑项目声明 |
-| **Context** | 工作区事实、来源采集、代码索引、证据契约、候选身份、审核应用、质量验证和确定性构建 |
+| `/c4a:context` | 创建、生产、更新、审阅和构建知识工作区 |
+| `/c4a:context-plan` | 分阶段规划大型项目或大范围来源更新 |
+| `/c4a:context-inspect-search` | 基于知识回答问题，并把答案追溯到来源 |
+| `/c4a:context-repo-content` | 维护同仓文档与技能，不启动知识生产 |
 
-Context 不调用 LLM，也不会静默克隆仓库、读取未授权外部来源，或推断用户已经做出
-决定。在全托管对话中，Agent 可以依据工作流的 delegated policy 跳过重复审核
-界面，但证据、权限、校验和验证不会被删除。
+Code、Markdown、Note 与 Sessions 四个 Indexer 技能由工作流选择，不直接调用。见[命令与技能](https://context4ai.org/context/pages/2e3119bc24e49da0e10fbf2c002d5472.html)。
 
-## 本地知识工作区
+## 工作原理
 
-```text
-context/
-├── AGENTS.md       # 面向 Agent 的项目内说明
-├── src/            # 来源、阶段和知识包声明
-├── sources/        # 已登记来源和采集证据
-├── knowledge/      # 审核通过的知识和持久决定
-├── dist/           # 构建生成的知识包（忽略）
-└── .tmp/           # 可丢弃运行状态和报告（忽略）
-```
+![Context 知识生产工作流](./assets/context-workflow.svg)
 
-`sources/`、`knowledge/`、`dist/` 和 `.tmp/context-runtime/` 的生命周期写入由
-CLI 负责，它们不是可以随意修改的临时目录。只有当前工作流 Route 要求时，Agent
-才编辑项目配置，并使用 Route 返回的命令推进状态。
+1. **登记来源**：固定版本的代码仓库、文档目录、笔记与会话摘要。
+2. **采集证据**：文档正文、代码符号、关系与来源指纹。
+3. **规划结构**：Agent 提出知识集合、页面与小节，供你确认。
+4. **撰写可审阅草稿**：每个小节绑定证据，并检查覆盖与过期输入。
+5. **审阅与批准**：通过 HTML 审阅报告，或按你的选择委托 Agent 审阅。
+6. **核验、记录版本并构建**：已批准的工作区生成声明的产物。
 
-## 产物形态
+工作流由 [Agent Graph](https://github.com/context4ai/agent-graph) 定义：当前工作区事实决定下一个合法步骤，Agent 只加载该步骤需要的规程。重新进入工作区时从真实状态继续，而不是从对话记忆继续。可以观看[一次真实运行的脱敏回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)，或阅读[为什么是工作流](https://context4ai.org/context/pages/efa2b8e476ba9d77b6d0664b453e59bc.html)。
 
-- **Agent 知识包**：审核通过的知识位于 `wikis/`、`guides/`、`rules/` 和
-  `feats/`，并可包含 Skills、索引和包专属查询工具。
-- **LLM 文档**：用于模型上下文、离线评测或下游导入的聚合文本。
-- **项目自定义包**：模板可以增加 Agent 说明、静态文件或检索工具，同时仍以正式
-  知识作为事实来源。
+Context 本身不调用模型。用户负责目标、来源权限与审阅决定；Agent 阅读证据、提出结构并撰写；Context 记录事实、校验证据、应用决定并确定性地构建。见[核心概念](https://context4ai.org/context/pages/e7afa377a464a3453f2ed4ed2a90f3f7.html)。
 
-每次构建都会输出一份清单，将分发文件映射回工作区内的正式知识。发布页只保留
-面向读者的元数据；完整来源和审核证据继续留在生产工作区。
+## 产物
 
-Context 在生成完整本地产物后结束。将产物发布到托管知识服务或包平台，属于显式
-安装的下游分发工具职责；如果分发工具支持完整产物上传，应直接使用该入口，而不
-是先重建一份远端安装基线。
+| 产物 | 说明 |
+|---|---|
+| [知识包](https://context4ai.org/context/pages/d44c4a3b119c1c5101baa173791105e1.html) | 供 Agent 使用的已批准知识，含索引、可选技能与查询辅助 |
+| [文档站](https://context4ai.org/context/pages/089c3c9e0212ca13bb27c8e8d2fe6080.html) | 带搜索、知识地图导航与[多语言](https://context4ai.org/context/pages/c1dc07fb24e9ea500fee02e9e275f4b7.html)的静态网站 |
+| [LLM 文档](https://context4ai.org/context/pages/7d888a31ded9bcd291bc79dcd6c87e26.html) | `llms.txt` 与合并文本，用于模型上下文与评测 |
 
-## 仓库模块
+每次构建都会生成清单，把分发文件映射回已批准的知识。Context 在完整的本地构建处停止，发布交给你的托管或包仓库工具。[Context 文档](https://context4ai.org/context/)本身就是一个 Context 工作区，由本仓库及相关项目构建（[源码](https://github.com/context4ai/portal)）。
 
-| 模块 | 在知识生产链中的职责 | 文档 |
+## 生态
+
+| 项目 | 角色 |
+|---|---|
+| [Agent Graph](https://github.com/context4ai/agent-graph) | 面向 Agent Skills 的 Graph Engineering，Context 工作流的运行时 |
+| [Source Graph](https://github.com/context4ai/sourcegraph) | 固定 Git 版本的代码搜索与阅读；Context 通过它远程读取代码证据 |
+| [Portal](https://github.com/context4ai/portal) | [context4ai.org](https://context4ai.org)：首页与文档站 |
+
+## 仓库结构
+
+| 模块 | 角色 | 文档 |
 |---|---|---|
-| `@c4a/context` | 声明来源、阶段、审核门禁和产物的项目 SDK | [English](./packages/context/README.md) · [中文](./packages/context/README.zh-CN.md) |
-| `@c4a/context-cli` | 本地工作流运行时和 Agent 接入 | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
-| `@c4a/core` | 共享 Schema、身份、错误和提取契约 | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
-| `@c4a/extract` | 语言插件协议和仓库提取 Runner | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
-| `@c4a/extract-ts` | TypeScript/JavaScript 与 TSX/JSX 结构提取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
-| `@c4a/extract-go` | 可选 Go 结构提取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
-| `@c4a/extract-rush` | 可选 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
-| `@c4a/extract-mdx` | 可选 MDX 组件与示例目录 | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
-| `@c4a/extract-proto` | 可选 Protocol Buffers IDL 目录 | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
-| `@c4a/extract-thrift` | 可选 Apache Thrift IDL 目录 | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
-| `@c4a/extract-contract` | 可选 OpenAPI 与 GraphQL 契约目录 | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
-| `@c4a/extract-sql` | 可选按方言绑定的 SQL 证据 | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
-| `@c4a/extract-style` | 可选 CSS 与 SCSS 证据 | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
-| `context-evidence-wasm` | 为 Source Graph 读取附加已登记章节来源的插件 | [English](./packages/context-evidence-wasm/README.md) |
-| `@c4a/dev-cli` | 仓库开发和发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
+| `@c4a/context` | 声明来源、阶段、审阅门禁与产物的项目 SDK | [English](./packages/context/README.md) · [中文](./packages/context/README.zh-CN.md) |
+| `@c4a/context-cli` | 本地工作流运行时、Agent 插件与网站构建 | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
+| `@c4a/core` | 共享 Schema、身份、错误与抽取契约 | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
+| `@c4a/extract` | 语言插件协议与仓库抽取运行器 | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
+| `@c4a/extract-ts` | TypeScript/JavaScript 与 TSX/JSX 结构抽取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
+| `@c4a/extract-go` | 可选的 Go 结构抽取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
+| `@c4a/extract-rush` | 可选的 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
+| `@c4a/extract-mdx` | 可选的 MDX 组件与示例目录 | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
+| `@c4a/extract-proto` | 可选的 Protocol Buffers IDL 目录 | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
+| `@c4a/extract-thrift` | 可选的 Apache Thrift IDL 目录 | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
+| `@c4a/extract-contract` | 可选的 OpenAPI 与 GraphQL 契约目录 | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
+| `@c4a/extract-sql` | 可选的方言绑定 SQL 证据 | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
+| `@c4a/extract-style` | 可选的 CSS 与 SCSS 证据 | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
+| `context-evidence-wasm` | 为已登记小节附带来源的 Source Graph 读取插件 | [English](./packages/context-evidence-wasm/README.md) |
+| `@c4a/dev-cli` | 仓库开发与发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
 | `@c4a/tui` | 开发工具共用的终端组件 | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
 
-包名只是技术分发标识。面向用户的知识工作流、知识包模板和生成内容统一使用
-Context 产品语义，下游分发无需继承另一套品牌模型。
+[模块布局](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)说明这些包之间的依赖以及改动落在哪里；内部实现见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
-## 文档与开发
+## 文档
 
-- [SDK 文档索引](./packages/context/docs/README.zh-CN.md)
-- [知识项目完整示例](./packages/context/docs/getting-started.md)
-- [Agent 接入指南](./packages/context-cli/README.zh-CN.md)
-- [插件契约](./plugins/context/README_CN.md)
-- [Workflow Provider 内部说明](./packages/context-cli/context-workflow/README.zh-CN.md)
-- [参与贡献](./CONTRIBUTING.md)
-- [获取支持](./SUPPORT.md)
-- [安全策略](./SECURITY.md)
-- [发布记录](./CHANGELOG.md)
+| 分类 | 从这里开始 |
+|---|---|
+| 入门 | [什么是 Context](https://context4ai.org/context/pages/2b7a58617f9c9122c6995f6a8f98426f.html) · [快速开始](https://context4ai.org/context/pages/2d2cb920187a515c51a72c1c7b071ab6.html) · [知识工作区](https://context4ai.org/context/pages/cdf9148eedbd9888212333ab91eb1b42.html) |
+| 指南 | [登记来源](https://context4ai.org/context/pages/08a9b212fa4ad7acc9f41f2c6fc74733.html) · [更新知识](https://context4ai.org/context/pages/d44b1e3f9b763a0bea2081fd73781a64.html) · [提问](https://context4ai.org/context/pages/9f737b01f7c056374ecc2d13199e8600.html) · [创建 Indexer](https://context4ai.org/context/pages/ea58e96a208549b9844ac19839769dcc.html) · [构建知识服务](https://context4ai.org/context/pages/f5d6d79f9a3763c3da3d1efa26331988.html) |
+| 原理 | [架构总览](https://context4ai.org/context/pages/7f25dc0aedcee13f99a215242910a729.html) · [知识生命周期](https://context4ai.org/context/pages/cc571a5e90fab471ed74b49bac98cf0d.html) · [写给 Agent 的知识](https://context4ai.org/context/pages/5481df1096e6386ed0dcfac3aa3f96ff.html) |
+| 参考 | [CLI 命令](https://context4ai.org/context/pages/a53289d9e9cbd12d13c1027feb6b47f1.html) · [项目 API](https://context4ai.org/context/pages/1ff821a37b83918a98daf26a8d6c87ca.html) · [技能](https://context4ai.org/context/pages/9c25851c53c836d2d640b54ee5fc671c.html) · [常见问题](https://context4ai.org/context/pages/eac245c4b0bc8346acc3bd56fa10ea6b.html) |
 
-仓库开发使用 Bun，运行时包保持兼容 Node.js 20 及以上版本：
+文档站提供面向 Agent 的 [LLM 版本](https://context4ai.org/context/llms.txt)。包级参考仍在本仓库：[SDK 指南](./packages/context/docs/README.md)、[Agent 集成指南](./packages/context-cli/README.zh-CN.md)与[插件契约](./plugins/context/README.md)。
+
+## 参与贡献
+
+Context 使用 Bun 开发，发布的包运行于 Node.js 20 及以上。
 
 ```bash
+git clone https://github.com/context4ai/context.git
+cd context
 bun install
 bun run verify
 ```
 
-源码、link、打包安装和发布流程参见 [DEVELOPMENT.md](./DEVELOPMENT.md)。这些是
-维护者命令，不是普通用户的知识生产入口；用户通过已安装的 Agent 入口工作。
+提交 Pull Request 前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)；本地 CLI、插件、验证与发布流程见 [DEVELOPMENT.md](./DEVELOPMENT.md)。使用问题请到 [GitHub Discussions](https://github.com/context4ai/context/discussions)（见 [SUPPORT.md](./SUPPORT.md)），安全漏洞按 [SECURITY.md](./SECURITY.md) 私下报告。参与本项目须遵守[行为准则](./CODE_OF_CONDUCT.md)。
+
+## 许可证
+
+[MIT](./LICENSE)。第三方组件见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
