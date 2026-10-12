@@ -8,10 +8,10 @@ export const DIAGRAM_STYLES = String.raw`
 .context-diagram-percent{font-size:11px;color:var(--diagram-muted);min-width:34px;text-align:center}
 .context-diagram-viewport{overflow:auto;max-height:620px;min-height:60px;overscroll-behavior:contain;cursor:grab}
 .context-diagram-viewport:active{cursor:grabbing}.context-diagram-canvas{padding:16px;width:max-content;min-width:100%;box-sizing:border-box}
-.context-diagram-canvas svg{display:block;margin:auto;height:auto;max-width:none}.context-diagram-status{padding:12px 16px;font-size:13px;color:var(--diagram-muted)}
+.context-diagram-canvas svg{display:block;margin:auto;height:auto;max-width:none}.context-diagram-canvas foreignObject p{margin:0;line-height:inherit}.context-diagram-status{padding:12px 16px;font-size:13px;color:var(--diagram-muted)}
 .context-diagram-expanded{position:fixed!important;inset:16px!important;z-index:10000!important;margin:0!important;display:flex;flex-direction:column;box-shadow:0 0 0 100vmax #10182788}
 .context-diagram-expanded .context-diagram-viewport{flex:1;max-height:none}.context-diagram-expanded .context-diagram-tools{flex-shrink:0}
-.vp-doc div.language-mermaid.context-rendered{background:transparent;border:0}
+.vp-doc div.language-mermaid.context-rendered,div.language-mermaid.context-rendered{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}
 .context-rendered>pre,.context-rendered>.copy,.context-rendered>.lang{display:none!important}.context-diagram-shell [hidden]{display:none!important}
 .context-diagram-left,.context-diagram-right{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.context-diagram-right{margin-left:auto}
 .context-diagram-tools{opacity:0;pointer-events:none;transition:opacity .15s}.context-diagram-shell:hover .context-diagram-tools,.context-diagram-shell:focus-within .context-diagram-tools{opacity:1;pointer-events:auto}

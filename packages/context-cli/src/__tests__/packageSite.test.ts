@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { kbPackage, updateKnowledgeMap } from "@c4a/context";
-import { createSiteNavigation, siteMarkdown, siteSections, writePackageSite } from "../project/packageSite.js";
+import { createSiteNavigation, siteHomeHero, siteMarkdown, siteSections, writePackageSite } from "../project/packageSite.js";
 import { withStagedPackageOutput } from "../project/packageBuildStage.js";
 
 const pkg = kbPackage({ name: "sample", template: "src/templates", site: { title: "Knowledge", base: "/docs/", home: {
@@ -156,8 +156,9 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(homeResources).toContain("context-home-resource-heading");
     expect(homeResources).toContain("context-home-install-action");
     expect(home.indexOf("Browse knowledge")).toBeLessThan(home.indexOf("Project workspace"));
-    expect(home).toContain('"auto"');
+    expect(home).toContain('matchMedia("(prefers-color-scheme: dark)")');
     expect(home).toContain("context-theme:");
+    expect(home).not.toContain('id="check-dark-mode"');
     expect(article).toContain('<a id="section-entry"></a>');
     expect(article).not.toContain('&lt;a id=');
     expect(article).toContain('<p>Paragraph before anchor.</p>');
@@ -204,4 +205,19 @@ test("deployment roots retain subpaths and reject non-site URLs without network 
   const root = await mkdtemp(join(tmpdir(), "context-site-address-"));
   try { expect(await readPackageSiteUrl(root, pkg)).toBeUndefined(); }
   finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("homepage fields of a reader language fall back to the site's own settings", () => {
+  const actions = [{ text: "Get started", link: "/context/start.html", theme: "brand" as const }];
+  const site = kbPackage({ name: "sample", template: "t", site: { title: "Docs", description: "Site description",
+    home: { title: "Context", slogan: "Knowledge you can trace", description: "Home description", actions },
+    locales: { "zh-CN": { title: "文档" }, "ja-JP": { home: { slogan: "追跡できる知識" } } } } }).site!;
+  const hero = (tag: string) => siteHomeHero(site, { tag, primary: "en-US", packageName: "sample", firstSection: "/a.html" });
+  expect(hero("zh-CN")).toEqual({ name: "文档", text: "Knowledge you can trace", tagline: "Home description", actions });
+  expect(hero("ja-JP")).toEqual({ name: "Context", text: "追跡できる知識", tagline: "Home description", actions });
+  expect(hero("en-US")).toEqual({ name: "Context", text: "Knowledge you can trace", tagline: "Home description", actions });
+  const plain = kbPackage({ name: "sample", template: "t", site: { locales: { "zh-CN": {} } } }).site!;
+  expect(siteHomeHero(plain, { tag: "zh-CN", primary: "en-US", packageName: "sample", firstSection: "/a.html" })).toEqual({
+    name: "sample", text: "从知识地图开始探索", tagline: "",
+    actions: [{ theme: "brand", text: "浏览知识", link: "/a.html" }, { theme: "alt", text: "LLM Docs", link: "/llms/index.html" }] });
 });

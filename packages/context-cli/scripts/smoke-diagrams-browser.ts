@@ -58,6 +58,26 @@ const port=(server.address() as {port:number}).port;
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 const errors:string[]=[];const network:string[]=[];
+// One frame per diagram, edge labels mask their edge, and cluster titles clear the cluster's top border.
+const assertDiagramChrome=async()=>assert.deepEqual(await page.evaluate(()=>{
+  const wrapper=document.querySelector('.language-mermaid.context-rendered')!;
+  const label=[...document.querySelectorAll('.context-diagram-canvas .edgeLabel')].find(e=>e.textContent!.trim())!.querySelector('rect')!;
+  const gaps=[...document.querySelectorAll('.context-diagram-canvas .cluster')].map(cluster=>{
+    const svg=cluster.closest('svg')!;const scale=svg.getBoundingClientRect().width/svg.viewBox.baseVal.width;
+    return (cluster.querySelector('.cluster-label text')!.getBoundingClientRect().top-cluster.querySelector('rect')!.getBoundingClientRect().top)/scale;
+  });
+  // Distance from each label's centre to its edge, in screen pixels.
+  const offsets=[...document.querySelectorAll<SVGGElement>('.context-diagram-canvas .edgeLabel > .label[data-id]')].filter(l=>l.textContent!.trim()&&l.getClientRects().length).map(l=>{
+    const svg=l.closest('svg')!;const path=svg.querySelector<SVGPathElement>(`path[data-id="${CSS.escape(l.getAttribute('data-id')!)}"]`)!;
+    const box=l.querySelector('rect')!.getBoundingClientRect();const cx=box.x+box.width/2,cy=box.y+box.height/2;const m=path.getScreenCTM()!;
+    let best=Infinity;for(let at=0,n=path.getTotalLength();at<=n;at+=.5){const p=path.getPointAtLength(at).matrixTransform(m);best=Math.min(best,Math.hypot(p.x-cx,p.y-cy));}
+    return best;
+  });
+  // Host typography must not resize node text after Mermaid measured it, or labels drift off centre.
+  const drift=[...document.querySelectorAll('.context-diagram-canvas .node foreignObject')].filter(f=>f.getClientRects().length&&f.querySelector('p')).map(f=>Math.abs(f.querySelector('p')!.getBoundingClientRect().height-f.getBoundingClientRect().height));
+  return {nodeLabelsFit:drift.length>0&&Math.max(...drift)<0.5,wrapperBorder:getComputedStyle(wrapper).borderTopWidth,labelOpacity:getComputedStyle(label).opacity,labelFont:getComputedStyle(label.parentElement!.querySelector('text')!).fontSize,
+    titleClear:gaps.length>0&&Math.min(...gaps)>=6,labelsOnEdge:offsets.length>0&&Math.max(...offsets)<1.5};
+}),{nodeLabelsFit:true,wrapperBorder:'0px',labelOpacity:'1',labelFont:'13px',titleClear:true,labelsOnEdge:true});
 page.on('pageerror',error=>errors.push(error.message));
 await page.route('**/*',route=>{ if(new URL(route.request().url()).hostname!=='127.0.0.1'){network.push(route.request().url());return route.abort()}return route.continue()});
 try {
@@ -98,6 +118,7 @@ try {
   assert.equal(await page.evaluate(()=>getComputedStyle(document.body).getPropertyValue('--blue').trim()), '#6750a4');
   await page.getByRole('button',{name:/Answer overview/}).first().click();
   await page.waitForFunction((count)=>document.querySelectorAll('.context-diagram-canvas svg').length===count,cases.length-2);
+  await assertDiagramChrome();
   await page.locator('#theme').click();
   assert.equal(await page.evaluate(()=>getComputedStyle(document.body).getPropertyValue('--blue').trim()), '#d0bcff');
   await page.locator('#home').click();
@@ -111,6 +132,7 @@ try {
   await page.waitForFunction((count)=>document.querySelectorAll('.context-diagram-canvas svg').length===count,cases.length-2);
   assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--vp-c-brand-1').trim()), '#6750a4');
   assert.ok(await page.locator('.context-diagram-canvas svg').first().evaluate(e=>e.outerHTML.includes('#f3effa')));
+  await assertDiagramChrome();
   await page.screenshot({path:join(output,'site.png')});
   assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
   await writeFile(join(output,'result.json'),JSON.stringify({cases:cases.length,rendered:cases.length-2,invalidFallback:2,offlineReview:true,site:true,errors,network},null,2));

@@ -10,7 +10,7 @@ Context 使用 Agent Graph 承载工作契约。Agent Graph 不提取代码、�
 
 ## 一个公开入口驱动一套完整工作流
 
-Context 插件对外只有一个 Agent 入口：
+知识生产生命周期只有一个公开 Agent 入口。插件的其他公开技能 `context-plan`、`context-inspect-search` 与 `context-repo-content` 不直接驱动生命周期，规划和已采纳的知识建议都交回这个入口：
 
 - [`/c4a:context`](https://github.com/context4ai/context/blob/main/plugins/context/skills/context/SKILL.md) 由根级 Context Skill 生成，既能创建用户请求的知识工作区，也能继续已有工作区。首次调用 `context entry` 时，它会先判断应该初始化、定位工作区还是求值当前工作流，再把控制权交给 `workflow.current`。
 

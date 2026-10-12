@@ -36,11 +36,38 @@ export function createDiagramViewer(load: () => Promise<Mermaid>) {
         edgeLabelBackground: color("background", dark ? "#171b24" : "#ffffff"),
         actorBkg: color("surface", dark ? "#202735" : "#f5f8ff"), actorTextColor: color("text", dark ? "#e2e4ed" : "#161e2e"),
         signalColor: color("muted-text", dark ? "#9faec5" : "#66758d"), signalTextColor: color("text", dark ? "#e2e4ed" : "#161e2e"),
+        titleColor: color("muted-text", dark ? "#9faec5" : "#66758d"),
       },
-      flowchart: { useMaxWidth: false, nodeSpacing: 36, rankSpacing: 58, padding: 16, curve: "linear", wrappingWidth: 220, htmlLabels: false },
+      // Mermaid fades edge-label backgrounds to half opacity, letting the edge show through the text.
+      // Label sizes are measured with this CSS, so the smaller edge-label font stays correctly boxed.
+      themeCSS: ".edgeLabel rect{opacity:1}.edgeLabel text{font-size:13px}",
+      flowchart: { useMaxWidth: false, nodeSpacing: 36, rankSpacing: 58, padding: 16, curve: "linear", wrappingWidth: 220, htmlLabels: false, subGraphTitleMargin: { top: 10, bottom: 6 } },
       sequence: { useMaxWidth: false, diagramMarginX: 24, diagramMarginY: 20, actorMargin: 48, messageMargin: 38, wrap: true },
       state: { useMaxWidth: false }, er: { useMaxWidth: false },
     };
+  }
+  // Layouts place edge-label boxes beside their edge rather than on it; move each box onto the nearest point of its edge.
+  // Geometry is only measurable once the diagram is displayed, so this also runs on the first visible resize.
+  function centerEdgeLabels(svg: SVGSVGElement) {
+    if (svg.dataset.labelsCentered || !svg.getClientRects().length) return;
+    svg.dataset.labelsCentered = "true";
+    for (const label of svg.querySelectorAll<SVGGElement>(".edgeLabel > .label[data-id]")) {
+      const box = label.querySelector<SVGRectElement>("rect.background"); const text = label.querySelector<SVGTextElement>("text");
+      const path = svg.querySelector<SVGPathElement>(`path[data-id="${CSS.escape(label.getAttribute("data-id")!)}"]`);
+      const toLabel = label.getCTM(); const toPath = path?.getCTM(); const glyphs = text?.getBBox();
+      if (!box || !path || !toLabel || !toPath || !glyphs?.width) continue;
+      // Mermaid sized the box before the edge-label font applied; refit it to the rendered text.
+      box.setAttribute("x", String(glyphs.x - 4)); box.setAttribute("y", String(glyphs.y - 1));
+      box.setAttribute("width", String(glyphs.width + 8)); box.setAttribute("height", String(glyphs.height + 2));
+      const center = new DOMPoint(box.x.baseVal.value + box.width.baseVal.value / 2, box.y.baseVal.value + box.height.baseVal.value / 2);
+      const local = center.matrixTransform(toLabel).matrixTransform(toPath.inverse());
+      const length = path.getTotalLength(); let best = 0; let distance = Infinity;
+      const probe = (at: number) => { const point = path.getPointAtLength(at); const d = (point.x - local.x) ** 2 + (point.y - local.y) ** 2; if (d < distance) { distance = d; best = at; } };
+      for (let step = 0; step <= 64; step++) probe(length * step / 64);
+      for (let span = length / 64; span > 0.25; span /= 2) { const at = best; probe(Math.max(0, at - span)); probe(Math.min(length, at + span)); }
+      const target = path.getPointAtLength(best).matrixTransform(toPath).matrixTransform(toLabel.inverse());
+      label.setAttribute("transform", `${label.getAttribute("transform") ?? ""} translate(${target.x - center.x} ${target.y - center.y})`);
+    }
   }
   function prune() {
     for (const [node, state] of states) if (!node.isConnected) {
@@ -76,6 +103,7 @@ export function createDiagramViewer(load: () => Promise<Mermaid>) {
     const percent = document.createElement("span"); percent.className = "context-diagram-percent";
     function resize() {
       const svg = canvas.querySelector("svg"); if (!svg || !state.width) return;
+      centerEdgeLabels(svg);
       if (state.fit) state.scale = Math.min(1, Math.max(.1, (viewport.clientWidth - 32) / state.width));
       svg.style.width = `${state.width * state.scale}px`; svg.style.maxWidth = "none"; svg.style.height = "auto";
       percent.textContent = `${Math.round(state.scale * 100)}%`;
@@ -162,6 +190,7 @@ export function createDiagramViewer(load: () => Promise<Mermaid>) {
           canvas.innerHTML = svg;
           const element = canvas.querySelector("svg");
           if (!element) throw new Error("Missing SVG");
+          centerEdgeLabels(element);
           state.width = element.viewBox.baseVal.width || element.getBoundingClientRect().width || 640;
           element.setAttribute("role", "img");
           if (!element.hasAttribute("aria-label") && !element.hasAttribute("aria-labelledby")) element.setAttribute("aria-label", t.area);

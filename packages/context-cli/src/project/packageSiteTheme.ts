@@ -326,6 +326,12 @@ export default {
           extensions.knowledge === undefined ? siteMap() : extensions.knowledge && custom('knowledge'),
           extensions.resources === undefined ? resources() : extensions.resources && custom('resources')],
         'home-features-after': () => extensions.footer === undefined ? poweredBy() : extensions.footer && custom('footer'),
+        'not-found': () => h('div', { class: 'context-not-found' }, [
+          h('p', { class: 'context-not-found-code' }, '404'),
+          h('h1', both('页面不存在', 'Page not found')),
+          h('p', both('链接可能已失效，或页面已被移动。', 'The link may be broken, or the page has moved.')),
+          h('a', { class: 'context-not-found-home', href: data.site.value.base }, both('返回首页', 'Back to home')),
+        ]),
         'doc-after': () => history.value ? h('section', { class: 'context-history-cards' },
           history.value.length ? history.value.map((entry, index) =>
             h('details', { class: 'context-history-card', open: index < 3, key: entry.version }, [
@@ -376,7 +382,7 @@ export default {
         },
       };
       // History belongs between the page heading and footer metadata.
-      return () => h(DefaultTheme.Layout, { class: inHome.value ? 'context-home' :
+      return () => h(DefaultTheme.Layout, { class: inHome.value ? 'context-home' : data.page.value.isNotFound ? 'context-missing' :
         inLlms.value || inHistory.value ? 'context-empty-sidebar' : undefined }, { ...slots, 'doc-after': undefined,
         'doc-footer-before': () => [slots['doc-after'](), slots['doc-footer-before']()] });
     }
@@ -584,13 +590,20 @@ ${readerContentStyles(".vp-doc")}
 .context-home-powered { width: var(--context-content); margin: 24px auto 0; padding: 22px 0 30px; border-top: 1px solid var(--vp-c-divider);
   color: var(--vp-c-text-2); font-size: 11px; text-align: right; }
 .context-home-powered a { color: inherit; }
+/* 404: centred in the space below the top bar, in the reader language */
+.context-not-found { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - var(--vp-nav-height)); padding: 48px 24px 96px; text-align: center; }
+.context-not-found-code { margin: 0; font: 600 72px/1 var(--vp-font-family-mono); letter-spacing: -.04em; color: var(--vp-c-text-1); }
+.context-not-found h1 { margin: 20px 0 0; font-size: 20px; font-weight: 600; line-height: 1.4; color: var(--vp-c-text-1); }
+.context-not-found h1 + p { max-width: 28rem; margin: 8px 0 0; font-size: 14px; line-height: 1.7; color: var(--vp-c-text-2); }
+.context-not-found-home { margin-top: 28px; padding: 0 18px; border: 1px solid var(--vp-c-divider); border-radius: 999px; font-size: 14px; font-weight: 500; line-height: 38px; color: var(--vp-c-text-1) !important; text-decoration: none !important; transition: border-color .2s; }
+.context-not-found-home:hover { border-color: var(--vp-c-text-3); }
 @keyframes context-home-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (min-width: 960px) {
   /* The sidebar background reaches the screen edge; its first-level labels line up with the top-bar title. */
   .VPSidebar { top: var(--vp-nav-height) !important; left: 0 !important; width: calc(var(--vp-sidebar-width) + var(--context-edge) - 26px) !important;
     padding: 12px 0 48px calc(var(--context-edge) - 26px) !important; }
   .VPSidebar .curtain { display: none; }
-  .VPContent.has-sidebar, .Layout:not(.context-home) .VPContent:not(.is-home) { padding-left: calc(var(--vp-sidebar-width) + var(--context-edge) - 26px) !important;
+  .VPContent.has-sidebar, .Layout:not(.context-home):not(.context-missing) .VPContent:not(.is-home) { padding-left: calc(var(--vp-sidebar-width) + var(--context-edge) - 26px) !important;
     padding-right: calc(var(--context-edge) - var(--context-gutter)) !important; }
   .context-home .VPContent { padding-left: 0 !important; padding-right: 0 !important; }
   .VPDoc { padding: 44px 36px 80px !important; }

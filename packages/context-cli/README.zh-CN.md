@@ -17,7 +17,7 @@
 [English](./README.md)
 
 `@c4a/context-cli` 提供 Context 知识生产工作流的本地运行时和 Agent 接入。虽然
-包名中包含 CLI，但它面向用户的主要体验不是终端命令清单：用户调用一个 Agent
+包名中包含 CLI，但它面向用户的主要体验不是终端命令清单：用户调用生产
 入口，用自然语言说明要生产的知识，再在对话中完成必要决策。
 
 运行时执行确定性工作，包括观察工作区、采集来源、索引代码、校验证据、暂存候选、
@@ -49,8 +49,10 @@ context plugin install --local /path/to/repo --agent auto-detect
 并把 `context-code-indexer`、`context-markdown-indexer` 作为无命名空间的生命周期
 Provider Skill 投影到 Claude、Codex 和 Cursor 的用户技能目录。
 
-社区版公开入口是 `/c4a:context`。它可以创建用户请求的工作区、定位已有工作区，
-或从当前状态继续流程。用户应该从知识意图开始，而不是内部命令：
+生产入口是 `/c4a:context`。它可以创建用户请求的工作区、定位已有工作区，
+或从当前状态继续流程。其他公开入口是 `/c4a:context-plan`、
+`/c4a:context-inspect-search` 和 `/c4a:context-repo-content`（Cursor 中为
+`/c4a-context-*`），详见[插件契约](../../plugins/context/README_CN.md)。用户应该从知识意图开始，而不是内部命令：
 
 ```text
 /c4a:context 请把这些产品文档和当前仓库整理成经过审核的 Agent 知识包，所有代码

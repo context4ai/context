@@ -10,7 +10,7 @@ Context uses Agent Graph as its work-contract layer. Agent Graph does not extrac
 
 ## One public entry, one workflow
 
-The public Context plugin exposes one Agent entry:
+The knowledge production lifecycle has one public Agent entry. The plugin's other public Skills, `context-plan`, `context-inspect-search` and `context-repo-content`, do not drive the lifecycle themselves; plans and accepted knowledge suggestions are handed back to this entry:
 
 - [`/c4a:context`](https://github.com/context4ai/context/blob/main/plugins/context/skills/context/SKILL.md), generated from the root Context Skill, starts a requested knowledge workspace or continues an existing one. Its first `context entry` call resolves initialization, workspace relocation, or current workflow evaluation before handing control to `workflow.current`.
 

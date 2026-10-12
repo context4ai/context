@@ -205,6 +205,12 @@ rewriting. Keep unrelated changes and still-correct knowledge out of the
 revision scope. Explain additions or removals through the behavior and coverage
 they affect, including cross-repository dependencies when material.
 
+Compare cited files by the object IDs from `git ls-tree` at both refs first;
+an unchanged ID needs no content read. In a partial clone each `git show`,
+`cat-file -s`, `ls-tree --long`, `blame` or `log -p` can download objects one at
+a time, so batch-fetch the object IDs you still need in one `git fetch` before
+reading them, and do not scan or size such a checkout with those commands.
+
 For documents, classify the findings as new, changed, deleted or invalidated,
 unchanged, or currently unreadable. A permission failure is an access gap, not
 evidence of deletion. Use available revisions and saved bodies for comparison;

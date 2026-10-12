@@ -5,9 +5,9 @@
 `@c4a/context` 是 Context 知识工作区使用的声明式 SDK。多数用户通过 Context
 Agent 和 CLI 工作；项目作者使用本包声明来源采集与知识包输出。
 
-知识生产只有一条路径：`src/indexers.yaml` 选择 Indexer Provider，并管理需求、
-Profile、范围和定制。`src/index.ts` 中的项目阶段不再负责生产代码或 Markdown
-知识。
+知识生产只有一条路径，即 Indexer 生命周期。`src/indexers.yaml` 只保存已确认的
+读者需求、授权来源与排除项；已安装的 Indexer 技能按任务在临时生产计划中选用。
+`src/index.ts` 中的项目阶段不再负责生产代码或 Markdown 知识。
 
 ## 项目边界
 
