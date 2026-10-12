@@ -22,11 +22,12 @@ import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } fr
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
 import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
-import { localeLabel, siteMoreTargets, siteNavigationConfig, writeLocalizedSite } from "./packageSiteLocales.js";
+import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, restoreOriginNavLinks, siteLocaleCss, siteLocaleScript,
+  siteMoreTargets, siteNavigationConfig, siteReaderLocales, type SiteNavItem } from "./packageSiteLocales.js";
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v45-locales:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v48-reader-locales:${createHash("sha256")
   .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -121,11 +122,11 @@ export function siteMarkdown(content: string, from: string, pages: ReadonlyMap<s
   return body;
 }
 
-function sidebar(entries: ProjectedKnowledgeMapEntry[]): unknown[] {
-  return entries.map(entry => ({ text: entry.title, ...(entry.href ? { link: entry.href } : {}),
+function sidebar(entries: ProjectedKnowledgeMapEntry[], label: (entry: ProjectedKnowledgeMapEntry) => string = entry => entry.title): unknown[] {
+  return entries.map(entry => ({ text: label(entry), ...(entry.href ? { link: entry.href } : {}),
     // Explicit empty items keep VitePress from wrapping sibling leaves in an
     // anonymous group, which would introduce an extra indentation level.
-    items: sidebar(entry.children), ...(entry.children.length ? { collapsed: true } : {}) }));
+    items: sidebar(entry.children, label), ...(entry.children.length ? { collapsed: true } : {}) }));
 }
 
 export function siteSections(entries: ProjectedKnowledgeMapEntry[]) {
@@ -139,7 +140,7 @@ export function siteSections(entries: ProjectedKnowledgeMapEntry[]) {
   ];
   // Keep top navigation order; partition each section recursively without
   // changing the authored map or the order within directories and articles.
-  return entries.map(entry => ({ ...entry, children: directoriesFirst(entry.children) })).map(entry => ({ key: entry.key, title: entry.title,
+  return entries.map(entry => ({ ...entry, children: directoriesFirst(entry.children) })).map(entry => ({ key: entry.key, title: entry.title, entry,
     href: `/sections/${createHash("sha256").update(entry.key).digest("hex").slice(0, 20)}.html`,
     pages: [...new Set(pageLinks(entry))],
     items: sidebar(entry.href ? [entry] : entry.children),
@@ -215,34 +216,13 @@ export async function writePackageSite(input: {
       await mkdir(dirname(join(temporary, "node_modules", name!)), { recursive: true });
       await symlink(path!, join(temporary, "node_modules", name!), "dir");
     }
+    const readers = siteReaderLocales(options, pkg.name);
+    const marker = createLocaleMarker();
     await writeFile(join(configRoot, "theme/index.js"), siteThemeScript);
-    await writeFile(join(configRoot, "theme/style.css"), siteThemeCss + siteThemeVariables(await resolveSiteTheme(projectRoot, options.theme, true)));
+    await writeFile(join(configRoot, "theme/style.css"), siteThemeCss + siteLocaleCss(readers) +
+      siteThemeVariables(await resolveSiteTheme(projectRoot, options.theme, true)));
     await writeSiteExtensions(projectRoot, temporary, options.extensions);
-    const navigation = siteNavigationConfig(options, mapping.pages);
-    const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: options.lang ?? "en-US", base,
-      appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: `context-theme:${pkg.name}:${base}` },
-      srcExclude: ["_site/**/*.md"],
-      ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: {
-        resolve: { dedupe: ["vue", "vitepress"] }, build: { chunkSizeWarningLimit: 2000 } },
-      themeConfig: { ...siteThemeLabels("zh"), contextUpdated: historyDate,
-        contextUiLabels: { zh: siteThemeLabels("zh"), en: siteThemeLabels("en") },
-        contextSections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
-        contextHome: { resources: options.home?.resources ?? [], branding: packageSiteBranding },
-        sidebar: sections[0]?.items ?? [],
-        nav: [...sections.map(section => ({ text: section.title, link: section.href })),
-          ...(typeof pkg.repoContentPage === "object" && byPath.has("wikis/repo-content.md")
-            ? [{ text: (await repoContentLabels(projectRoot)).title, link: `/${byPath.get("wikis/repo-content.md")!.site_path}` }] : []),
-          ...(typeof pkg.importsPage === "object" && byPath.has("wikis/imports.md")
-            ? [{ text: (await importsLabels(projectRoot)).title, link: `/${byPath.get("wikis/imports.md")!.site_path}` }] : []),
-          { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
-        contextNav: navigation.nav, contextMore: navigation.more,
-        ...(options.socialLinks ? { socialLinks: options.socialLinks } : {}),
-        ...(options.locales ? { contextLocales: { primary: options.lang ?? "en-US",
-          paths: Object.fromEntries(Object.entries(options.locales).map(([tag, locale]) => [tag, locale.path])),
-          labels: { [options.lang ?? "en-US"]: localeLabel(options.lang ?? "en-US"),
-            ...Object.fromEntries(Object.entries(options.locales).map(([tag, locale]) => [tag, locale.label ?? localeLabel(tag)])) },
-          preferenceKey: options.localePreferenceKey ?? `context-locale:${pkg.name}:${base}` } } : {}),
-      } };
+    const localizer = await createSiteLocalizer({ projectRoot, readers, marker, selected, byPath, resources });
     await mkdir(join(temporary, "pages"), { recursive: true });
     const primaryBody = (page: SitePage, packageContent: string) => {
       let content = packageContent;
@@ -259,48 +239,95 @@ export async function writePackageSite(input: {
       const pageContent = provenance && content.endsWith(provenance) ? content.slice(0, -provenance.length) : content;
       return siteMarkdown(pageContent, page.package_path, byPath, resources);
     };
-    const pageFrontmatter = (page: SitePage, title: string, content?: string) => {
+    const pageFrontmatter = (page: SitePage, content: string, titles?: Record<string, string>) => {
       const original = sourceContent.get(page.package_path);
       const sources = siteArticleSources(original?.article, registry, repositoryRemote);
-      const timestamp = parseKnowledgeFrontmatter(original?.content ?? content ?? "").timestamp;
+      const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
       const updated = typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))
         ? new Date(timestamp).toISOString() : null;
-      return `---\ntitle: ${JSON.stringify(title)}\ncontextSources: ${JSON.stringify(sources)}\ncontextUpdated: ${JSON.stringify(updated)}\n---\n`;
+      return `---\ntitle: ${JSON.stringify(page.title)}\n${titles ? `contextTitles: ${JSON.stringify(titles)}\n` : ""}` +
+        `contextSources: ${JSON.stringify(sources)}\ncontextUpdated: ${JSON.stringify(updated)}\n---\n`;
     };
     for (const page of byPath.values()) {
       const content = await readFile(join(root, page.package_path), "utf8");
+      const localized = await localizer.page(page, primaryBody(page, content));
       await writeFile(join(temporary, page.site_path.replace(/\.html$/u, ".md")),
-        `${pageFrontmatter(page, page.title, content)}\n${primaryBody(page, content)}`);
+        `${pageFrontmatter(page, content, localized.titles)}\n${localized.body}`);
     }
-    const localized = await writeLocalizedSite({ projectRoot, temporary, root, site: options, packageName: pkg.name, selected,
-      byPath, entries: mapping.entries, resources, contextHome: config.themeConfig.contextHome, primaryBody,
-      pageFrontmatter: (page, title) => pageFrontmatter(page, title) });
-    await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify({ ...config,
-      ...(localized.locales ? { locales: localized.locales } : {}) })}, markdown: { ${siteMarkdownConfig} } };\n`);
-    const menu = (lines: string[], entries: ProjectedKnowledgeMapEntry[], level: number) => entries.forEach(entry => {
-      lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${mdLabel(entry.title)}](${entry.href})` : mdLabel(entry.title)}`);
-      menu(lines, entry.children, level + 1);
+    // Labels read translated page titles, so they follow the pages.
+    const themeSections = sections.map(section => ({ key: section.key, title: section.title, titles: localizer.titles(section.entry),
+      label: localizer.label(section.entry), href: section.href, pages: section.pages, items: sidebar(section.entries, localizer.label) }));
+    const navigation = siteNavigationConfig(options, mapping.pages);
+    const navText = ({ locales, ...item }: SiteNavItem) => ({ ...item, text: localizedHtml(readers.tags, tag => locales?.[tag] ?? item.text) });
+    const localeResources = Object.values(options.locales ?? {}).some(locale => locale.home?.resources) ? Object.fromEntries(readers.tags.map(tag =>
+      [tag, (tag === readers.primary ? undefined : options.locales?.[tag]?.home?.resources) ?? options.home?.resources ?? []])) : undefined;
+    const appearanceKey = `context-theme:${pkg.name}:${base}`;
+    const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: readers.primary, base,
+      appearance: { initialValue: "auto", valueDark: "dark", valueLight: "light", storageKey: appearanceKey },
+      // VitePress's pre-paint script reads its default key; apply the site key before first paint too.
+      // Without a saved choice ("auto" included) the site follows the system scheme.
+      head: [["script", { id: "context-appearance" },
+        `(()=>{let v=null;try{v=localStorage.getItem(${JSON.stringify(appearanceKey)})}catch{}document.documentElement.classList.toggle("dark",v==="dark"||(v!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))})();`],
+        ["script", { id: "context-locale" }, siteLocaleScript(readers)]],
+      srcExclude: ["_site/**/*.md"],
+      ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: {
+        resolve: { dedupe: ["vue", "vitepress"] }, build: { chunkSizeWarningLimit: 2000 } },
+      themeConfig: { ...siteThemeLabels("zh"), contextUpdated: historyDate,
+        contextUiLabels: { zh: siteThemeLabels("zh"), en: siteThemeLabels("en") },
+        contextSections: themeSections,
+        contextHome: { resources: options.home?.resources ?? [], ...(localeResources ? { localeResources } : {}), branding: packageSiteBranding },
+        sidebar: themeSections[0]?.items ?? [],
+        nav: [...themeSections.map(section => ({ text: section.label, link: section.href })),
+          ...(typeof pkg.repoContentPage === "object" && byPath.has("wikis/repo-content.md")
+            ? [{ text: escapeHtml((await repoContentLabels(projectRoot)).title), link: `/${byPath.get("wikis/repo-content.md")!.site_path}` }] : []),
+          ...(typeof pkg.importsPage === "object" && byPath.has("wikis/imports.md")
+            ? [{ text: escapeHtml((await importsLabels(projectRoot)).title), link: `/${byPath.get("wikis/imports.md")!.site_path}` }] : []),
+          { text: "More", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
+        contextNav: navigation.nav.map(navText), contextMore: navigation.more.map(navText),
+        ...(options.socialLinks ? { socialLinks: options.socialLinks } : {}),
+        // A target keeps the router from resolving the link inside the site base.
+        ...(options.titleLink ? { logoLink: { link: options.titleLink, target: "_self" } } : {}),
+        ...(options.extensions?.slots?.brand ? { siteTitle: false } : {}),
+        contextLocales: { primary: readers.primary, tags: readers.tags, labels: readers.labels, titles: readers.titles, preferenceKey: readers.preferenceKey },
+      } };
+    await writeFile(join(configRoot, "config.mjs"), `const contextLocaleMarker = ${JSON.stringify(readers.translated ? marker : null)};\n` +
+      `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
+    const menu = (lines: string[], entries: ProjectedKnowledgeMapEntry[], level: number, tag: string) => entries.forEach(entry => {
+      const title = mdLabel(localizer.entryTitle(tag, entry));
+      lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${title}](${entry.href})` : title}`);
+      menu(lines, entry.children, level + 1, tag);
     });
     await mkdir(join(temporary, "sections"), { recursive: true });
     for (const section of sections) {
-      const lines = [`# ${mdLabel(section.title)}`, ""];
-      menu(lines, section.entries, 0);
-      await writeFile(join(temporary, section.href.slice(1).replace(/\.html$/u, ".md")), lines.join("\n") + "\n");
+      await writeFile(join(temporary, section.href.slice(1).replace(/\.html$/u, ".md")), localizer.variants(tag => {
+        const lines = [`# ${mdLabel(localizer.entryTitle(tag, section.entry))}`, ""];
+        menu(lines, section.entries, 0, tag);
+        return lines.join("\n") + "\n";
+      }));
     }
-    const chinese = (options.lang ?? "en-US").startsWith("zh");
     const firstSection = sections[0]?.href ?? "/llms/index.html";
-    const featuredResources = (options.home?.resources ?? []).filter(resource => resource.featured && resource.href);
-    const hero = {
-      name: options.home?.title ?? options.title ?? pkg.name,
-      text: options.home?.slogan ?? (chinese ? "从知识地图开始探索" : "Explore from the knowledge map"),
-      tagline: options.home?.description ?? options.description ?? "",
-      actions: options.home?.actions ?? [
-        { theme: "brand", text: chinese ? "浏览知识" : "Browse knowledge", link: firstSection },
-        ...featuredResources.map(resource => ({ theme: "alt" as const, text: resource.title, link: resource.href! })),
-        { theme: "alt", text: "LLM Docs", link: "/llms/index.html" },
-      ],
+    const heroFor = (tag: string) => {
+      const chinese = tag.toLowerCase().startsWith("zh");
+      const locale = tag === readers.primary ? undefined : options.locales?.[tag];
+      const home = locale ? locale.home : options.home;
+      const featured = (home?.resources ?? options.home?.resources ?? []).filter(resource => resource.featured && resource.href);
+      return {
+        name: (locale ? locale.home?.title ?? locale.title : options.home?.title) ?? options.title ?? pkg.name,
+        text: home?.slogan ?? (chinese ? "从知识地图开始探索" : "Explore from the knowledge map"),
+        tagline: (locale ? locale.home?.description ?? locale.description : options.home?.description ?? options.description) ?? "",
+        actions: home?.actions ?? [
+          { theme: "brand" as const, text: chinese ? "浏览知识" : "Browse knowledge", link: firstSection },
+          ...featured.map(resource => ({ theme: "alt" as const, text: resource.title, link: resource.href! })),
+          { theme: "alt" as const, text: "LLM Docs", link: "/llms/index.html" },
+        ],
+      };
     };
-    const homeHero = options.extensions?.slots?.banner === undefined ? `hero: ${JSON.stringify(hero)}\n` : "";
+    const heroTags = readers.translated ? readers.tags : [readers.primary];
+    const heroes = new Map(heroTags.map(tag => [tag, heroFor(tag)]));
+    const hero = { name: localizedHtml(heroTags, tag => heroes.get(tag)!.name), text: localizedHtml(heroTags, tag => heroes.get(tag)!.text),
+      tagline: localizedHtml(heroTags, tag => heroes.get(tag)!.tagline), actions: heroes.get(readers.primary)!.actions };
+    const heroActions = readers.translated ? `contextHeroActions: ${JSON.stringify(Object.fromEntries([...heroes].map(([tag, value]) => [tag, value.actions])))}\n` : "";
+    const homeHero = options.extensions?.slots?.banner === undefined ? `hero: ${JSON.stringify(hero)}\n${heroActions}` : "";
     await writeFile(join(temporary, "index.md"),
       `---\nlayout: home\ntitle: ${JSON.stringify(options.home?.title ?? options.title ?? pkg.name)}\n${homeHero}---\n`);
     await writeFile(join(temporary, "changelog.md"), `---\ntitle: Changelog\ncontextHistory: ${JSON.stringify(Buffer.from(JSON.stringify(history)).toString("base64"))}\n---\n\n# Changelog\n`);
@@ -325,10 +352,16 @@ export async function writePackageSite(input: {
       await cp(join(root, path), destination);
     }
     await compileSite(temporary, output);
+    const originLinks = [...navigation.nav, ...navigation.more].filter(item => item.origin).map(item => item.link);
     // Some deployment stores reject zero-byte objects. Preserve URLs and only
     // fill formats where a comment is valid; never invent JSON or binary data.
     for (const file of await walkPackageFiles(output)) {
       const extension = posix.extname(file.relPath).toLowerCase();
+      if (extension === ".html" && originLinks.length) {
+        const html = await readFile(file.absPath, "utf8");
+        const restored = restoreOriginNavLinks(html, base, originLinks);
+        if (restored !== html) await writeFile(file.absPath, restored);
+      }
       const placeholder = [".css", ".js", ".mjs", ".cjs"].includes(extension)
         ? "/* Intentionally empty. */\n"
         : [".html", ".htm"].includes(extension) ? "<!-- Intentionally empty. -->\n" : null;
@@ -339,7 +372,7 @@ export async function writePackageSite(input: {
     const siteMapContent = JSON.stringify({ ...(input.siteUrl ? { site_url: input.siteUrl } : {}), protocol: "context.site-output/v1",
       knowledge_map_revision: structure?.revision ?? null, base, llms: { index: "llms.txt", full: "llms-full.txt", home: "llms/index.html", articles: llms.articleCount }, pages: [...byPath.values()], entries: mapping.entries,
       sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
-      ...(localized.summaries.length ? { locales: localized.summaries } : {}), warnings: mapping.warnings }, null, 2) + "\n";
+      ...(localizer.summaries.length ? { locales: localizer.summaries } : {}), warnings: mapping.warnings }, null, 2) + "\n";
     const packageSiteMap = join(projectRoot, pkg.outDir, "context-site-map.json");
     const distributedSiteMap = join(
       projectRoot,

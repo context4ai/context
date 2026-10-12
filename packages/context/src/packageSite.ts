@@ -34,11 +34,8 @@ const packageSiteHomeSchema = z.object({
 const localeTagSchema = z.string().regex(/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/u, "Use a BCP 47 language tag, such as zh-CN");
 const localizedTextSchema = z.record(localeTagSchema, z.string().trim().min(1));
 
+/** Every page keeps one URL; the reader's language selects which translation is shown. */
 const packageSiteLocaleSchema = z.object({
-  /** Single URL segment under the site base, such as zh for /docs/zh/. */
-  path: z.string().regex(/^[a-z0-9][a-z0-9-]*$/u, "Use one lowercase URL segment, such as zh")
-    .refine(value => !["pages", "sections", "llms", "resources", "custom", "assets"].includes(value),
-      "Locale path conflicts with a reserved website directory"),
   label: z.string().trim().min(1).optional(),
   title: z.string().trim().min(1).optional(),
   description: z.string().optional(),
@@ -77,6 +74,8 @@ export const packageSiteSchema = z.object({
   home: packageSiteHomeSchema.optional(),
   /** Additional reader languages; translations are optional and never reviewed knowledge. */
   locales: z.record(localeTagSchema, packageSiteLocaleSchema).optional(),
+  /** Target of the top-bar title; defaults to the site home. Root-relative links address the site origin. */
+  titleLink: siteHrefSchema.optional(),
   /** Top navigation links after the knowledge sections. Root-relative links address the site origin. */
   nav: z.array(packageSiteNavLinkSchema).optional(),
   /** Items appended to the More menu after LLM Docs and Changelog. */
@@ -88,6 +87,8 @@ export const packageSiteSchema = z.object({
   extensions: z.object({
     root: z.string().regex(/^src\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/).default("src/site"),
     slots: z.object({
+      /** Replaces the site title at the start of the top bar, for example with a logo. */
+      brand: z.string().min(1).optional(),
       banner: z.union([z.string().min(1), z.literal(false)]).optional(),
       knowledge: z.union([z.string().min(1), z.literal(false)]).optional(),
       resources: z.union([z.string().min(1), z.literal(false)]).optional(),
@@ -97,15 +98,10 @@ export const packageSiteSchema = z.object({
     pages: z.record(z.string().regex(/^[a-zA-Z0-9_-]+$/), z.string().min(1)).optional(),
   }).strict().optional(),
 }).strict().superRefine((value, context) => {
-  const paths = new Set<string>();
-  for (const [tag, locale] of Object.entries(value.locales ?? {})) {
+  for (const tag of Object.keys(value.locales ?? {})) {
     if (tag.toLowerCase() === value.lang.toLowerCase()) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["locales", tag], message: "An additional locale must differ from the primary site lang" });
     }
-    if (paths.has(locale.path)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["locales", tag, "path"], message: `Locale path ${locale.path} is already used` });
-    }
-    paths.add(locale.path);
   }
 });
 export type PackageSiteDefinition = z.input<typeof packageSiteSchema>;

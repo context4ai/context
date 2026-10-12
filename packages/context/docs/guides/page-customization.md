@@ -32,11 +32,27 @@ credentials or private configuration in frontend files. Hidden files,
 | `resources` | Resource card group | Replace with a component |
 | `footer` | Existing homepage footer | Replace with a component |
 | `floating` | Empty | Client-only component fixed at the bottom right on all pages |
+| `brand` | Site title text | Component shown at the start of the top bar, for example a logo |
+
+`site.titleLink` sets where the top-bar title leads; it defaults to the site
+home. A root-relative link such as `/` addresses the site origin rather than
+the site `base`, so a documentation site under `/docs/` can return to a product
+homepage.
 
 Omit a slot to retain its default; set it to `false` to hide it. A component
 replaces only its slot, not the global navigation, language switch or article
 provenance. Components can use VitePress `useData()` and `useRoute()` for theme,
 page and route information. Import scoped CSS from components for local styling.
+Pages prerender in the light theme. For a reader who starts in the dark theme,
+slot components are mounted again after the page loads, so markup bound to
+`isDark` matches the reader's theme.
+
+Pages keep one URL for every reader language. `useData().lang` is the reader's
+language after mount and `site.lang` during static rendering;
+`theme.contextLocales` lists `primary`, `tags` and `labels`. To show the right
+language from the first paint, render each language and mark it with
+`data-context-locales="<tag>"` (a space-separated list for shared content); the
+site stylesheet hides the others.
 
 The floating component owns its button, chat/bot panel and open/close behavior.
 Keep its panel within the viewport and preserve keyboard focus and close controls.

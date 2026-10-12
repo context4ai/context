@@ -102,10 +102,14 @@ screens the homepage content aligns with article content while preserving the
 sidebar rail; on narrow screens it uses the available width. Motion is limited
 to short card entrance and hover feedback and is disabled when the reader asks
 the operating system to reduce motion.
-The website uses a full-width VitePress theme with system fonts, compact navigation,
-a wide reading area and a smaller article outline. It starts in
-light mode regardless of the operating system; an explicit reader choice is
-remembered in browser storage. Search runs locally, without a search service.
+The website uses a VitePress theme with system fonts and compact navigation. The
+top bar, homepage and articles share a centered 1440px container with 32px
+margins (16px on phones); on wide screens the sidebar sits at its left edge and
+articles keep a wide reading area and a smaller outline. Navigation is centered
+in the top bar, which ends with icon buttons for search, theme, social links and
+reader language; search, or Cmd/Ctrl+K, opens a dialog over a blurred page. The theme follows the
+operating system until the reader switches it; that choice is remembered in
+browser storage. Search runs locally, without a search service.
 Mermaid renders in the browser using the website theme, with fit, original-size,
 zoom, full-screen and source controls. Controls appear on hover or keyboard focus
 (and remain visible on touch devices). Layout and source/copy actions are on the
@@ -145,18 +149,21 @@ domain, and are not prefixed with `site.base`. `locales` on a nav or More item
 translates its text per language tag. `socialLinks` adds icon links in the top
 bar; each requires an `https` URL.
 
-`site.locales` publishes translated copies under a URL segment, for example
-`locales: { "zh-CN": { path: "zh", title: "项目知识" } }` serves the primary
-language at `/` and Simplified Chinese at `/zh/`. Each locale may override
-`label`, `title`, `description` and `home`. Translations are stored in the
-workspace under `translations/<tag>/` and follow the
+`site.locales` adds reader languages, for example
+`locales: { "zh-CN": { title: "项目知识" } }`. Every page keeps one URL and
+carries each language; the reader's language decides which one is shown, so
+links, navigation and custom pages need no per-language routes. Each locale may
+override `label`, `title`, `description` and `home`. Translations are stored in
+the workspace under `translations/<tag>/` and follow the
 [site translation](site-translation.md) procedure. The top bar language button
-opens the same page in the next language. A first visit follows the browser
-languages; the reader's choice is remembered under `site.localePreferenceKey`
-(default `context-locale:<package>:<base>`). Pages without a current
-translation show the original with a notice. LLM Docs and Changelog stay in the
-primary language. `context-site-map.json` lists translated, stale and missing
-counts per locale.
+switches the current page in place. A saved choice wins, then the browser
+languages, then `site.lang`; the choice is remembered under
+`site.localePreferenceKey` (default `context-locale:<package>:<base>`), which
+sites on one origin can share. Pages without a current translation show the
+original with a notice. LLM Docs and Changelog stay in the primary language.
+`context-site-map.json` lists translated, stale and missing counts per locale.
+Without `site.locales` the button still switches the interface between Chinese
+and English.
 
 `dist/<base>-site/context-site-map.json` records each article's approved path, KB path and
 site path, plus the projected menu and unresolved targets. URLs are derived from

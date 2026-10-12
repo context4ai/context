@@ -64,8 +64,9 @@ the next approved change asks again.
 
 ## Website
 
-The primary language is served at the site root and each locale under its
-`path`. A stale page shows the translation with an outdated notice, and a
-missing page shows the original with a notice; both link to the primary page.
-Navigation titles without a translation use the translated article title, then
-the primary title.
+Each page is published once and contains every language; the reader's language
+selects what is shown at the same URL. A stale page shows the translation with
+an outdated notice and a button that switches to the original; a missing page
+shows the original with a notice. Navigation titles without a translation use
+the translated article title, then the primary title. Site search covers every
+language; opening a result in another language switches to it.
