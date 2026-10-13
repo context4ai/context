@@ -72,6 +72,12 @@ complete article with stable `context:section` markers. References contain
 text. CLI computes source digests. A fragment may cite at most three distinct
 source positions; an article may have multiple fragments.
 
+When prose names a file, directory or Skill from a cited repository, write its
+exact repository-relative path, or the unique name of its directory such as a
+Skill name, in inline code and cite a file inside it. The website links such
+spellings to the recorded revision; do not hand-write links to repository files
+or add source-link columns.
+
 A revision uses `edits` instead of `content`/`references`. The file contains an
 `edits` list. Each item maps `replace: [old-fragment-ids]` to `with: [...]`, whose
 entries contain `id` and the changed `markdown` and/or `references`.

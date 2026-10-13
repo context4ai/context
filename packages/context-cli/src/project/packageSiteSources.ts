@@ -60,3 +60,48 @@ export function siteArticleSources(article: ArticleStructureEntry | undefined, r
   }
   return [...new Map(sources.map(source => [JSON.stringify(source), source])).values()];
 }
+
+/**
+ * Inline code that spells a cited repository file, a cited file's directory (at least two
+ * segments), or the distinctive name of exactly one such directory links to the cited revision.
+ * Only recorded references produce links; ambiguous spellings stay plain text.
+ */
+export function siteSourceLinks(article: ArticleStructureEntry | undefined, registry: SourcesRegistry, repositoryRemote?: string): Record<string, string> {
+  const candidates = new Map<string, Set<string>>();
+  const names = new Map<string, Set<string>>();
+  const add = (map: Map<string, Set<string>>, key: string, url: string) => map.set(key, (map.get(key) ?? new Set()).add(url));
+  for (const reference of article?.sections.flatMap(section => section.references) ?? []) {
+    const ref = reference.source_ref;
+    const local = parseRepoContentRef(ref);
+    const repo = local ? undefined : registry.repos.find(entry => ref === `repo:${entry.id}` || ref === `repo:${entry.name}`);
+    const prefix = repo?.subpath?.replace(/^\/+|\/+$/gu, "") ?? "";
+    const base = repo && repoUrl(repo.remote);
+    const target = (path: string, directory: boolean) => local
+      ? local.worktree ? undefined : repoContentWebUrl(repositoryRemote, local.commit, path, directory)
+      : base ? `${base}/${directory ? "tree" : "blob"}/${encodeURIComponent(repo!.ref)}/${encodedPath(path)}` : undefined;
+    const path = reference.locator.path;
+    const parts = path.split("/");
+    if (!local && !repo || path.startsWith("/") || parts.some(part => !part || part === "." || part === "..")) continue;
+    // Authors may write a path relative to the registered module or to its repository root.
+    for (const written of new Set([path, prefix ? `${prefix}/${path}` : path])) {
+      const segments = written.split("/");
+      for (let depth = segments.length; depth >= 1; depth--) {
+        const spelled = segments.slice(0, depth).join("/");
+        const full = prefix && !written.startsWith(`${prefix}/`) ? `${prefix}/${spelled}` : spelled;
+        const directory = depth < segments.length;
+        const url = target(local ? spelled : full, directory);
+        if (!url) break;
+        if (!directory) add(candidates, spelled, url);
+        else if (depth >= 2) { add(candidates, spelled, url); add(candidates, `${spelled}/`, url); }
+        // File names such as README.md recur across projects, so only directory names stand alone.
+        const name = segments[depth - 1]!;
+        if (directory && /[._-]/u.test(name)) add(names, name, url);
+      }
+    }
+  }
+  const links: Record<string, string> = {};
+  for (const map of [names, candidates]) {
+    for (const [key, urls] of map) if (urls.size === 1) links[key] = [...urls][0]!;
+  }
+  return links;
+}

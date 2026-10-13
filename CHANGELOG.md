@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.65 - 2026-10-13
+
+- Inline code in knowledge website articles that names a cited repository file, one of its directories, or the unique name of such a directory (for example a Skill name) links to that path at the recorded revision, shown with a link icon and a dotted underline. Bare file names, uncited or ambiguous names stay plain text, as do headings and existing links.
+- Writing guidance asks authors to name cited repository files, directories and Skills in inline code instead of hand-writing repository links or adding source-link columns.
+
 ## 0.7.64 - 2026-10-13
 
 - The knowledge website homepage no longer highlights the first section in the top bar; a `site.nav` link to the current page, such as a documentation home link, is highlighted instead.

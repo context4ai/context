@@ -17,7 +17,7 @@ import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import { knowledgeMapSectionAnchor } from "./packageKnowledgeMap.js";
 import { markdownReaderLinks } from "./markdownLinks.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
-import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSources.js";
+import { articleProvenanceMarkdown, siteArticleSources, siteSourceLinks } from "./packageSiteSources.js";
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
@@ -261,11 +261,13 @@ export async function writePackageSite(input: {
     const pageFrontmatter = (page: SitePage, content: string, titles?: Record<string, string>) => {
       const original = sourceContent.get(page.package_path);
       const sources = siteArticleSources(original?.article, registry, repositoryRemote);
+      const sourceLinks = siteSourceLinks(original?.article, registry, repositoryRemote);
       const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
       const updated = typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))
         ? new Date(timestamp).toISOString() : null;
       return `---\ntitle: ${JSON.stringify(page.title)}\n${titles ? `contextTitles: ${JSON.stringify(titles)}\n` : ""}` +
-        `contextSources: ${JSON.stringify(sources)}\ncontextUpdated: ${JSON.stringify(updated)}\n---\n`;
+        `contextSources: ${JSON.stringify(sources)}\n` +
+        `${Object.keys(sourceLinks).length ? `contextSourceLinks: ${JSON.stringify(sourceLinks)}\n` : ""}contextUpdated: ${JSON.stringify(updated)}\n---\n`;
     };
     for (const page of byPath.values()) {
       const content = await readFile(join(root, page.package_path), "utf8");
