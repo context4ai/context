@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.64 - 2026-10-13
+
+- The knowledge website homepage no longer highlights the first section in the top bar; a `site.nav` link to the current page, such as a documentation home link, is highlighted instead.
+- Changelog cards show the title on one line, truncated, while collapsed, and wrap the full title when expanded; long titles no longer widen the page.
+
 ## 0.7.63 - 2026-10-13
 
 - Section landing pages of a knowledge website show each first-level group as a card, two per row and one on narrow screens, instead of one long list.

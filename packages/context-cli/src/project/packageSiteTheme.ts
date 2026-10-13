@@ -208,8 +208,11 @@ export default {
             tags.map(tag => h('span', { 'data-context-locales': tag, lang: next(tag) }, shortLabel(next(tag))))),
         ]);
       };
+      // Origin links become absolute URLs, which VitePress never marks active.
       const navLink = item => ({ text: item.text,
-        ...(item.origin ? { link: mounted.value ? window.location.origin + item.link : item.link, target: '_self', noIcon: true } : { link: item.link }) });
+        ...(item.origin ? { link: mounted.value ? window.location.origin + item.link : item.link, target: '_self', noIcon: true,
+          activeMatch: [item.link, item.link + 'index.html'].includes(route.path) ||
+            (inHome.value && item.link === data.site.value.base) ? '^' : '(?!)' } : { link: item.link }) });
       const href = value => value.startsWith('/') ? data.site.value.base + value.slice(1) : value;
       const external = value => /^https?:\/\//.test(value) || value.startsWith('mailto:');
       const copyCommand = async value => {
@@ -329,7 +332,7 @@ export default {
         ...data.theme.value.contextUiLabels?.[chinese.value ? 'zh' : 'en'],
         sidebar: outsideSections.value ? [] : active.value?.items || [],
         nav: [...userNav('start'), ...sections.value.map(section => ({ text: section.label, link: section.href,
-          activeMatch: !outsideSections.value && section.key === selected.value ? '^' : '(?!)' })),
+          activeMatch: !inHome.value && !outsideSections.value && section.key === selected.value ? '^' : '(?!)' })),
           ...userNav('end'),
           { text: bothHtml('更多', 'More'), items: [
             ...(data.theme.value.contextMore || []).map(navLink),
@@ -428,14 +431,20 @@ export default {
 
 export const siteThemeCss = `
 .context-business-floating { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 30; max-width: calc(100vw - 40px); }
-.context-history-cards { display: grid; gap: 16px; margin: 24px 0; }
-.context-history-card { border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg-soft); }
-.context-history-card summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; padding: 20px; cursor: pointer; }
+.context-history-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 24px 0; }
+.context-history-card { min-width: 0; border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg-soft); }
+.context-history-card summary { display: flex; align-items: baseline; gap: 12px; padding: 20px; cursor: pointer; }
 .context-history-card summary::before { content: '▸'; }
 .context-history-card[open] summary::before { content: '▾'; }
 .context-history-card summary strong { color: var(--vp-c-brand-1); font-size: 13px; }
-.context-history-title { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
-.context-history-attribution { margin-left: auto; font-size: 13px; color: var(--vp-c-text-2); }
+.context-history-card summary strong, .context-history-card summary::before { flex-shrink: 0; }
+.context-history-title { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.context-history-card[open] .context-history-title { white-space: normal; overflow-wrap: anywhere; }
+.context-history-attribution { flex-shrink: 0; margin-left: auto; font-size: 13px; color: var(--vp-c-text-2); white-space: nowrap; }
+@media (max-width: 639px) {
+  .context-history-card summary { flex-wrap: wrap; }
+  .context-history-attribution { flex-basis: 100%; text-align: right; }
+}
 .context-history-body { padding: 0 24px 20px; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
 .context-history-body ul { list-style: disc; padding-left: 20px; }
 .context-history-meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--vp-c-divider); color: var(--vp-c-text-2); }
