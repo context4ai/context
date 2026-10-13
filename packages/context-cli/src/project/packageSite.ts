@@ -318,11 +318,27 @@ export async function writePackageSite(input: {
       lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${title}](${entry.href})` : title}`);
       menu(lines, entry.children, level + 1, tag);
     });
+    // Each first-level group is one card; loose articles share a final card.
+    // Blank lines around the wrappers keep the card contents parsed as Markdown.
+    const card = (lines: string[], heading: string | undefined, entries: ProjectedKnowledgeMapEntry[], tag: string) => {
+      lines.push('<div class="context-section-card">', "");
+      if (heading !== undefined) lines.push(`## ${heading}`, "");
+      menu(lines, entries, 0, tag);
+      lines.push("", "</div>", "");
+    };
     await mkdir(join(temporary, "sections"), { recursive: true });
     for (const section of sections) {
       await writeFile(join(temporary, section.href.slice(1).replace(/\.html$/u, ".md")), localizer.variants(tag => {
-        const lines = [`# ${mdLabel(localizer.entryTitle(tag, section.entry))}`, ""];
-        menu(lines, section.entries, 0, tag);
+        const lines = [`# ${mdLabel(localizer.entryTitle(tag, section.entry))}`, "", '<div class="context-section-grid">', ""];
+        const groups = section.entries.filter(entry => entry.children.length > 0);
+        const articles = section.entries.filter(entry => entry.children.length === 0);
+        for (const group of groups) {
+          card(lines, group.href ? `[${mdLabel(localizer.entryTitle(tag, group))}](${group.href})` : mdLabel(localizer.entryTitle(tag, group)),
+            group.children, tag);
+        }
+        if (groups.length === 0) for (const article of articles) card(lines, undefined, [article], tag);
+        else if (articles.length) card(lines, undefined, articles, tag);
+        lines.push("</div>");
         return lines.join("\n") + "\n";
       }));
     }

@@ -59,6 +59,17 @@ export const siteMarkdownConfig = String.raw`
       return true;
     }, { alt: ['paragraph'] });
     md.renderer.rules.context_anchor = (tokens, index) => '<a id="' + md.utils.escapeHtml(tokens[index].content) + '"></a>\n';
+    // Only the compiler writes section landing pages; accept exactly its card wrappers there.
+    const sectionWrappers = new Set(['<div class="context-section-grid">', '<div class="context-section-card">', '</div>']);
+    md.block.ruler.before('paragraph', 'context_section_card', (state, line, end, silent) => {
+      if (!/(?:^|\/)sections\/[0-9a-f]+\.md$/.test(state.env.relativePath || '')) return false;
+      const raw = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
+      if (!sectionWrappers.has(raw)) return false;
+      if (!silent) { const token = state.push('context_section_card', '', 0); token.content = raw; }
+      state.line = line + 1;
+      return true;
+    }, { alt: ['paragraph'] });
+    md.renderer.rules.context_section_card = (tokens, index) => tokens[index].content + '\n';
     // The generated website config declares contextLocaleMarker; null when the site has no translations.
     const contextLocale = typeof contextLocaleMarker === 'string' ? contextLocaleMarker : null;
     md.block.ruler.before('paragraph', 'context_locale', (state, line, end, silent) => {
@@ -286,10 +297,13 @@ export default {
         return part('year') + '-' + part('month') + '-' + part('day') + ' ' +
           part('hour') + ':' + part('minute') + ':' + part('second') + ' ' + part('timeZoneName');
       });
+      const sitePath = () => {
+        const base = data.site.value.base;
+        return route.path.startsWith(base) ? '/' + route.path.slice(base.length) : route.path;
+      };
       watch(() => route.path, () => {
         allSources.value = false;
-        const base = data.site.value.base;
-        const path = route.path.startsWith(base) ? '/' + route.path.slice(base.length) : route.path;
+        const path = sitePath();
         const direct = sections.value.find(section => section.href === path);
         const current = sections.value.find(section => section.key === selected.value);
         selected.value = (direct || (current?.pages.includes(path) ? current :
@@ -299,6 +313,12 @@ export default {
       const inLlms = computed(() => route.path.startsWith(data.site.value.base + 'llms/'));
       const inHistory = computed(() => route.path === data.site.value.base + 'changelog.html');
       const inHome = computed(() => data.frontmatter.value.layout === 'home');
+      // Articles outside the knowledge map, such as More menu targets, belong to no section.
+      const inMore = computed(() => (data.theme.value.contextMore || []).some(item => !item.origin && item.link === sitePath()));
+      const outsideSections = computed(() => inLlms.value || inHistory.value || inMore.value || (!inHome.value &&
+        !sections.value.some(section => section.href === sitePath() || section.pages.includes(sitePath()))));
+      const userNav = position => (data.theme.value.contextNav || [])
+        .filter(item => (item.position === 'start') === (position === 'start')).map(navLink);
       // Descendants, including site extensions, read the reader language as lang.
       // The frontmatter carries it too so the content refreshes its outline on a switch.
       provide(dataSymbol, { ...data, lang: computed(() => locale.value), frontmatter: computed(() => {
@@ -307,15 +327,15 @@ export default {
         return { ...value, contextLocale: locale.value, ...(actions ? { hero: { ...value.hero, actions } } : {}) };
       }), theme: computed(() => ({ ...data.theme.value,
         ...data.theme.value.contextUiLabels?.[chinese.value ? 'zh' : 'en'],
-        sidebar: inLlms.value || inHistory.value ? [] : active.value?.items || [],
-        nav: [...sections.value.map(section => ({ text: section.label, link: section.href,
-          activeMatch: !inLlms.value && !inHistory.value && section.key === selected.value ? '^' : '(?!)' })),
-          ...(data.theme.value.contextNav || []).map(navLink),
+        sidebar: outsideSections.value ? [] : active.value?.items || [],
+        nav: [...userNav('start'), ...sections.value.map(section => ({ text: section.label, link: section.href,
+          activeMatch: !outsideSections.value && section.key === selected.value ? '^' : '(?!)' })),
+          ...userNav('end'),
           { text: bothHtml('更多', 'More'), items: [
             ...(data.theme.value.contextMore || []).map(navLink),
             { text: 'LLM Docs', link: '/llms/index.html' },
             { text: 'Changelog', link: '/changelog.html' }],
-            activeMatch: inLlms.value || inHistory.value ? '^' : '(?!)' }],
+            activeMatch: inLlms.value || inHistory.value || inMore.value ? '^' : '(?!)' }],
       })) });
       const slots = {
         'nav-bar-title-before': () => extensions.brand ? h('span', { class: 'context-brand' }, custom('brand')) : null,
@@ -383,7 +403,7 @@ export default {
       };
       // History belongs between the page heading and footer metadata.
       return () => h(DefaultTheme.Layout, { class: inHome.value ? 'context-home' : data.page.value.isNotFound ? 'context-missing' :
-        inLlms.value || inHistory.value ? 'context-empty-sidebar' : undefined }, { ...slots, 'doc-after': undefined,
+        outsideSections.value ? 'context-empty-sidebar' : undefined }, { ...slots, 'doc-after': undefined,
         'doc-footer-before': () => [slots['doc-after'](), slots['doc-footer-before']()] });
     }
   },
@@ -663,6 +683,19 @@ ${readerContentStyles(".vp-doc")}
 .context-sources li + li { margin-top: 6px; }
 .context-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .context-sources a:hover { color: var(--vp-c-brand-1); border-color: currentColor; }
+/* Section landing pages: two cards per row, one on narrow screens. */
+.context-section-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+.vp-doc .context-section-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--vp-c-divider); border-radius: 12px;
+  background: color-mix(in srgb, var(--vp-c-bg) 88%, var(--vp-c-bg-soft)); }
+.vp-doc .context-section-card:hover { border-color: color-mix(in srgb, var(--vp-c-brand-1) 42%, var(--vp-c-divider)); }
+.vp-doc .context-section-card h2 { margin: 0 0 10px; padding: 0 0 10px; border-top: 0; border-bottom: 1px solid var(--vp-c-divider); font-size: 17px; line-height: 1.45; letter-spacing: 0; }
+.vp-doc .context-section-card h2 a { color: var(--vp-c-text-1); text-decoration: none; }
+.vp-doc .context-section-card > ul { margin: 0; padding: 0; list-style: none; }
+.vp-doc .context-section-card li { margin: 6px 0; font-size: 14px; line-height: 1.55; }
+.vp-doc .context-section-card li a { color: var(--vp-c-text-2); text-decoration: none; }
+.vp-doc .context-section-card li a:hover { color: var(--vp-c-brand-1); }
+.vp-doc .context-section-card ul ul { margin: 4px 0 8px; padding-left: 14px; border-left: 1px solid var(--vp-c-divider); list-style: none; }
+@media (max-width: 719px) { .context-section-grid { grid-template-columns: 1fr; } }
 ${DIAGRAM_STYLES}
 `;
 

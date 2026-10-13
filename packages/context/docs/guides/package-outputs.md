@@ -137,9 +137,16 @@ a section shows only its descendants in the left sidebar; opening an article
 directly selects its section. Skills and their Markdown references remain
 reachable as linked read-only pages, but have no automatically added navigation
 section. A reader-facing usage guide can link them where appropriate.
-Section landing pages have stable URLs separate from article URLs.
+Section landing pages have stable URLs separate from article URLs. They show
+each first-level group of the section as a card, two per row and one on
+narrow screens; articles directly under the section share one card, or get one
+card each when the section has no groups. Pages outside every section, such as
+More menu targets, LLM Docs and Changelog, show no sidebar and highlight no
+section.
 
-`site.nav` appends links after the reading directories, and `site.more` adds
+`site.nav` appends links after the reading directories; a link with
+`position: "start"` goes before them instead, for example a documentation home
+link. `site.more` adds
 items to the More menu before LLM Docs and Changelog. A More item uses either
 `link` or `target: { artifact_ref }`; a target is an approved article kept
 outside the knowledge map (for example release notes or a contribution guide),

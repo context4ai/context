@@ -8,7 +8,7 @@ import { readTranslatedArticle, readTranslatedMapTitles } from "./siteTranslatio
 import type { SitePage } from "./packageSite.js";
 
 type KbSite = NonNullable<Extract<PackageDefinition, { kind: "package.kb" }>["site"]>;
-export interface SiteNavItem { text: string; link: string; origin?: true; locales?: Record<string, string> }
+export interface SiteNavItem { text: string; link: string; origin?: true; position?: "start"; locales?: Record<string, string> }
 export interface LocalizedSiteSummary { tag: string; translated: number; stale: number; missing: number }
 export interface SiteReaderLocales {
   primary: string; tags: string[]; translated: boolean;
@@ -75,7 +75,8 @@ export function siteNavigationConfig(site: KbSite, pages: readonly SitePage[]) {
     return { text: item.text, link: item.link!, ...(item.link!.startsWith("/") ? { origin: true as const } : {}), ...(item.locales ? { locales: item.locales } : {}) };
   });
   const nav: SiteNavItem[] = (site.nav ?? []).map(item => ({ text: item.text, link: item.link,
-    ...(item.link.startsWith("/") ? { origin: true as const } : {}), ...(item.locales ? { locales: item.locales } : {}) }));
+    ...(item.link.startsWith("/") ? { origin: true as const } : {}), ...(item.position === "start" ? { position: "start" as const } : {}),
+    ...(item.locales ? { locales: item.locales } : {}) }));
   return { nav, more };
 }
 

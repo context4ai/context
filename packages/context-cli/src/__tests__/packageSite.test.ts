@@ -12,7 +12,7 @@ const pkg = kbPackage({ name: "sample", template: "src/templates", site: { title
   title: "Sample knowledge", slogan: "Answers for the work ahead", description: "A connected knowledge map.",
   resources: [{ title: "Project workspace", description: "Review the source workspace.",
     href: "https://example.com/workspace", action: "Open workspace", command: "context status", featured: true }],
-} } });
+}, nav: [{ text: "Overview", link: "/docs/", position: "start" }, { text: "Blog", link: "https://example.com/blog" }] } });
 const selected = [{ relPath: "codeindex/app/start.md", absPath: "/unused", content: '---\ntitle: Start\nartifact_ref: article:start\n---\n# Start\n<!-- context:section id="entry" -->\n## Entry\n' },
   { relPath: "codeindex/app/next.md", absPath: "/unused", content: '---\ntitle: Next\nartifact_ref: article:next\n---\n# Next\n' }].map(file => ({ ...file,
     article: { article_id: file.relPath.includes("start") ? "article:start" : "article:next", path: file.relPath,
@@ -183,8 +183,21 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     for (const section of map.sections) {
       expect(await readFile(join(root, packageSiteOutputDir(pkg), section.href.slice(1)), "utf8")).toContain(section.title);
     }
+    // A group becomes its own card; loose articles share one card.
+    const business = await readFile(join(root, packageSiteOutputDir(pkg), map.sections[0].href.slice(1)), "utf8");
+    expect(business).toContain('class="context-section-grid"');
+    expect(business.match(/class="context-section-card"/gu)).toHaveLength(2);
+    expect(business).toMatch(/class="context-section-card"><h2[^>]*>Folder[\s\S]*?Nested next/u);
+    const navMenu = article.match(/<nav\b[^>]*class="VPNavBarMenu[\s\S]*?<\/nav>/u)![0];
+    expect(navMenu.indexOf("Overview")).toBeLessThan(navMenu.indexOf("Business"));
+    expect(navMenu.indexOf("Business")).toBeLessThan(navMenu.indexOf("Blog"));
+    expect(article).not.toContain("context-empty-sidebar");
     const skill = map.pages.find((page: { package_path: string }) => page.package_path === "skills/search/SKILL.md");
-    expect(await readFile(join(root, packageSiteOutputDir(pkg), skill.site_path), "utf8")).toContain("Search guide");
+    const skillPage = await readFile(join(root, packageSiteOutputDir(pkg), skill.site_path), "utf8");
+    expect(skillPage).toContain("Search guide");
+    // Pages outside every section do not borrow the first section's sidebar.
+    expect(skillPage).toContain("context-empty-sidebar");
+    expect(skillPage).not.toMatch(/class="VPSidebarItem level-0/u);
     expect(map.warnings).toHaveLength(2);
     // A failed additional channel must not replace the prior package.
     await expect(withStagedPackageOutput(root, pkg, async staged => {
