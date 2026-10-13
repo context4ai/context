@@ -12,7 +12,7 @@ reviewed, versioned knowledge in which every claim leads back to its source.
 Agents read the knowledge first and follow its evidence chain to the original
 only when they need exact detail.
 
-[Documentation](https://context4ai.org/context/) ·
+[Documentation](https://context4ai.org/) ·
 [Quick Start](https://context4ai.org/context/pages/2d2cb920187a515c51a72c1c7b071ab6.html) ·
 [简体中文](./README.zh-CN.md) ·
 [Contributing](./CONTRIBUTING.md) ·
@@ -76,7 +76,7 @@ workflow rather than invoked directly. See
 
 ## How it works
 
-![Context knowledge production workflow](./assets/context-workflow.svg)
+![Context knowledge workflow: production, updates and retrieval](./assets/context-workflow.svg)
 
 1. **Register sources** — repositories at pinned revisions, document
    directories, notes and conversation summaries.
