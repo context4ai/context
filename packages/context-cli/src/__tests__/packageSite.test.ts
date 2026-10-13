@@ -80,7 +80,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     for (const page of mapping.pages) {
       const path = join(root, pkg.outDir, page.package_path);
       await mkdir(join(path, ".."), { recursive: true });
-      await writeFile(path, `---\nhead: [[script, {}, "unsafe-script"]]\n---\n# ${page.title}\n\nParagraph before anchor.\n<a id="section-entry"></a>\n\n## Entry\n\n{{ window.alert('unsafe') }}\n\n<script>unsafe()</script>\n\n| A | B |\n|---|---|\n| { x?: number; y?: number; } | 2 |\n\n\`\`\`mermaid\nflowchart LR\nA-->B\n\`\`\`\n\n![Figure](../../../others/assets/example.svg)\n`);
+      await writeFile(path, `---\nhead: [[script, {}, "unsafe-script"]]\n---\n# ${page.title}\n\nParagraph before anchor.\n<a id="section-entry"></a>\n\n## Entry \`entry.ts\`\n\nRead \`src/entry.ts\`, \`packages/ui/src/\`, \`src\` and [\`entry.ts\`](https://example.com/x).\n\n{{ window.alert('unsafe') }}\n\n<script>unsafe()</script>\n\n| A | B |\n|---|---|\n| { x?: number; y?: number; } | 2 |\n\n\`\`\`mermaid\nflowchart LR\nA-->B\n\`\`\`\n\n![Figure](../../../others/assets/example.svg)\n`);
     }
     await mkdir(join(root, pkg.outDir, "others/assets"), { recursive: true });
     await writeFile(join(root, pkg.outDir, "others/assets/example.svg"), '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>');
@@ -169,6 +169,12 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(article).toContain("language-mermaid");
     expect(article).toContain('class="context-sources"');
     expect(article).toContain("https://github.com/example/components/blob/abc123/packages/ui/src/entry.ts#L1-L1");
+    const sourceLinks = [...article.matchAll(/<a class="context-source-link" href="([^"]+)"[^>]*><code>([^<]+)<\/code><\/a>/gu)].map(match => [match[2], match[1]]);
+    expect(sourceLinks).toEqual([
+      ["src/entry.ts", "https://github.com/example/components/blob/abc123/packages/ui/src/entry.ts"],
+      ["packages/ui/src/", "https://github.com/example/components/tree/abc123/packages/ui/src"],
+    ]);
+    expect(article).toContain('<a href="https://example.com/x"');
     expect(await readFile(join(root, packageSiteOutputDir(pkg), "resources/others/assets/example.svg"), "utf8")).toContain("<svg");
     const map = JSON.parse(await readFile(join(root, packageSiteOutputDir(pkg), "context-site-map.json"), "utf8"));
     expect(map.site_url).toBe("https://example.com/docs/");

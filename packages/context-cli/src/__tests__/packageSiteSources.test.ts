@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ArticleStructureEntry, SourcesRegistry } from "@c4a/context";
-import { siteArticleSources } from "../project/packageSiteSources.js";
+import { siteArticleSources, siteSourceLinks } from "../project/packageSiteSources.js";
 const registry: SourcesRegistry = {
   kind: "sources.registry", registryPaths: { repo: "", file: "", lark: "" }, absolutePaths: { repo: "", file: "", lark: "" },
   repos: [{ id: "snapshot/ui", name: "ui", namespace: "snapshot", module: "ui", materializedAt: "", subpath: "packages/ui", remote: "git@github.com:example/widgets.git", ref: "abc123def4567890abc123def4567890abc123de" }],
@@ -37,4 +37,34 @@ test("same-repository provenance uses the source SHA and never labels worktree b
   expect(source.href).toBe(`https://example.org/team/project/blob/${"c".repeat(40)}/packages/core/docs/guide.md#L3-L8`);
   entry.sections[0]!.references[0]!.source_ref += "+worktree";
   expect(siteArticleSources(entry, registry, "https://example.org/team/project.git")[0]!.href).toBeUndefined();
+});
+
+test("inline code links only to cited files, their directories and unambiguous cited directory names", () => {
+  const entry = article("skills/context-code-indexer/SKILL.md");
+  entry.sections[0]!.references.push({ ...entry.sections[0]!.references[0]!, locator: { path: "skills/context-note-indexer/SKILL.md", start_line: 1, end_line: 2 } });
+  const links = siteSourceLinks(entry, registry);
+  const blob = "https://github.com/example/widgets/blob/abc123def4567890abc123def4567890abc123de/packages/ui";
+  const tree = "https://github.com/example/widgets/tree/abc123def4567890abc123def4567890abc123de/packages/ui";
+  expect(links["skills/context-code-indexer/SKILL.md"]).toBe(`${blob}/skills/context-code-indexer/SKILL.md`);
+  expect(links["packages/ui/skills/context-code-indexer/SKILL.md"]).toBe(`${blob}/skills/context-code-indexer/SKILL.md`);
+  expect(links["skills/context-code-indexer/"]).toBe(`${tree}/skills/context-code-indexer`);
+  expect(links["context-code-indexer"]).toBe(`${tree}/skills/context-code-indexer`);
+  expect(links["packages/ui/"]).toBe(tree);
+  // Two cited SKILL.md files, a one-segment directory and plain words are not guessed.
+  expect(links["SKILL.md"]).toBeUndefined();
+  expect(siteSourceLinks(article(), registry)["button.ts"]).toBeUndefined();
+  expect(links["skills"]).toBeUndefined();
+  expect(links["skills/"]).toBeUndefined();
+  expect(links["packages"]).toBeUndefined();
+  expect(Object.keys(links).every(key => !key.startsWith("guide"))).toBe(true);
+});
+
+test("unsafe paths and worktree content never become inline source links", () => {
+  expect(siteSourceLinks(article("../../secret"), registry)).toEqual({});
+  const entry = article("docs/guide.md");
+  entry.sections[0]!.references = [{ ...entry.sections[0]!.references[0]!, source_ref: `repo-content:docs@${"c".repeat(40)}+worktree` }];
+  expect(siteSourceLinks(entry, registry, "https://example.org/team/project.git")).toEqual({});
+  entry.sections[0]!.references[0]!.source_ref = `repo-content:docs@${"c".repeat(40)}`;
+  expect(siteSourceLinks(entry, registry, "https://example.org/team/project.git")["docs/guide.md"])
+    .toBe(`https://example.org/team/project/blob/${"c".repeat(40)}/docs/guide.md`);
 });

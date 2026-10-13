@@ -180,7 +180,7 @@ article identity; legacy pages without `artifact_ref` use their approved path,
 so moving those legacy files changes their URL. The shared knowledge map,
 KB layout and production Markdown remain unchanged.
 
-Article pages include a small source footer from recorded article source references and the source registry. Repository entries link to the recorded revision and module (or an explicitly referenced file); document entries link to their registered HTTP(S) URL. Unrecorded associations are not inferred from prose. Source-footer changes participate in the website build fingerprint without modifying knowledge Markdown.
+Article pages include a small source footer from recorded article source references and the source registry. Repository entries link to the recorded revision and module (or an explicitly referenced file); document entries link to their registered HTTP(S) URL. Unrecorded associations are not inferred from prose. Source-footer changes participate in the website build fingerprint without modifying knowledge Markdown. Inline code in article prose that spells a cited repository file exactly, a cited file's directory of at least two segments (with or without a trailing `/`), or the name of exactly one such directory when it contains `.`, `-` or `_` links to that path at the recorded revision. Headings, existing links and code blocks are left unchanged, and ambiguous or uncited spellings remain plain code.
 
 The website reuses resource delivery already performed for the KB: bundled
 resources are copied into the site's `resources/`; Git raw links remain remote,

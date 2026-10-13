@@ -50,6 +50,29 @@ export const siteMarkdownConfig = String.raw`
       const render = md.renderer.rules[name];
       if (render) md.renderer.rules[name] = (...args) => render(...args).replace(/\{/g, '&#123;');
     }
+    // The compiler lists contextSourceLinks only from the page's recorded references.
+    // Headings stay unlinked because their text also feeds the outline links.
+    md.core.ruler.push('context_source_links', state => {
+      const links = state.env.frontmatter && state.env.frontmatter.contextSourceLinks;
+      if (!links || typeof links !== 'object') return;
+      state.tokens.forEach((block, position) => {
+        if (block.type !== 'inline' || !block.children || state.tokens[position - 1]?.type === 'heading_open') return;
+        const children = [];
+        let depth = 0;
+        for (const token of block.children) {
+          if (token.type === 'link_open') depth++;
+          if (token.type === 'link_close') depth--;
+          const href = token.type === 'code_inline' && depth === 0 && Object.hasOwn(links, token.content) ? links[token.content] : null;
+          if (typeof href !== 'string' || !/^https?:\/\//.test(href)) { children.push(token); continue; }
+          const open = new state.Token('html_inline', '', 0);
+          open.content = '<a class="context-source-link" href="' + md.utils.escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">';
+          const close = new state.Token('html_inline', '', 0);
+          close.content = '</a>';
+          children.push(open, token, close);
+        }
+        block.children = children;
+      });
+    });
     md.block.ruler.before('paragraph', 'context_anchor', (state, line, end, silent) => {
       const raw = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
       const match = /^<a id="(section-[a-zA-Z0-9_%.-]+)"><\/a>$/.exec(raw);
@@ -692,6 +715,12 @@ ${readerContentStyles(".vp-doc")}
 .context-sources li + li { margin-top: 6px; }
 .context-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .context-sources a:hover { color: var(--vp-c-brand-1); border-color: currentColor; }
+.vp-doc a.context-source-link { font-weight: inherit; border-bottom: 0; }
+.vp-doc a.context-source-link::before { content: ""; display: inline-block; width: .85em; height: .85em; margin-right: .25em; vertical-align: -.1em; background: currentColor; opacity: .55; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat; transition: opacity .15s; }
+.vp-doc a.context-source-link > code { border-bottom: 1px dotted color-mix(in srgb, var(--vp-c-text-1) 55%, transparent); transition: color .15s, border-color .15s; }
+.vp-doc td a.context-source-link { white-space: nowrap; }
+.vp-doc a.context-source-link:hover::before { opacity: 1; }
+.vp-doc a.context-source-link:hover > code { color: var(--vp-c-brand-1); border-bottom-style: solid; border-bottom-color: currentColor; }
 /* Section landing pages: two cards per row, one on narrow screens. */
 .context-section-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
 .vp-doc .context-section-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--vp-c-divider); border-radius: 12px;
