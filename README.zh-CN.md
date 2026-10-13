@@ -9,7 +9,7 @@
 
 Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版本的知识，每条结论都能追溯到来源。Agent 先读知识，需要精确细节时再沿证据链读取原文。
 
-[文档](https://context4ai.org/context/) ·
+[文档](https://context4ai.org/) ·
 [快速开始](https://context4ai.org/context/pages/2d2cb920187a515c51a72c1c7b071ab6.html) ·
 [English](./README.md) ·
 [参与贡献](./CONTRIBUTING.md) ·
@@ -56,7 +56,7 @@ Code、Markdown、Note 与 Sessions 四个 Indexer 技能由工作流选择，�
 
 ## 工作原理
 
-![Context 知识生产工作流](./assets/context-workflow.zh-CN.svg)
+![Context 知识工作流：生产、更新与检索](./assets/context-workflow.zh-CN.svg)
 
 1. **登记来源**：固定版本的代码仓库、文档目录、笔记与会话摘要。
 2. **采集证据**：文档正文、代码符号、关系与来源指纹。
