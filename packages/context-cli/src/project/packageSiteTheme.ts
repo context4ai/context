@@ -123,7 +123,7 @@ import DefaultTheme from 'vitepress/theme-without-fonts';
 import { useData, useRoute, dataSymbol, onContentUpdated, getScrollOffset } from 'vitepress';
 import { onMounted, onUnmounted, nextTick, watch, computed, ref, provide, h } from 'vue';
 import './style.css';
-import extensions from './extensions.js';
+import extensions, { preloadExtensions } from './extensions.js';
 export default {
   extends: DefaultTheme,
   Layout: {
@@ -310,7 +310,10 @@ export default {
       // components that read isDark are mounted again for readers starting dark.
       const startedDark = ref(false);
       const custom = name => extensions[name]({ key: startedDark.value ? 'client' : 'prerender' });
-      onMounted(() => { mounted.value = true; startedDark.value = data.isDark.value; });
+      onMounted(() => {
+        mounted.value = true;
+        if (data.isDark.value) preloadExtensions().catch(() => {}).then(() => { startedDark.value = true; });
+      });
       const updatedLabel = computed(() => {
         const value = data.frontmatter.value.contextUpdated || data.theme.value.contextUpdated;
         if (!value) return '';
