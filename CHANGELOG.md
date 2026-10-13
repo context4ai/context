@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.66 - 2026-10-13
+
+- Knowledge websites no longer collapse custom slots, such as a homepage banner, for readers who open them in dark mode. Slots remounted for these readers now finish loading before they replace the prerendered markup, so the old and new content swap in the same frame.
+
 ## 0.7.65 - 2026-10-13
 
 - Inline code in knowledge website articles that names a cited repository file, one of its directories, or the unique name of such a directory (for example a Skill name) links to that path at the recorded revision, shown with a link icon and a dotted underline. Bare file names, uncited or ambiguous names stay plain text, as do headings and existing links.

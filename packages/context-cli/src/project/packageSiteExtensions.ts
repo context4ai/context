@@ -87,15 +87,20 @@ export async function writeSiteExtensions(projectRoot: string, temporary: string
   }
   const imports = ["import { h, defineAsyncComponent, resolveComponent } from 'vue';"];
   const slots: string[] = [];
+  const remounted: string[] = [];
   for (const [name, path] of Object.entries(extensions?.slots ?? {})) {
     if (path === undefined) continue;
     if (path === false) { slots.push(`${JSON.stringify(name)}: false`); continue; }
     imports.push(`const ${name} = defineAsyncComponent(() => import(${JSON.stringify(`../../_site/${path}`)}));`);
+    if (name !== "floating") remounted.push(name);
     // Floating widgets can contain browser-only SDKs. The import is deferred
     // until ClientOnly mounts, so it never executes during prerendering.
     slots.push(`${JSON.stringify(name)}: ${name === "floating" ? `() => h(resolveComponent('ClientOnly'), null, { default: () => h(${name}) })` : `props => h(${name}, props)`}`);
   }
-  await writeFile(join(temporary, ".vitepress/theme/extensions.js"), imports.join("\n") + `\nexport default {${slots.join(",")}};\n`);
+  // Readers starting dark remount these slots; resolving them first lets the
+  // replacement render in the same frame instead of leaving an empty slot.
+  const preload = `export const preloadExtensions = () => Promise.all([${remounted.map((name) => `${name}.__asyncLoader()`).join(",")}]);`;
+  await writeFile(join(temporary, ".vitepress/theme/extensions.js"), imports.join("\n") + `\nexport default {${slots.join(",")}};\n${preload}\n`);
   for (const [key, path] of Object.entries(extensions?.pages ?? {})) {
     await mkdir(join(temporary, "custom"), { recursive: true });
     // Compile the original Markdown in place, retaining relative component and asset imports.
