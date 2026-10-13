@@ -2,6 +2,12 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.63 - 2026-10-13
+
+- Section landing pages of a knowledge website show each first-level group as a card, two per row and one on narrow screens, instead of one long list.
+- A `site.nav` link with `position: "start"` appears before the knowledge sections, for example a documentation home link.
+- More menu targets and other pages outside every section no longer show the first section's sidebar or highlight it in the top bar; the More menu is highlighted instead.
+
 ## 0.7.62 - 2026-10-13
 
 - Approved articles targeted by `site.more` no longer need a knowledge map entry: package builds, knowledge map adjustments and structure approval accept them, and review reports no longer list them as unplaced.

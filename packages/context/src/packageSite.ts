@@ -45,6 +45,8 @@ const packageSiteLocaleSchema = z.object({
 const packageSiteNavLinkSchema = z.object({
   text: z.string().trim().min(1),
   link: siteHrefSchema,
+  /** `start` places the link before the knowledge sections; the default `end` places it after them. */
+  position: z.enum(["start", "end"]).optional(),
   locales: localizedTextSchema.optional(),
 }).strict();
 
@@ -76,7 +78,7 @@ export const packageSiteSchema = z.object({
   locales: z.record(localeTagSchema, packageSiteLocaleSchema).optional(),
   /** Target of the top-bar title; defaults to the site home. Root-relative links address the site origin. */
   titleLink: siteHrefSchema.optional(),
-  /** Top navigation links after the knowledge sections. Root-relative links address the site origin. */
+  /** Top navigation links, after the knowledge sections unless `position: "start"`. Root-relative links address the site origin. */
   nav: z.array(packageSiteNavLinkSchema).optional(),
   /** Items appended to the More menu after LLM Docs and Changelog. */
   more: z.array(packageSiteMoreItemSchema).optional(),
