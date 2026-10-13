@@ -191,6 +191,11 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     const navMenu = article.match(/<nav\b[^>]*class="VPNavBarMenu[\s\S]*?<\/nav>/u)![0];
     expect(navMenu.indexOf("Overview")).toBeLessThan(navMenu.indexOf("Business"));
     expect(navMenu.indexOf("Business")).toBeLessThan(navMenu.indexOf("Blog"));
+    // The site home highlights its own nav link, not the first section.
+    const homeNav = home.match(/<nav\b[^>]*class="VPNavBarMenu[\s\S]*?<\/nav>/u)![0];
+    expect(homeNav).toMatch(/<a[^>]*class="[^"]*VPNavBarMenuLink active[^"]*"[^>]*>(?:(?!<\/a>)[\s\S])*Overview/u);
+    expect(homeNav).not.toMatch(/<a[^>]*class="[^"]*VPNavBarMenuLink active[^"]*"[^>]*>(?:(?!<\/a>)[\s\S])*Business/u);
+    expect(navMenu).toMatch(/<a[^>]*class="[^"]*VPNavBarMenuLink active[^"]*"[^>]*>(?:(?!<\/a>)[\s\S])*Business/u);
     expect(article).not.toContain("context-empty-sidebar");
     const skill = map.pages.find((page: { package_path: string }) => page.package_path === "skills/search/SKILL.md");
     const skillPage = await readFile(join(root, packageSiteOutputDir(pkg), skill.site_path), "utf8");

@@ -91,8 +91,7 @@ export function restoreOriginNavLinks(html: string, base: string, links: readonl
     const href = tag.match(/\shref="([^"]*)"/u)?.[1];
     const link = href === undefined ? undefined : prefixedHref.get(href);
     if (link === undefined) return tag;
-    return tag.replace(` href="${href}"`, ` href="${link}"`)
-      .replace(/\sclass="([^"]*)"/u, (_, classes: string) => ` class="${classes.split(/\s+/u).filter(name => name !== "active").join(" ")}"`);
+    return tag.replace(` href="${href}"`, ` href="${link}"`);
   });
 }
 

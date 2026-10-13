@@ -148,7 +148,9 @@ each first-level group of the section as a card, two per row and one on
 narrow screens; articles directly under the section share one card, or get one
 card each when the section has no groups. Pages outside every section, such as
 More menu targets, LLM Docs and Changelog, show no sidebar and highlight no
-section.
+section. The homepage highlights no section either; a `site.nav` link to the
+current page, such as a `position: "start"` origin link to the site root, is
+highlighted instead.
 
 `site.nav` appends links after the reading directories; a link with
 `position: "start"` goes before them instead, for example a documentation home

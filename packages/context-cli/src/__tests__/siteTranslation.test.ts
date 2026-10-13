@@ -30,7 +30,7 @@ test("server-rendered origin nav links skip the site base", () => {
     '<a class="VPLink link" href="/docs/search/" target="_self">Search</a>' +
     '<a class="VPLink link" href="/docs/pages/a.html">Article</a>';
   expect(restoreOriginNavLinks(html, "/docs/", ["/", "/search/"])).toBe('<a class="title" href="/docs/">T</a>' +
-    '<a class="VPLink link VPNavBarMenuLink" href="/" target="_self" tabindex="0">Home</a>' +
+    '<a class="VPLink link VPNavBarMenuLink active" href="/" target="_self" tabindex="0">Home</a>' +
     '<a class="VPLink link" href="/search/" target="_self">Search</a>' +
     '<a class="VPLink link" href="/docs/pages/a.html">Article</a>');
   expect(restoreOriginNavLinks(html, "/", ["/"])).toBe(html);
