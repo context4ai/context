@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
 import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
@@ -7,6 +7,7 @@ import { produceFixtureArticles } from "./productionArticleWorkflow.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
+import { verifyProjectWorkspace } from "../project/verify.js";
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
 
 test("a successful package build retains navigation diagnostics on unchanged rebuilds", async () => {
@@ -39,5 +40,35 @@ test("a successful package build retains navigation diagnostics on unchanged reb
     const repaired = (await buildProjectPackages(root)).packages[0]!;
     expect(repaired.linkWarnings?.some(warning => warning.code === "package-import-unresolved")).toBe(false);
     expect(await readFile(page, "utf8")).toContain("https://example.org/guide");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60000);
+
+test("package builds leave source-region checks to verify", async () => {
+  const root = await createDocumentRevisionWorkspace({ sourceCount: 1 });
+  try {
+    await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"), join(root, "src/package-templates/kb"), { recursive: true });
+    const entryPath = join(root, "src/index.ts");
+    await writeFile(entryPath, (await readFile(entryPath, "utf8")).replace("defineProject, source", "defineProject, kbPackage, source")
+      .replace("packages: []", 'packages: [kbPackage({ name: "source-checks", template: { path: "src/package-templates/kb", vars: {} } })]'));
+    await produceFixtureArticles(root, [{
+      path: "architecture/entry.md", question: "How is the public entry used?",
+      sources: [DOCUMENT_REVISION_SOURCE_REF],
+      markdown: '---\ntitle: Public entry\ndescription: Public entry usage.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point.\n<!-- /context:section -->\n',
+      references: { sections: [{ id: "entry", references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF,
+        locator: { path: "src/index.ts", start_line: 1, end_line: 1 } }] }] },
+    }]);
+    await approveCandidates(root, await readCandidateRecords(root));
+    await closeProjectWorkspace(root);
+    await acceptStarterPackageTemplates({ projectRoot: root });
+    const first = (await buildProjectPackages(root)).packages[0]!;
+    await rm(join(root, "fixture-source"), { recursive: true, force: true });
+    expect((await verifyProjectWorkspace(root)).issues).toContainEqual(expect.objectContaining({
+      code: "approved-source-region-changed", severity: "warning" }));
+    const rebuilt = (await buildProjectPackages(root)).packages[0]!;
+    expect(rebuilt.state).toBe("unchanged");
+    const pages = (await readdir(join(root, first.outDir), { recursive: true })).filter(path => path.endsWith(".md"));
+    const contents = await Promise.all(pages.map(path => readFile(join(root, first.outDir, path), "utf8")));
+    expect(contents.some(content => content.includes("Use the public entry point."))).toBe(true);
+    expect(contents.some(content => content.includes("Source regions need review"))).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60000);

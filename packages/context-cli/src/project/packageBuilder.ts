@@ -14,7 +14,6 @@ import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
 import { readSiteExtensions } from "./packageSiteExtensions.js";
 import { workspaceVersionFingerprint, writePackageVersion } from "./workspaceBuildVersion.js";
 import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
-import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
 import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
 import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
@@ -372,7 +371,7 @@ export async function collectPackageFreshness(
   packages: readonly PackageDefinition[],
 ): Promise<PackageFreshness[]> {
   assertDistinctPackageOutputs(packages);
-  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
+  const approved = await listApprovedKnowledge(projectRoot);
   return Promise.all(packages.map(async (pkg) => {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);
@@ -468,7 +467,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       next: "Declare kbPackage() or llmsPackage() in src/index.ts, then rerun context build.",
     });
   }
-  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
+  const approved = await listApprovedKnowledge(projectRoot);
   const templateReviews = await inspectPackageTemplateReviews(projectRoot, packages);
   const unresolvedTemplateReviews = templateReviews.filter((review) =>
     review.state === "review-required" || review.state === "invalid"

@@ -19,3 +19,5 @@ whether the content needs revision.
 Changed, missing or ambiguously relocated source regions identify articles to
 inspect through the normal revision workflow. Warnings do not add a separate
 maintenance gate, silently rewrite articles or confirm that the prose is current.
+Build does not repeat this comparison or read registered sources, so package
+pages carry no source-region notice; run verify before publishing.
