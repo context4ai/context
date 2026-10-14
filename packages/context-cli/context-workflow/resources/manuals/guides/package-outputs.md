@@ -173,8 +173,8 @@ the workspace under `translations/<tag>/` and follow the
 [site translation](site-translation.md) procedure. The top bar language button
 switches the current page in place. A saved choice wins, then the browser
 languages, then `site.lang`; the choice is remembered under
-`site.localePreferenceKey` (default `context-locale:<package>:<base>`), which
-sites on one origin can share. Pages without a current translation show the
+`site.localePreferenceKey` (default `context-locale`), which
+sites on one origin share unless configured otherwise. Pages without a current translation show the
 original with a notice. LLM Docs and Changelog stay in the primary language.
 `context-site-map.json` lists translated, stale and missing counts per locale.
 Without `site.locales` the button still switches the interface between Chinese
@@ -574,6 +574,10 @@ all websites and offline Review reports in the workspace. It is configuration,
 not a generated HTML file: builds never overwrite existing values. Deleting it
 restores built-in defaults; Review does not need the file or an existing website
 build. The next website build recreates it.
+
+Websites open in light mode regardless of the system color scheme. The reader's
+light/dark choice is remembered under the origin-wide `context-theme` key, so
+sites and other pages on one origin share it.
 
 Each `light`/`dark` object supports `brand`, `accent`, `background`, `surface`,
 `text`, `mutedText`, and `border`. Values are hexadecimal CSS colors (`#RGB`,

@@ -139,9 +139,9 @@ test("localized website keeps one URL per page with a block per reader language"
     expect(guide).toContain('href="/sourcegraph/" target="_self"');
     expect(guide).toContain('<script id="context-appearance">');
     expect(guide).not.toContain('id="check-dark-mode"');
-    expect(guide).toContain("context-theme:sample:/context/");
+    expect(guide).toContain('localStorage.getItem("context-theme")');
     expect(guide).toContain('<script id="context-locale">');
-    expect(guide).toContain("context-locale:sample:/context/");
+    expect(guide).toMatch(/key:"context-locale"/);
     const map = JSON.parse(await readFile(join(output, "context-site-map.json"), "utf8"));
     expect(map.locales).toEqual([{ tag: "zh-CN", translated: 1, stale: 1, missing: 1 }]);
     expect(existsSync(join(output, "zh"))).toBe(false);
