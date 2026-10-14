@@ -183,6 +183,7 @@ export async function materializeProductionStage(input: {
         const projections = await Promise.allSettled(batch.tasks.slice(offset, offset + 8).map(async id => {
           const task = tasksById.get(id)!;
           const taskRoot = join(batchPath, "tasks", id);
+          let sectionIds: string[] = [];
           if (task.base !== null) {
             const basePath = join(taskRoot, "base.md");
             const referencesPath = join(taskRoot, "base-references.yaml");
@@ -202,10 +203,20 @@ export async function materializeProductionStage(input: {
               await write(basePath, target.base.markdown);
               await write(referencesPath, YAML.stringify({ sections: target.base.sections }));
             }
+            const saved = YAML.parse((await readOptional(input.projectRoot, referencesPath))!);
+            sectionIds = saved.sections.map((section: { id: string }) => section.id);
           }
+          const output = `batches/${batch.id}/${id}`;
+          const draft = join(agent, output, "edits.yaml");
+          // A complete draft written before edits were projected stays the submitted form.
+          const edits = task.base !== null && (await readOptional(input.projectRoot, draft) !== undefined ||
+            await readOptional(input.projectRoot, join(agent, output, "article.md")) === undefined);
+          if (edits && await readOptional(input.projectRoot, draft) === undefined) await write(draft,
+            `# Existing fragment IDs: ${JSON.stringify(sectionIds)}\n# Replace selected fragments or insert with replace: [] and after: <id>.\n# Omit references to inherit; supply references to re-confirm evidence.\nedits: []\n`);
           await write(join(taskRoot, "task.md"), [`# ${task.question}`, "", `Target: ${task.path}`,
-            `Draft Markdown: ${join(agent, "batches", batch.id, id, "article.md")}`,
-            `Draft references: ${join(agent, "batches", batch.id, id, "references.yaml")}`,
+            ...(edits ? [`Draft edits: ${join(agent, output, "edits.yaml")}`] : [
+              `Draft Markdown: ${join(agent, output, "article.md")}`,
+              `Draft references: ${join(agent, output, "references.yaml")}`]),
             `Article: ${task.article_id}`, `Dependencies: ${task.after.join(", ") || "none"}`, "",
             task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
             ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
@@ -215,8 +226,8 @@ export async function materializeProductionStage(input: {
           await write(join(taskRoot, "sources.md"), ["# Authorized sources", "",
             ...task.sources.map(source => `- ${source.scope}: ${scopePaths.get(source.scope)!}`), "",
             "Navigation is not semantic evidence. Read the relevant full text before writing and cite actual source regions.", ""].join("\n"));
-          const output = `batches/${batch.id}/${id}`;
-          return { task: id, input: task.input, content: `${output}/article.md`, references: `${output}/references.yaml` };
+          return { task: id, input: task.input, ...(edits ? { edits: `${output}/edits.yaml` }
+            : { content: `${output}/article.md`, references: `${output}/references.yaml` }) };
         }));
         // Drain all workers before releasing the lock on failure; partial
         // unissued projections are safe to reuse during normal preparation.

@@ -167,6 +167,9 @@ test("writing amendments append once, preserve issued work and explicitly replac
   expect(appended.tasks[1]!.status).toBe("pending");
   expect(command(projectRoot, args).stage_state).toBe("active");
   expect((await readProductionStage(projectRoot))!.tasks).toEqual(appended.tasks);
+  await writeFile(amendmentPath, YAML.stringify({ articles: [{ ...article, path: "decision/unstaged.md" }] }));
+  await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/amendment.yaml" })).rejects.toMatchObject({
+    detail: { reason_code: "production-plan-stage-missing", example: { stage: stage.id } } });
   const replacement = { ...plan, replaces: [issued.id], articles: [{ ...article, path: "decision/revised.md" }] };
   await writeFile(amendmentPath, YAML.stringify(replacement));
   await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/amendment.yaml" })).rejects.toThrow("dependent plans together");

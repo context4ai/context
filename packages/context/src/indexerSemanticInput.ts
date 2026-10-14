@@ -1,3 +1,4 @@
+import { articleSourceLocatorInputSchema } from "./articleSourceLocatorInput.js";
 import { articleSourceLocatorSchema } from "./articleStructure.js";
 import { indexerIdSchema } from "./indexerProtocolCommon.js";
 import { knowledgeMapUpdateSchema } from "./knowledgeMap.js";
@@ -366,8 +367,8 @@ export const indexerLayoutConfirmationInputSchema = z.discriminatedUnion("decisi
 ]);
 
 const revisionSectionReferencesSchema = z.array(z.object({
-  source_ref: z.string().min(1), locator: articleSourceLocatorSchema,
-}).strict()).max(3);
+  source_ref: z.string().min(1), locator: articleSourceLocatorInputSchema,
+}).strict());
 
 export const approvedRevisionSemanticInputSchema = z.union([
   z.object({ stage: z.literal("approved-revision"), markdown: z.string().min(1),

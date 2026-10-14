@@ -1,11 +1,11 @@
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { expandRevisionProgramBlocks, type RevisionProgramBlock } from "./approvedRevisionPrograms.js";
-import type { ArticleSourceReference } from "@c4a/context";
+import type { SubmittedSourceReference } from "./submittedSourceLocator.js";
 
 export interface RevisionContentInput {
   markdown?: string;
   sections?: Array<{ section_id: string; content?: Array<{ markdown: string } | { program: string }> | undefined;
-    references?: Array<Omit<ArticleSourceReference, "content_digest">> | undefined }>;
+    references?: Array<SubmittedSourceReference> | undefined }>;
 }
 
 /** Replace only explicitly identified source-bound sections. All untouched bytes

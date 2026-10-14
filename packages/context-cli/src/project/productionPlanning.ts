@@ -1,3 +1,5 @@
+import { migrateProductionDrafts } from "./productionDraftMigration.js";
+import { inheritedProductionSources, resolveProductionDependency } from "./productionDependencies.js";
 import { randomUUID } from "node:crypto";
 import { readFile, access } from "node:fs/promises";
 import { join } from "node:path";
@@ -156,12 +158,27 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if ((await readMaintenance(input.projectRoot)).active) throw new TypeError("Finish or cancel the active maintenance task before amending the production plan.");
     await assertProductionPlanRequirementsCurrent(input.projectRoot, stage);
     const file = input.manifest ?? await readProductionFile(input);
-    const plan = productionPlanInputSchema.parse(YAML.parse(file.text));
+    const rawPlan = YAML.parse(file.text);
+    if (rawPlan && typeof rawPlan === "object" && rawPlan.stage === undefined) throw new ContextError(ExitCode.UserError,
+      `The file requires a top-level stage. Example:\nstage: ${stage.id}\narticles: []`, {
+        category: ErrorCategory.UserInputInvalid, reason_code: "production-plan-stage-missing", missing_field: "stage", example: { stage: stage.id },
+        next_action: { command: "context status --format json", instruction: `Add stage: ${stage.id} to the top of ${input.path}, then submit it again with the current action command.` },
+      });
+    const plan = productionPlanInputSchema.parse(rawPlan);
     if (plan.stage !== stage.id) throw new TypeError("The submitted plan belongs to a different stage");
     if (new Set(plan.replaces).size !== plan.replaces.length) throw new TypeError("Replacement task identities must be unique");
     if (!stage.report_approved && plan.replaces.length) throw new TypeError("Before report approval, submit the complete plan instead of replacement task identities");
     if (stage.report_approved && !plan.articles.length && plan.pending_scopes === undefined) throw new TypeError("A writing-stage plan amendment needs new tasks or an explicit investigation update");
     const request = (await productionPlanningRequest(input.projectRoot))!;
+    const candidates = await readCandidateRecords(input.projectRoot);
+    const approved = productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot));
+    const authorized = authorizedProductionSources(request.requirements);
+    for (const article of plan.articles) {
+      const prior = candidates.find(candidate => candidate.path === article.path);
+      const sections = prior?.indexer_candidate?.sections.map(section => ({ references: section.references })) ?? approved.byPath.get(article.path)?.sections ?? [];
+      article.sources = await inheritedProductionSources(article.sources, sections.flatMap(section => section.references), authorized,
+        scope => productionSourceBaseline(input.projectRoot, scope).then(() => true, () => false));
+    }
     const selected = [...new Set([...plan.articles.flatMap(article => article.sources), ...plan.pending_scopes ?? []])];
     if (selected.length) selectProductionSources(request.requirements, selected);
     const existingScopes = new Set(stage.scopes.map(source => source.scope));
@@ -204,8 +221,6 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
       return { stage_state: prepared.state, next: { directory: prepared.directory, agent_directory: prepared.agent_directory, mode: prepared.mode,
         ...(prepared.submission ? { submission: prepared.submission } : {}) } };
     }
-    const candidates = await readCandidateRecords(input.projectRoot);
-    const approved = productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot));
     const tasks = [];
     for (const article of plan.articles) {
       if (stage.report_approved && stage.tasks.some(task => task.path === article.path &&
@@ -218,8 +233,7 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
       const sections = prior?.indexer_candidate?.sections.map(section => ({ id: section.section_key, references: section.references })) ?? formal?.sections;
       const task = { id: identities.get(article.path)!, article_id: prior?.article_id ?? formal?.article_id ?? stage.tasks.find(task => task.path === article.path)?.article_id ?? randomUUID(),
         path: article.path, question: article.question, batch: article.batch,
-        after: article.after.map(path => { const id = (stage.report_approved || retained.length > 0) && stage.tasks.some(task => task.id === path) ? path : identities.get(path);
-          if (!id) throw new TypeError(`Unknown dependency article path or existing task identity: ${path}`); return id; }),
+        after: article.after.map(value => resolveProductionDependency(value, identities, stage, plan.replaces)),
         sources: article.sources.map(scope => { const source = stage.scopes.find(source => source.scope === scope);
           if (!source) throw new TypeError(`Article source is outside authorized scope: ${scope}`);
           if (source.baseline === null) throw refreshRequired(stage.id, `Source ${scope} has no captured version; restore and prepare it before planning an article`);
@@ -236,8 +250,9 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     const updated = validateProductionStage({ ...amended, indexer_usage: [...new Map(usage.map(item => [JSON.stringify(item), item])).values()] });
     await saveExpandedProductionScope(input.projectRoot, updated, request.requirements, additional.materials.sources);
     try {
+      const draft_migrations = await migrateProductionDrafts(input.projectRoot, stage, tasks, plan.replaces);
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage: updated, capabilities: plan.capabilities });
-      return { stage_state: prepared.state, ...(prepared.submission ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory,
+      return { stage_state: prepared.state, draft_migrations, ...(prepared.submission ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory,
         submission: prepared.submission, mode: prepared.mode } } : { next_action: { command: "context status --format json" } }) };
     } catch (error) {
       return { stage_state: "active" as const, next_preparation: { outcome: "failed" as const,

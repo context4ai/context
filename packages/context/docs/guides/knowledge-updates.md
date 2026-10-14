@@ -700,3 +700,14 @@ an explicit empty list removes them, and deleting a fragment removes its
 citations. Each fragment may cite at most three source positions. Register and
 authorize new material before citing it, then follow normal Review, close and
 build. Article links alone do not authorize reading new sources or prove a claim.
+
+### Locating submitted references
+
+Submission locators also accept `{path, heading}` or `{path, quote}` instead of
+line numbers. Use exactly one form. A heading matches an exact ATX heading
+outside code fences in a Markdown source; its region ends before the next
+same-level or higher-level heading. A quote is an exact, unique, nonempty
+substring (line endings are normalized). Ambiguous matches return candidate
+line ranges. Both forms resolve against authorized captured text before hashing;
+stored references still contain only `path`, `start_line` and `end_line`.
+The three-region limit applies after resolving and deduplicating positions.

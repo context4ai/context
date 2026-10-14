@@ -1,3 +1,4 @@
+import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import YAML from "yaml";
 import { z } from "zod";
 import { articleFragmentReferences, createArticleSourceReference,
@@ -73,6 +74,8 @@ export async function prepareProductionArticle(input: {
   sourceReader?: ProductionSourceReader;
   visibility?: string;
   base?: ProductionArticleBase;
+  /** Validated candidate/approved references only; repair drafts never grant authority. */
+  trustedBase?: ProductionArticleBase;
   approvedBaseDigest: string | null;
 }): Promise<CandidateRecord> {
   const { task } = input;
@@ -124,6 +127,7 @@ export async function prepareProductionArticle(input: {
   // Report all oversized fragments together before reading source bodies.
   // Duplicate declarations of the same region still count only once.
   const oversized = declared.sections.flatMap(section => {
+    if (section.references.some(ref => !("start_line" in ref.locator))) return [];
     const count = new Set(section.references.map(ref => indexerProtocolDigest({
       source_ref: ref.source_ref, locator: ref.locator,
     }))).size;
@@ -138,10 +142,14 @@ export async function prepareProductionArticle(input: {
     const references = [];
     for (const ref of byId.get(fragment.id)!) {
       try {
-        if (![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) throw new TypeError(`Source is outside this task's authorized inputs: ${ref.source_ref}`);
+        const inherited = retained?.get(fragment.id)?.some(value => value.source_ref === ref.source_ref &&
+          indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator));
+        const trusted = inherited ? input.trustedBase?.sections.find(section => section.id === fragment.id)?.references.find(value =>
+          value.source_ref === ref.source_ref && indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator)) : undefined;
+        if (!trusted?.content_digest && ![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) throw new TypeError(`Source is outside this task's authorized inputs: ${ref.source_ref}`);
         const text = await read(ref.source_ref, ref.locator.path, true);
-        const reference = createArticleSourceReference(ref.source_ref, ref.locator, text);
-        const previous = retained?.get(fragment.id)?.find(value => value.source_ref === ref.source_ref &&
+        const reference = createArticleSourceReference(ref.source_ref, resolveSubmittedSourceLocator(ref.locator, text), text);
+        const previous = trusted ?? retained?.get(fragment.id)?.find(value => value.source_ref === ref.source_ref &&
           indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator));
         if (previous?.content_digest && previous.content_digest !== reference.content_digest) {
           throw new TypeError("Retained source text changed. Read it and explicitly revise this fragment's references; a body-only edit cannot confirm changed evidence.");

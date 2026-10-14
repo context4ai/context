@@ -1,3 +1,4 @@
+import { siteHeadingPairingRule } from "./siteHeadingPairs.js";
 import { readerContentStyles } from "./readerContentStyles.js";
 import { DIAGRAM_VIEWER_SCRIPT } from "./diagramViewer.js";
 import { DIAGRAM_STYLES } from "./diagramStyles.js";
@@ -109,6 +110,7 @@ export const siteMarkdownConfig = String.raw`
       state.line = line + 1;
       return true;
     }, { alt: ['paragraph'] });
+${siteHeadingPairingRule}
     md.renderer.rules.context_locale = (tokens, index) => {
       const meta = tokens[index].meta;
       if (meta.tags) return '<div data-context-locales="' + meta.tags.join(' ') + '" lang="' + meta.tags[0] + '">\n';
@@ -168,27 +170,49 @@ export default {
         (parseInt(getComputedStyle(element).paddingTop, 10) || 0));
       // Anchors repeat across languages and search results can point into a hidden one.
       const revealHash = (switched = false) => {
-        const id = decodeURIComponent(location.hash.slice(1));
+        let id;
+        try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
         if (!id) return;
         const targets = [...document.querySelectorAll('[id="' + CSS.escape(id) + '"]')];
         const visible = targets.find(element => element.getClientRects().length);
         // The browser already scrolled to the first match unless it was hidden.
         if (visible) { if (switched || visible !== targets[0]) scrollToElement(visible); return; }
+        const key = targets[0]?.dataset.contextHeading;
+        if (key) {
+          const paired = [...document.querySelectorAll('[data-context-heading="' + CSS.escape(key) + '"]')]
+            .find(element => element.getClientRects().length);
+          if (paired) { scrollToElement(paired); return; }
+        }
         const block = targets[0]?.closest('[data-context-locales]');
         if (!block) return;
         setLocale(block.dataset.contextLocales.split(' ')[0]);
         nextTick(() => requestAnimationFrame(() => revealHash(true)));
       };
-      onContentUpdated(() => { applyLocale(); setTimeout(() => revealHash()); });
-      const onHashChange = () => revealHash();
+      // VitePress schedules its own scroll in a frame after rendering. Apply the locale target afterwards.
+      const scheduleReveal = () => nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => revealHash(true))));
+      onContentUpdated(() => { applyLocale(); scheduleReveal(); });
+      const onHashChange = scheduleReveal;
+      const onAnchorClick = event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const link = event.target?.closest?.('a[href]');
+        if (!link || link.hasAttribute('download') || link.hasAttribute('target')) return;
+        const url = new URL(link.href, location.href);
+        if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search && url.hash) {
+          scheduleReveal();
+        }
+      };
       const switchToOriginal = event => { if (event.target.closest?.('.context-locale-original')) setLocale(readers.value.primary); };
       onMounted(() => {
         locale.value = activeLocale();
         window.addEventListener('hashchange', onHashChange);
+        window.addEventListener('popstate', onHashChange);
+        window.addEventListener('click', onAnchorClick, true);
         document.addEventListener('click', switchToOriginal);
       });
       onUnmounted(() => {
         window.removeEventListener('hashchange', onHashChange);
+        window.removeEventListener('popstate', onHashChange);
+        window.removeEventListener('click', onAnchorClick, true);
         document.removeEventListener('click', switchToOriginal);
       });
       watch(locale, () => nextTick(applyLocale));

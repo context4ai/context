@@ -44,6 +44,7 @@ function writeTarget(path: string, previous: string | undefined, content: string
 
 export interface ProductionSubmissionResult {
   accepted: Array<{ task: string; receipt: string }>;
+  resolved_references?: Array<{ task: string; section: string; source_ref: string; locator: { path: string; start_line: number; end_line: number } }>;
   failed: Array<{ task: string; reason: string; file?: string; section?: string }>;
   stage_state: "active" | "waiting-user" | "blocked" | "ended";
   next?: { directory: string; submission?: string; mode: "single-agent" | "multi-agent" };
@@ -92,7 +93,7 @@ export async function completeProductionSubmission(input: {
     const baselines = new Map<string, Promise<string>>();
     let sourceReader: Awaited<ReturnType<typeof registeredArticleSourceReader>> | undefined;
     let approvedTargets: ReturnType<typeof productionApprovedTargetsIndex> | undefined;
-    const result: ProductionSubmissionResult = { accepted: [], failed: [], stage_state: "active" };
+    const result: ProductionSubmissionResult = { accepted: [], failed: [], stage_state: "active", resolved_references: [] };
     const tasksById = new Map(stage.tasks.map(task => [task.id, task]));
     const pending = new Map<string, { candidate: CandidateRecord; digest: string }>();
     // Check only currently issued submitted inputs. Independent source checks
@@ -158,6 +159,7 @@ export async function completeProductionSubmission(input: {
             sourceReader: sourceReader!,
             approvedBaseDigest: target.approvedBaseDigest,
             ...(base ? { base } : {}),
+            ...(target.base ? { trustedBase: target.base } : {}),
             visibility: target.visibility }));
         // Make successful proposals visible to subsequent conflict checks,
         // without exposing any acceptance until their joint transaction saves.
@@ -196,7 +198,11 @@ export async function completeProductionSubmission(input: {
               writeTarget(manifestPath, manifestText, `${JSON.stringify(nextStage)}\n`)]
               .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) }));
         stage = nextStage;
-        for (const [task, proposal] of pending) result.accepted.push({ task, receipt: proposal.candidate.candidate_id });
+        for (const [task, proposal] of pending) {
+          result.accepted.push({ task, receipt: proposal.candidate.candidate_id });
+          result.resolved_references?.push(...proposal.candidate.indexer_candidate?.sections.flatMap(section => section.references.map(ref =>
+            ({ task, section: section.section_key, source_ref: ref.source_ref, locator: ref.locator }))) ?? []);
+        }
       } catch (error) {
         // A durable journal may already exist. Recover it before observing
         // receipts; never report an in-memory proposal as accepted.

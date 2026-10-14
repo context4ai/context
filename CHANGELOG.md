@@ -2,6 +2,16 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.70 - 2026-10-14
+
+- Revising an existing article no longer fails because its old citations are outside the new task's sources. A fragment that omits `references` keeps its validated citations; listing references re-confirms them against the task's authorized sources. Only candidate or approved citations are trusted, never a failed draft's.
+- Revision tasks come with an `edits.yaml` skeleton that lists the existing fragment IDs. A complete draft written before the skeleton appeared is still submitted as a whole article.
+- Plan amendments accept an article path in `after`, resolve it to the current task, and reject replaced or excluded tasks with a list of candidates. When a replacement keeps the same editing base, its draft is carried to the new task. Sources already authorized and cited by the revised article are added to its task. A plan without `stage` is rejected with an example.
+- A citation can be located by `heading` (Markdown files) or by an exact `quote` instead of line numbers. The CLI resolves it to lines and echoes the result in `resolved_references`; stored locators are still line ranges.
+- `translate prepare` is incremental: it reports changed sections, titles and surrounding text; writes drafts that keep unchanged translations; and writes a submission file. A draft edited against an older source must be reconciled and confirmed with `source_digest`. A draft without a generation record is set aside as `*.unrecorded.md`. Existing translations gain `source_parts` baselines once, without changing reader text.
+- Website translations may translate prose in `text`, `txt`, and `plaintext` code blocks while preserving commands, paths, placeholders, block counts, and language markers. Other code blocks remain unchanged; Mermaid labels can still be translated.
+- On multilingual websites, in-page and cross-page anchors keep the reader's language and scroll to the matching heading, including repeated clicks and back/forward navigation.
+
 ## 0.7.67 - 2026-10-14
 
 - Knowledge websites open in light mode regardless of the system color scheme. The reader's light/dark and language choices are remembered per origin by default, so sites on one origin share them.
