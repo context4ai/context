@@ -1,11 +1,11 @@
+import { submittedSourceLocatorSchema, type SubmittedSourceReference } from "./submittedSourceLocator.js";
 import YAML from "yaml";
 import { z } from "zod";
-import { articleSourceLocatorSchema, type ArticleSourceReference } from "@c4a/context";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import type { FixedProductionFile, FixedProductionTask } from "./productionSubmissionFiles.js";
 
-export const productionReferenceInputSchema = z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict();
+export const productionReferenceInputSchema = z.object({ source_ref: z.string().min(1), locator: submittedSourceLocatorSchema }).strict();
 const fragment = z.object({
   id: z.string().min(1).regex(/^[^"\r\n<>]+$/u),
   markdown: z.string().optional(),
@@ -22,7 +22,7 @@ export const productionArticleEditsSchema = z.object({
   }).strict()).min(1),
 }).strict();
 
-type BaseReference = Omit<ArticleSourceReference, "content_digest"> & { content_digest?: string };
+type BaseReference = SubmittedSourceReference & { content_digest?: string };
 export interface ProductionArticleBase {
   markdown: string;
   sections: Array<{ id: string; references: BaseReference[] }>;
@@ -54,7 +54,7 @@ export function applyProductionArticleEdits(base: ProductionArticleBase, files: 
   });
   const used = new Set<string>();
   const retainedReferences = new Map(previous);
-  const resulting = new Map<string, Array<Omit<ArticleSourceReference, "content_digest">>>(previous);
+  const resulting = new Map<string, Array<SubmittedSourceReference>>(previous);
   const patches: Array<{ start: number; end: number; text: string }> = [];
   const anchors: string[] = [];
   const additions = new Set<string | null>();
@@ -103,7 +103,7 @@ export function applyProductionArticleEdits(base: ProductionArticleBase, files: 
     }).join("\n");
     patches.push({ start, end, text: replacement });
   }
-  if (anchors.some(id => used.has(id))) throw new TypeError("An insertion anchor cannot also be replaced in the same revision. Include the new fragment in that replacement instead.");
+  if (anchors.some(id => used.has(id))) throw new TypeError("An insertion anchor cannot also be replaced in the same revision. Include the new fragment in that replacement instead. Example:\nedits:\n  - replace: [existing-section]\n    with:\n      - id: existing-section\n      - id: new-section\n        markdown: New content\n        references: []");
   let markdown = base.markdown;
   for (const patch of patches.sort((a, b) => b.start - a.start || b.end - a.end)) {
     markdown = markdown.slice(0, patch.start) + patch.text + markdown.slice(patch.end);

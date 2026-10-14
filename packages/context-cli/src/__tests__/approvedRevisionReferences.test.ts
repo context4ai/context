@@ -26,6 +26,13 @@ test("revision resolves exact regions, retains untouched citations and removes d
     expect(result).toEqual([{ id: "first", references: [reference] }, { id: "second", references: [
       createArticleSourceReference(sourceRef, { ...locator, start_line: 3, end_line: 3 }, source),
     ] }]);
+    const symbolic = await prepareRevisionReferences({ ...input, edits: [{ section_id: "second", references: [
+      { source_ref: sourceRef, locator: { path: "source.md", quote: "Second behavior" } },
+      { source_ref: sourceRef, locator: { path: "source.md", start_line: 3, end_line: 3 } },
+      { source_ref: sourceRef, locator: { path: "source.md", quote: "Second behavior" } },
+      { source_ref: sourceRef, locator: { path: "source.md", quote: "Second behavior" } },
+    ] }] });
+    expect(symbolic).toEqual(result);
     expect(await prepareRevisionReferences({ ...input, edits: [{ section_id: "first", references: [] }] }))
       .toEqual([{ id: "first", references: [] }, { id: "second", references: [] }]);
     await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "missing", references: [] }] })).rejects.toThrow();

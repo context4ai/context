@@ -75,7 +75,7 @@ export async function completeCurrentIndexerAction(input: {
       revision: input.revision, ...content });
     return completedRevisionReceipt(found.projectRoot, semantic.stage,
       { outcome: candidate === undefined ? "unchanged" : "candidate-prepared",
-        ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id }) }, input.managed === true, authorities);
+        ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id, resolved_references: candidate.indexer_candidate?.sections.flatMap(section => section.references.map(ref => ({ section: section.section_key, source_ref: ref.source_ref, locator: ref.locator }))) ?? [] }) }, input.managed === true, authorities);
   }
   if (semantic.stage === "structure-review") {
     const { readKnowledgeUpdate, completeUpdateStructureReview } = await import("./knowledgeUpdate.js");

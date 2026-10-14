@@ -60,7 +60,7 @@ export function registerTranslateCommands(program: Command) {
     write({ ...task, next_action: { command: "context translate submit --input <file> --format json" },
       input_example: { expected_digest: task.expected_digest,
         articles: task.items.filter(item => item.kind === "article").slice(0, 1).map(item => ({ locale: item.locale,
-          approved_path: item.kind === "article" ? item.approved_path : "", file: `.tmp/agent-payloads/${item.kind === "article" ? item.translation_path : ""}` })),
+          approved_path: item.kind === "article" ? item.approved_path : "", file: item.kind === "article" ? item.file : "" })),
         map_entries: task.items.filter(item => item.kind === "map-entry").slice(0, 1).map(item => ({ locale: item.locale,
           key: item.kind === "map-entry" ? item.key : "", title: "Translated title" })) } });
   });

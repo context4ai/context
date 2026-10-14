@@ -24,6 +24,25 @@ test("translations must keep sections, code, languages and link targets", () => 
   expect(translationStructureIssues(approved, translated.replace("(next.md)", "(other.md)"))).toHaveLength(1);
 });
 
+test("plain-text fences allow translated prose while preserving block count and language", () => {
+  for (const lang of ["text", "txt", "plaintext"]) {
+    const source = `---\ntitle: Guide\n---\n\n\`\`\`${lang}\nExplain <repository> and run context status.\n\`\`\`\n`;
+    const translatedText = source.replace("Explain <repository> and run context status.", "解释 <repository>，并运行 context status。");
+    expect(translationStructureIssues(source, translatedText)).toEqual([]);
+    expect(translationStructureIssues(source, translatedText.replace(`\`\`\`${lang}\n`, "\`\`\`bash\n"))).toHaveLength(1);
+    expect(translationStructureIssues(source, "---\ntitle: Guide\n---\n")).toHaveLength(1);
+    expect(translationStructureIssues(source, translatedText + "\n\`\`\`text\nExtra\n\`\`\`\n")).toHaveLength(1);
+  }
+});
+
+test("unmarked and programming-language fences still reject content changes", () => {
+  for (const lang of ["", "bash", "yaml", "json", "ts"]) {
+    const source = `---\ntitle: Guide\n---\n\n\`\`\`${lang}\noriginal\n\`\`\`\n`;
+    expect(translationStructureIssues(source, source)).toEqual([]);
+    expect(translationStructureIssues(source, source.replace("original", "changed"))).toHaveLength(1);
+  }
+});
+
 test("server-rendered origin nav links skip the site base", () => {
   const html = '<a class="title" href="/docs/">T</a>' +
     '<a class="VPLink link VPNavBarMenuLink active" href="/docs/" target="_self" tabindex="0">Home</a>' +

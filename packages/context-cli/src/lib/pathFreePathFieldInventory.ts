@@ -72,6 +72,7 @@ const DEFAULT_INTERNAL_FIELDS = [
   "structure_path",
   "stage_path",
   "task_path",
+  "submission_path",
   "entry_path",
   "prompt_path",
   "packageDir",
@@ -130,6 +131,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "runner_config_path" ||
     field === "stage_path" ||
     field === "task_path" ||
+    field === "submission_path" ||
     field === "entry_path" ||
     field === "program_path" ||
     field === "bundle_root" ||

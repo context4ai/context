@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "bun:test";
 import YAML from "yaml";
 import { createArticleSourceReference } from "@c4a/context";
@@ -100,4 +103,27 @@ test("a body-only edit cannot silently accept changed retained evidence", async 
       path: "edits.yaml", text, digest: durableContentDigest(text), bytes: Buffer.byteLength(text),
     } },
   })).rejects.toThrow("Retained source text changed");
+});
+
+test("only validated citations grant inherited authority, including repair-draft edits", async () => {
+  const root = await mkdtemp(join(tmpdir(), "trusted-citations-"));
+  try {
+  const planned = { id: "revision", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
+    sources: [], base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
+  const task = { ...planned, input: productionTaskInput(planned) };
+  const run = (trustedBase?: ProductionArticleBase, source = "Source text\n", explicit = false) => {
+    const text = YAML.stringify({ edits: [{ replace: ["a"], with: [{ id: "a", markdown: "Rephrased",
+      ...(explicit ? { references: [{ source_ref: reference.source_ref, locator: reference.locator }] } : {}) }] }] });
+    // A failed complete draft retains coordinates but has no validated digest.
+    const repair = { ...base, sections: base.sections.map(section => ({ ...section,
+      references: section.references.map(ref => ({ source_ref: ref.source_ref, locator: ref.locator })) })) };
+    return prepareProductionArticle({ projectRoot: root, task, base: repair,
+      ...(trustedBase ? { trustedBase } : {}), approvedBaseDigest: null, sourceReader: async () => source,
+      files: { task: task.id, input: task.input, edits: { path: "edits.yaml", text, digest: durableContentDigest(text), bytes: Buffer.byteLength(text) } } });
+  };
+  expect((await run(base)).source_refs).toEqual([reference.source_ref]);
+  await expect(run()).rejects.toThrow("outside this task");
+  await expect(run(base, "Changed evidence\n")).rejects.toThrow("Retained source text changed");
+  await expect(run(base, "Source text\n", true)).rejects.toThrow("outside this task");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

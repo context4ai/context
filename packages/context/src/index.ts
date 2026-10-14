@@ -762,3 +762,5 @@ export type { IndexerArticlePlan } from "./indexerArticlePlan.js";
 export * from "./knowledgeMap.js";
 export * from "./indexerApprovedKnowledge.js";
 export * from "./articleStructure.js";
+
+export * from "./articleSourceLocatorInput.js";

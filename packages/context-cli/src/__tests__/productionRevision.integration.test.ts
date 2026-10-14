@@ -4,7 +4,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { prepareRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { beginDocumentRevision } from "../project/documentRevision.js";
-import { readProductionStage } from "../project/productionStageStore.js";
+import { prepareNextProductionStage, productionStageDirectory, readProductionStage } from "../project/productionStageStore.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { productionAgentDirectory } from "../project/productionSubmissionFiles.js";
 import { completeProductionSubmission } from "../project/productionSubmission.js";
@@ -56,6 +56,25 @@ test("a selected candidate reopens writing directly and preserves its peer and a
   await approveCandidates(root, after);
   await closeProjectWorkspace(root);
   expect(await readFile(join(root, "knowledge", selected.path), "utf8")).toContain("# Exported value");
+});
+
+test("a revision task projects an edits skeleton but keeps a complete draft written before it", async () => {
+  const root = await prepareRevisionKnowledge(roots);
+  const selected = (await readCandidateRecords(root)).find(candidate => candidate.path === "architecture/overview.md")!;
+  await beginDocumentRevision({ projectRoot: root, selector: selected.candidate_id, instruction: "Clarify the exported value." });
+  const stage = (await readProductionStage(root))!;
+  const task = stage.tasks.find(task => task.status === "issued")!;
+  const output = join(root, productionAgentDirectory(stage.id), "batches", task.batch, task.id);
+  const taskFile = join(root, productionStageDirectory(stage.id), "batches", task.batch, "tasks", task.id, "task.md");
+  expect(YAML.parse(await readFile(join(output, "edits.yaml"), "utf8"))).toEqual({ edits: [] });
+  expect(await readFile(taskFile, "utf8")).toContain("Draft edits:");
+  await rm(join(output, "edits.yaml"));
+  await writeFile(join(output, "article.md"), "# Complete draft\n");
+  const prepared = (await prepareNextProductionStage({ projectRoot: root, stage }))!;
+  const manifest = YAML.parse(await readFile(join(root, prepared.submission!), "utf8"));
+  expect(manifest.tasks.find((entry: { task: string }) => entry.task === task.id)).toMatchObject({ content: expect.stringContaining("article.md") });
+  expect(await readFile(taskFile, "utf8")).toContain("Draft Markdown:");
+  await expect(readFile(join(output, "edits.yaml"), "utf8")).rejects.toThrow();
 });
 
 test("a production revision cannot silently move an article onto its peer", async () => {

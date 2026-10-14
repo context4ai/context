@@ -104,3 +104,14 @@ build resumes the same stage; a failed build retains the pause and all tasks.
 To cancel that pause explicitly, use `context run --resume-writing --format json`.
 It preserves approved articles, candidates and existing task input handles.
 Partial delivery must include the approved articles needed by its local links.
+
+### Locating submitted references
+
+Submission locators also accept `{path, heading}` or `{path, quote}` instead of
+line numbers. Use exactly one form. A heading matches an exact ATX heading
+outside code fences in a Markdown source; its region ends before the next
+same-level or higher-level heading. A quote is an exact, unique, nonempty
+substring (line endings are normalized). Ambiguous matches return candidate
+line ranges. Both forms resolve against authorized captured text before hashing;
+stored references still contain only `path`, `start_line` and `end_line`.
+The three-region limit applies after resolving and deduplicating positions.

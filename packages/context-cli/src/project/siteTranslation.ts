@@ -1,7 +1,8 @@
+import { translationPartsSchema, translationSourceParts, translationPartsDiff, translationDraft } from "./siteTranslationParts.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { PackageDefinition } from "@c4a/context";
@@ -49,7 +50,7 @@ export interface TranslatedArticle { title: string; description?: string; body: 
 const text = z.string().trim().min(1);
 export const translationSubmitSchema = z.object({
   expected_digest: text,
-  articles: z.array(z.object({ locale: text, approved_path: text, file: text }).strict()).default([]),
+  articles: z.array(z.object({ locale: text, approved_path: text, file: text, source_digest: text.optional() }).strict()).default([]),
   map_entries: z.array(z.object({ locale: text, key: text, title: text }).strict()).default([]),
 }).strict();
 export type TranslationSubmitInput = z.infer<typeof translationSubmitSchema>;
@@ -196,14 +197,70 @@ export async function inspectSiteTranslations(projectRoot: string, packages: rea
     route_satisfied: pending === 0 || resolved === sourceSetDigest };
 }
 
+const DRAFTS_FILE = `${TRANSLATION_RUNTIME_ROOT}/drafts.json`;
+const draftRecordsSchema = z.record(z.object({ generated_digest: text, source_digest: text }).strict());
+async function draftRecords(root: string) {
+  const stored = await optionalText(join(root, DRAFTS_FILE));
+  return stored === undefined ? {} : draftRecordsSchema.parse(JSON.parse(stored));
+}
+
 export async function prepareSiteTranslation(projectRoot: string, packages: readonly PackageDefinition[]) {
-  const inspection = await inspectSiteTranslations(projectRoot, packages);
-  const pending = inspection.items.filter(item => item.state !== "current");
-  const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items: pending, orphans: inspection.orphans };
-  const taskPath = `${TRANSLATION_RUNTIME_ROOT}/${TASK_FILE}`;
-  await mkdir(join(projectRoot, TRANSLATION_RUNTIME_ROOT), { recursive: true });
-  await writeFile(join(projectRoot, taskPath), JSON.stringify(task, null, 2) + "\n", "utf8");
-  return { ...task, task_path: taskPath };
+  return withProjectWriteLock(projectRoot, "translate-prepare", async () => {
+    const inspection = await inspectSiteTranslations(projectRoot, packages);
+    const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
+    const records = await draftRecords(projectRoot);
+    const items = [];
+    const articles = [];
+    const map_entries = [];
+    for (const item of inspection.items) {
+      if (item.kind === "map-entry") {
+        if (item.state !== "current") { items.push(item); map_entries.push({ locale: item.locale, key: item.key, title: item.title }); }
+        continue;
+      }
+      const source = approved.get(item.approved_path)!;
+      const stored = await optionalText(join(projectRoot, item.translation_path));
+      const parsed = stored === undefined ? undefined : splitFrontmatter(stored);
+      const record = parsed?.frontmatter.translation as Record<string, unknown> | undefined;
+      const known = translationPartsSchema.safeParse(record?.source_parts);
+      const current = translationSourceParts(source.content);
+      if (item.state === "current") {
+        if (!known.success && parsed && record) {
+          parsed.frontmatter.translation = { ...record, source_parts: current };
+          await atomicWrite(join(projectRoot, item.translation_path), `---\n${stringifyYaml(parsed.frontmatter).trimEnd()}\n---\n${parsed.body}`);
+        }
+        continue;
+      }
+      const baseline = known.success ? known.data : undefined;
+      const diff = translationPartsDiff(current, baseline);
+      const file = `.tmp/agent-payloads/translations/${item.locale}/${source.relPath}`;
+      const existing = await optionalText(join(projectRoot, file));
+      const previous = records[file];
+      // Without a generation record, a draft's source is unknown. Keep it beside
+      // a fresh draft instead of asking the Agent to reconcile it.
+      const unrecorded = existing !== undefined && !previous ? `${file}.unrecorded.md` : undefined;
+      if (unrecorded && await optionalText(join(projectRoot, unrecorded)) === undefined) await atomicWrite(join(projectRoot, unrecorded), existing!);
+      const edited = existing !== undefined && previous !== undefined && sha256(existing) !== previous.generated_digest;
+      const needsRebase = edited && previous?.source_digest !== item.source_digest;
+      if (!edited) {
+        const content = translationDraft(source.content, stored, baseline);
+        await atomicWrite(join(projectRoot, file), content);
+        records[file] = { generated_digest: sha256(content), source_digest: item.source_digest };
+      }
+      if (diff === "unknown" && stored !== undefined && await optionalText(join(projectRoot, `${file}.previous.md`)) === undefined) {
+        await atomicWrite(join(projectRoot, `${file}.previous.md`), stored);
+      }
+      items.push({ ...item, diff, file, draft: needsRebase ? "rebase-required" : edited ? "kept" : "generated", ...(unrecorded ? { unrecorded_draft: unrecorded } : {}),
+        ...(needsRebase ? { instruction: "Reconcile this retained draft with the current source. Then explicitly add source_digest to its submission entry.", source_digest: item.source_digest } : {}) });
+      if (!needsRebase) articles.push({ locale: item.locale, approved_path: item.approved_path, file });
+    }
+    await atomicWrite(join(projectRoot, DRAFTS_FILE), JSON.stringify(records, null, 2) + "\n");
+    const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans };
+    const taskPath = `${TRANSLATION_RUNTIME_ROOT}/${TASK_FILE}`;
+    const submissionPath = `${TRANSLATION_RUNTIME_ROOT}/submission.yaml`;
+    await atomicWrite(join(projectRoot, taskPath), JSON.stringify(task, null, 2) + "\n");
+    await atomicWrite(join(projectRoot, submissionPath), stringifyYaml({ expected_digest: task.expected_digest, articles, map_entries }));
+    return { ...task, task_path: taskPath, submission_path: submissionPath };
+  });
 }
 
 function sectionIds(body: string): string[] {
@@ -218,7 +275,7 @@ function linkTargets(body: string): string[] {
   return markdownReaderLinks(body).map(link => link.target).sort();
 }
 
-/** Structural parity keeps evidence, code and links identical across languages. */
+/** Structural parity preserves evidence, executable examples and link targets. */
 export function translationStructureIssues(source: string, translated: string): string[] {
   const sourceBody = splitFrontmatter(source).body;
   const { frontmatter, body } = splitFrontmatter(translated);
@@ -234,7 +291,9 @@ export function translationStructureIssues(source: string, translated: string): 
   else sourceFences.forEach((fence, index) => {
     const other = translatedFences[index]!;
     if (fence.lang !== other.lang) issues.push(`Code block ${index + 1} must keep language "${fence.lang}".`);
-    else if (fence.lang !== "mermaid" && fence.content !== other.content) issues.push(`Code block ${index + 1} must not change.`);
+    else if (!["mermaid", "text", "txt", "plaintext"].includes(fence.lang) && fence.content !== other.content) {
+      issues.push(`Code block ${index + 1} must not change.`);
+    }
   });
   if (JSON.stringify(linkTargets(sourceBody)) !== JSON.stringify(linkTargets(body))) issues.push("Link targets must match the approved article.");
   return issues;
@@ -277,10 +336,21 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
     const writes: Array<{ path: string; content: string }> = [];
     const issues: Array<{ locale: string; target: string; issues: string[] }> = [];
     const translatedAt = new Date().toISOString();
+    const drafts = await draftRecords(projectRoot);
+    let draftsChanged = false;
     for (const article of input.articles) {
       const file = approved.get(article.approved_path);
       if (!inspection.locales.includes(article.locale) || file === undefined) {
         issues.push({ locale: article.locale, target: article.approved_path, issues: ["Unknown locale or approved article."] });
+        continue;
+      }
+      const draftPath = relative(resolve(projectRoot), resolve(resolveInput(article.file))).split("\\").join("/");
+      const prepared = drafts[draftPath];
+      const sourceDigest = approvedArticleDigest(file.content);
+      if ((article.source_digest !== undefined && article.source_digest !== sourceDigest) ||
+          (prepared && prepared.source_digest !== sourceDigest && article.source_digest !== sourceDigest)) {
+        issues.push({ locale: article.locale, target: article.approved_path,
+          issues: ["The retained draft belongs to an older source. Reconcile it, then explicitly supply the current source_digest."] });
         continue;
       }
       const content = await optionalText(resolveInput(article.file));
@@ -290,11 +360,15 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       }
       const found = translationStructureIssues(file.content, content);
       if (found.length > 0) { issues.push({ locale: article.locale, target: article.approved_path, issues: found }); continue; }
+      if (prepared) {
+        drafts[draftPath] = { source_digest: sourceDigest, generated_digest: sha256(content) };
+        draftsChanged = true;
+      }
       const { frontmatter, body } = splitFrontmatter(content);
       const description = stringField(frontmatter.description);
       const head = stringifyYaml({ title: stringField(frontmatter.title), ...(description === undefined ? {} : { description }),
         translation: { locale: article.locale, ...(file.article?.article_id ? { artifact_ref: file.article.article_id } : {}),
-          source_digest: approvedArticleDigest(file.content), translated_at: translatedAt } }).trimEnd();
+          source_digest: approvedArticleDigest(file.content), source_parts: translationSourceParts(file.content), translated_at: translatedAt } }).trimEnd();
       writes.push({ path: translationArticlePath(article.locale, file.relPath), content: `---\n${head}\n---\n\n${body.trimStart()}` });
     }
     const mapEntries = new Map(((await readKnowledgeMap(projectRoot))?.entries ?? []).map(entry => [entry.key, entry]));
@@ -315,6 +389,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       writes.push({ path: mapTranslationPath(locale), content: stringifyYaml({ locale, entries }) });
     }
     for (const write of writes) await atomicWrite(join(projectRoot, write.path), write.content);
+    if (draftsChanged) await atomicWrite(join(projectRoot, DRAFTS_FILE), JSON.stringify(drafts, null, 2) + "\n");
     for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
     await writeReceipt(projectRoot, digest, "submitted");
     return { written: writes.map(write => write.path), removed: inspection.orphans };

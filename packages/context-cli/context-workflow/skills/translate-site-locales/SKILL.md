@@ -8,13 +8,20 @@ knowledge map title that is missing or stale for each declared locale, with the
 `expected_digest` to submit. Approved knowledge in the primary language remains
 the only source of truth; translations never change it.
 
+Use the returned draft and submission paths. Preserve unchanged translated parts
+and translate the listed changes in a natural tone. For `diff: unknown`, compare
+with the previous translation. A `rebase-required` draft must be reconciled with
+the current source before explicitly confirming its `source_digest`.
+
 For each article, read the approved file and write a complete translation to a
 temporary file under `.tmp/agent-payloads/`. Keep its structure exactly:
 
 - frontmatter contains only a translated `title` and optional `description`;
 - keep every `context:section` marker, id and order unchanged;
-- keep every fenced code block, language and content unchanged; only Mermaid
-  labels may be translated;
+- keep every fenced code block and language marker; translate prose in `text`,
+  `txt`, and `plaintext` blocks, preserving commands, paths and placeholders such
+  as `<repository>`. Mermaid labels may be translated. Keep content unchanged
+  in every other block, including blocks without a language marker;
 - keep every link target unchanged; translate link labels only;
 - keep product names, commands, file paths, identifiers and API names as written.
 

@@ -129,26 +129,64 @@
                           "minLength": 1
                         },
                         "locator": {
-                          "type": "object",
-                          "properties": {
-                            "path": {
-                              "type": "string"
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": "string"
+                                },
+                                "start_line": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "end_line": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "start_line",
+                                "end_line"
+                              ],
+                              "additionalProperties": false
                             },
-                            "start_line": {
-                              "type": "integer",
-                              "minimum": 1
+                            {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "$ref": "#/$defs/approvedRevision/anyOf/0/properties/sections/items/properties/references/items/properties/locator/anyOf/0/properties/path"
+                                },
+                                "heading": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "heading"
+                              ],
+                              "additionalProperties": false
                             },
-                            "end_line": {
-                              "type": "integer",
-                              "minimum": 1
+                            {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "$ref": "#/$defs/approvedRevision/anyOf/0/properties/sections/items/properties/references/items/properties/locator/anyOf/0/properties/path"
+                                },
+                                "quote": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "quote"
+                              ],
+                              "additionalProperties": false
                             }
-                          },
-                          "required": [
-                            "path",
-                            "start_line",
-                            "end_line"
-                          ],
-                          "additionalProperties": false
+                          ]
                         }
                       },
                       "required": [
@@ -156,8 +194,7 @@
                         "locator"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 3
+                    }
                   }
                 },
                 "required": [
