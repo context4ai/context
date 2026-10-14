@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.67 - 2026-10-14
+
+- Knowledge websites open in light mode regardless of the system color scheme. The reader's light/dark and language choices are remembered per origin by default, so sites on one origin share them.
+- `context build` no longer compares cited source regions or adds a "Source regions need review" notice to pages, so publishing builds no longer need the registered source checkouts. `context verify` still reports changed, moved or missing regions; run it before publishing.
+
 ## 0.7.66 - 2026-10-13
 
 - Knowledge websites no longer collapse custom slots, such as a homepage banner, for readers who open them in dark mode. Slots remounted for these readers now finish loading before they replace the prerendered markup, so the old and new content swap in the same frame.
