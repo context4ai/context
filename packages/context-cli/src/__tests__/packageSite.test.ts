@@ -156,8 +156,8 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(homeResources).toContain("context-home-resource-heading");
     expect(homeResources).toContain("context-home-install-action");
     expect(home.indexOf("Browse knowledge")).toBeLessThan(home.indexOf("Project workspace"));
-    expect(home).toContain('matchMedia("(prefers-color-scheme: dark)")');
-    expect(home).toContain("context-theme:");
+    expect(home).not.toContain('matchMedia("(prefers-color-scheme: dark)")');
+    expect(home).toMatch(/classList\.toggle\("dark",\w+==="dark"\)\}\)/);
     expect(home).not.toContain('id="check-dark-mode"');
     expect(article).toContain('<a id="section-entry"></a>');
     expect(article).not.toContain('&lt;a id=');

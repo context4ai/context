@@ -27,7 +27,7 @@ import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, res
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v49-appearance-home-fallback:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v50-light-shared-preferences:${createHash("sha256")
   .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -282,14 +282,15 @@ export async function writePackageSite(input: {
     const navText = ({ locales, ...item }: SiteNavItem) => ({ ...item, text: localizedHtml(readers.tags, tag => locales?.[tag] ?? item.text) });
     const localeResources = Object.values(options.locales ?? {}).some(locale => locale.home?.resources) ? Object.fromEntries(readers.tags.map(tag =>
       [tag, (tag === readers.primary ? undefined : options.locales?.[tag]?.home?.resources) ?? options.home?.resources ?? []])) : undefined;
-    const appearanceKey = `context-theme:${pkg.name}:${base}`;
+    // One origin-wide key, so a homepage or other app on the same origin can share the reader's choice.
+    const appearanceKey = "context-theme";
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: readers.primary, base,
-      appearance: { initialValue: "auto", valueDark: "dark", valueLight: "light", storageKey: appearanceKey },
+      appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: appearanceKey },
       // VitePress's own pre-paint script ignores storageKey and can only add "dark", so the pages
       // drop it (see transformHtml) and this script alone applies the site key before first paint.
-      // Without a saved choice ("auto" included) the site follows the system scheme.
+      // Only a saved "dark" choice darkens the site; first visits are light regardless of the system scheme.
       head: [["script", { id: "context-appearance" },
-        `(()=>{let v=null;try{v=localStorage.getItem(${JSON.stringify(appearanceKey)})}catch{}document.documentElement.classList.toggle("dark",v==="dark"||(v!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))})();`],
+        `(()=>{let v=null;try{v=localStorage.getItem(${JSON.stringify(appearanceKey)})}catch{}document.documentElement.classList.toggle("dark",v==="dark")})();`],
         ["script", { id: "context-locale" }, siteLocaleScript(readers)]],
       srcExclude: ["_site/**/*.md"],
       ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: {

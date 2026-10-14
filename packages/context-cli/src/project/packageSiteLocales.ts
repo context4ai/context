@@ -33,7 +33,7 @@ export function siteReaderLocales(site: KbSite, packageName: string): SiteReader
   return { primary, tags, translated: extra.length > 0,
     labels: Object.fromEntries(tags.map(tag => [tag, site.locales?.[tag]?.label ?? localeLabel(tag)])),
     titles: Object.fromEntries(tags.map(tag => [tag, (tag === primary ? undefined : site.locales?.[tag]?.title) ?? site.title ?? packageName])),
-    preferenceKey: site.localePreferenceKey ?? `context-locale:${packageName}:${site.base ?? "/"}` };
+    preferenceKey: site.localePreferenceKey ?? "context-locale" };
 }
 
 /** Runs before first paint: a saved choice wins, then the browser languages, then the primary language. */
