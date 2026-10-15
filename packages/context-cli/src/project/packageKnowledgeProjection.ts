@@ -1,6 +1,7 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 import { isRuntimeOnlyKnowledgeMetadataField } from "./knowledgeMetadataPolicy.js";
+import { packageMarkdownAnchors } from "./packageMarkdownAnchors.js";
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
 const CONTEXT_METADATA_BLOCK_RE = /<!--\s*context:(summary|source_refs|audit)\b[\s\S]*?\/context:\1\s*-->[ \t]*(?:\r?\n){0,2}/giu;
@@ -198,12 +199,17 @@ export function projectPackageKnowledgeMarkdown(content: string): string {
   if (match === null) return content;
   const frontmatter = parseKnowledgeFrontmatter(content);
   if (Object.keys(frontmatter).length === 0) return content;
-  const body = content
-    .slice(match[0].length)
+  const source = content.slice(match[0].length);
+  // Authors link `#<section id>`; expose it unless a heading on the page already owns that slug.
+  let headingAnchors: Set<string> | undefined;
+  const body = source
     .replace(CONTEXT_METADATA_BLOCK_RE, "")
     .replace(CONTEXT_SECTION_OPEN_RE, opening => {
       const key = /\bid="([a-zA-Z0-9_-]+)"/u.exec(opening)?.[1];
-      return key === undefined ? "" : `\n\n<a id="section-${encodeURIComponent(key)}"></a>\n\n`;
+      if (key === undefined) return "";
+      headingAnchors ??= packageMarkdownAnchors(source);
+      const bare = headingAnchors.has(key) ? "" : `<a id="${key}"></a>\n`;
+      return `\n\n${bare}<a id="section-${encodeURIComponent(key)}"></a>\n\n`;
     })
     .replace(CONTEXT_SECTION_CLOSE_RE, "\n")
     .replace(LARK_RESOURCE_LOCATOR_COMMENT_RE, "")

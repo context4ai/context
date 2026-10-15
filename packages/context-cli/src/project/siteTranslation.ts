@@ -1,4 +1,3 @@
-import { translationPartsSchema, translationSourceParts, translationPartsDiff, translationDraft } from "./siteTranslationParts.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -10,6 +9,7 @@ import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
+import { canReadRepoObjects, optionalRepoGit } from "./repoContentGit.js";
 import { markdownReaderLinks } from "./markdownLinks.js";
 import { listApprovedKnowledge } from "./packageBuilder.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
@@ -50,7 +50,7 @@ export interface TranslatedArticle { title: string; description?: string; body: 
 const text = z.string().trim().min(1);
 export const translationSubmitSchema = z.object({
   expected_digest: text,
-  articles: z.array(z.object({ locale: text, approved_path: text, file: text, source_digest: text.optional() }).strict()).default([]),
+  articles: z.array(z.object({ locale: text, approved_path: text, file: text }).strict()).default([]),
   map_entries: z.array(z.object({ locale: text, key: text, title: text }).strict()).default([]),
 }).strict();
 export type TranslationSubmitInput = z.infer<typeof translationSubmitSchema>;
@@ -197,18 +197,27 @@ export async function inspectSiteTranslations(projectRoot: string, packages: rea
     route_satisfied: pending === 0 || resolved === sourceSetDigest };
 }
 
-const DRAFTS_FILE = `${TRANSLATION_RUNTIME_ROOT}/drafts.json`;
-const draftRecordsSchema = z.record(z.object({ generated_digest: text, source_digest: text }).strict());
-async function draftRecords(root: string) {
-  const stored = await optionalText(join(root, DRAFTS_FILE));
-  return stored === undefined ? {} : draftRecordsSchema.parse(JSON.parse(stored));
+const DRAFT_ROOT = ".tmp/agent-payloads/translations";
+const SOURCE_HISTORY_LIMIT = 50;
+
+/** Diff from the approved version a translation was made from. Missing or
+ * partial-clone history yields undefined; never trigger a lazy fetch. */
+async function sourceDiffSince(projectRoot: string, relPath: string, digest: string | undefined): Promise<string | undefined> {
+  if (digest === undefined || !await canReadRepoObjects(projectRoot)) return undefined;
+  const path = `knowledge/${relPath}`;
+  const commits = await optionalRepoGit(projectRoot, ["log", "--format=%H", "-n", String(SOURCE_HISTORY_LIMIT), "--", path]);
+  for (const commit of commits?.split("\n").filter(Boolean) ?? []) {
+    const content = await optionalRepoGit(projectRoot, ["show", `${commit}:./${path}`]);
+    if (content === undefined || approvedArticleDigest(content) !== digest) continue;
+    return optionalRepoGit(projectRoot, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", commit, "--", path]);
+  }
+  return undefined;
 }
 
 export async function prepareSiteTranslation(projectRoot: string, packages: readonly PackageDefinition[]) {
   return withProjectWriteLock(projectRoot, "translate-prepare", async () => {
     const inspection = await inspectSiteTranslations(projectRoot, packages);
     const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
-    const records = await draftRecords(projectRoot);
     const items = [];
     const articles = [];
     const map_entries = [];
@@ -217,43 +226,28 @@ export async function prepareSiteTranslation(projectRoot: string, packages: read
         if (item.state !== "current") { items.push(item); map_entries.push({ locale: item.locale, key: item.key, title: item.title }); }
         continue;
       }
+      if (item.state === "current") continue;
       const source = approved.get(item.approved_path)!;
       const stored = await optionalText(join(projectRoot, item.translation_path));
-      const parsed = stored === undefined ? undefined : splitFrontmatter(stored);
-      const record = parsed?.frontmatter.translation as Record<string, unknown> | undefined;
-      const known = translationPartsSchema.safeParse(record?.source_parts);
-      const current = translationSourceParts(source.content);
-      if (item.state === "current") {
-        if (!known.success && parsed && record) {
-          parsed.frontmatter.translation = { ...record, source_parts: current };
-          await atomicWrite(join(projectRoot, item.translation_path), `---\n${stringifyYaml(parsed.frontmatter).trimEnd()}\n---\n${parsed.body}`);
-        }
-        continue;
-      }
-      const baseline = known.success ? known.data : undefined;
-      const diff = translationPartsDiff(current, baseline);
-      const file = `.tmp/agent-payloads/translations/${item.locale}/${source.relPath}`;
+      const file = `${DRAFT_ROOT}/${item.locale}/${source.relPath}`;
+      // An existing draft is unfinished work; submission removes drafts it saved.
+      // A draft whose body is still the unedited seed (for example one left by
+      // an older CLI that did not remove drafts) holds no work and is reseeded.
+      const seed = stored ?? source.content;
       const existing = await optionalText(join(projectRoot, file));
-      const previous = records[file];
-      // Without a generation record, a draft's source is unknown. Keep it beside
-      // a fresh draft instead of asking the Agent to reconcile it.
-      const unrecorded = existing !== undefined && !previous ? `${file}.unrecorded.md` : undefined;
-      if (unrecorded && await optionalText(join(projectRoot, unrecorded)) === undefined) await atomicWrite(join(projectRoot, unrecorded), existing!);
-      const edited = existing !== undefined && previous !== undefined && sha256(existing) !== previous.generated_digest;
-      const needsRebase = edited && previous?.source_digest !== item.source_digest;
-      if (!edited) {
-        const content = translationDraft(source.content, stored, baseline);
-        await atomicWrite(join(projectRoot, file), content);
-        records[file] = { generated_digest: sha256(content), source_digest: item.source_digest };
-      }
-      if (diff === "unknown" && stored !== undefined && await optionalText(join(projectRoot, `${file}.previous.md`)) === undefined) {
-        await atomicWrite(join(projectRoot, `${file}.previous.md`), stored);
-      }
-      items.push({ ...item, diff, file, draft: needsRebase ? "rebase-required" : edited ? "kept" : "generated", ...(unrecorded ? { unrecorded_draft: unrecorded } : {}),
-        ...(needsRebase ? { instruction: "Reconcile this retained draft with the current source. Then explicitly add source_digest to its submission entry.", source_digest: item.source_digest } : {}) });
-      if (!needsRebase) articles.push({ locale: item.locale, approved_path: item.approved_path, file });
+      const body = (content: string) => content.slice(FRONTMATTER_RE.exec(content)?.[0].length ?? 0);
+      const kept = existing !== undefined && body(existing) !== body(seed);
+      if (!kept) await atomicWrite(join(projectRoot, file), seed);
+      const translation = stored === undefined ? undefined : splitFrontmatter(stored).frontmatter.translation as Record<string, unknown> | undefined;
+      // A kept draft may contain edits for source text that later changed back;
+      // the stored translation's diff does not describe it.
+      const diff = kept || stored === undefined ? undefined : await sourceDiffSince(projectRoot, source.relPath, stringField(translation?.source_digest));
+      const diffFile = `${file}.diff`;
+      if (diff) await atomicWrite(join(projectRoot, diffFile), `${diff}\n`);
+      else await rm(join(projectRoot, diffFile), { force: true });
+      items.push({ ...item, file, draft: kept ? "kept" as const : "generated" as const, source_diff: diff ? diffFile : null });
+      articles.push({ locale: item.locale, approved_path: item.approved_path, file });
     }
-    await atomicWrite(join(projectRoot, DRAFTS_FILE), JSON.stringify(records, null, 2) + "\n");
     const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans };
     const taskPath = `${TRANSLATION_RUNTIME_ROOT}/${TASK_FILE}`;
     const submissionPath = `${TRANSLATION_RUNTIME_ROOT}/submission.yaml`;
@@ -336,8 +330,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
     const writes: Array<{ path: string; content: string }> = [];
     const issues: Array<{ locale: string; target: string; issues: string[] }> = [];
     const translatedAt = new Date().toISOString();
-    const drafts = await draftRecords(projectRoot);
-    let draftsChanged = false;
+    const drafts: string[] = [];
     for (const article of input.articles) {
       const file = approved.get(article.approved_path);
       if (!inspection.locales.includes(article.locale) || file === undefined) {
@@ -345,14 +338,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
         continue;
       }
       const draftPath = relative(resolve(projectRoot), resolve(resolveInput(article.file))).split("\\").join("/");
-      const prepared = drafts[draftPath];
-      const sourceDigest = approvedArticleDigest(file.content);
-      if ((article.source_digest !== undefined && article.source_digest !== sourceDigest) ||
-          (prepared && prepared.source_digest !== sourceDigest && article.source_digest !== sourceDigest)) {
-        issues.push({ locale: article.locale, target: article.approved_path,
-          issues: ["The retained draft belongs to an older source. Reconcile it, then explicitly supply the current source_digest."] });
-        continue;
-      }
+      if (draftPath.startsWith(`${DRAFT_ROOT}/`)) drafts.push(draftPath);
       const content = await optionalText(resolveInput(article.file));
       if (content === undefined) {
         issues.push({ locale: article.locale, target: article.approved_path, issues: [`Translation file not found: ${article.file}`] });
@@ -360,15 +346,11 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       }
       const found = translationStructureIssues(file.content, content);
       if (found.length > 0) { issues.push({ locale: article.locale, target: article.approved_path, issues: found }); continue; }
-      if (prepared) {
-        drafts[draftPath] = { source_digest: sourceDigest, generated_digest: sha256(content) };
-        draftsChanged = true;
-      }
       const { frontmatter, body } = splitFrontmatter(content);
       const description = stringField(frontmatter.description);
       const head = stringifyYaml({ title: stringField(frontmatter.title), ...(description === undefined ? {} : { description }),
         translation: { locale: article.locale, ...(file.article?.article_id ? { artifact_ref: file.article.article_id } : {}),
-          source_digest: approvedArticleDigest(file.content), source_parts: translationSourceParts(file.content), translated_at: translatedAt } }).trimEnd();
+          source_digest: approvedArticleDigest(file.content), translated_at: translatedAt } }).trimEnd();
       writes.push({ path: translationArticlePath(article.locale, file.relPath), content: `---\n${head}\n---\n\n${body.trimStart()}` });
     }
     const mapEntries = new Map(((await readKnowledgeMap(projectRoot))?.entries ?? []).map(entry => [entry.key, entry]));
@@ -389,7 +371,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       writes.push({ path: mapTranslationPath(locale), content: stringifyYaml({ locale, entries }) });
     }
     for (const write of writes) await atomicWrite(join(projectRoot, write.path), write.content);
-    if (draftsChanged) await atomicWrite(join(projectRoot, DRAFTS_FILE), JSON.stringify(drafts, null, 2) + "\n");
+    for (const draft of drafts) for (const path of [draft, `${draft}.diff`]) await rm(join(projectRoot, path), { force: true });
     for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
     await writeReceipt(projectRoot, digest, "submitted");
     return { written: writes.map(write => write.path), removed: inspection.orphans };

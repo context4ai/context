@@ -78,16 +78,17 @@ test("reports every oversized fragment together before reading sources", async (
     base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
   const task = { ...planned, input: productionTaskInput(planned) };
   const file = (path: string, text: string) => ({ path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) });
-  const refs = (count: number) => Array.from({ length: count }, (_, index) => ({ source_ref: "note:source.md",
-    locator: { path: "source.md", start_line: index + 1, end_line: index + 1 } }));
+  const refs = (count: number, path = "source.md") => Array.from({ length: count }, (_, index) => ({ source_ref: "note:source.md",
+    locator: { path, start_line: index + 1, end_line: index + 1 } }));
   let reads = 0;
   await expect(prepareProductionArticle({ projectRoot: ".tmp/unused-production-references", task,
     approvedBaseDigest: null, sourceReader: async () => { reads++; return "Source text"; },
     files: { task: task.id, input: task.input, content: file("content.md", base.markdown),
       references: file("references.yaml", YAML.stringify({ sections: [
-        { id: "a", references: [...refs(4), ...refs(4)] }, { id: "b", references: refs(5) },
+        { id: "a", references: [...refs(9), ...refs(9)] },
+        { id: "b", references: ["one.md", "two.md", "three.md", "four.md"].flatMap(path => refs(1, path)) },
       ] })) },
-  })).rejects.toThrow("a: 4 distinct source regions (maximum 3); b: 5 distinct source regions (maximum 3)");
+  })).rejects.toThrow("a: 9 distinct source regions (maximum 8); b: 4 distinct source files (maximum 3)");
   expect(reads).toBe(0);
 });
 

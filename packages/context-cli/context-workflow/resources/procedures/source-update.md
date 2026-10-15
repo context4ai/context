@@ -26,6 +26,13 @@ Use an empty list only when existing pages cover the change or the additions
 are outside the confirmed purpose. New pages go through the same writing and
 review process as revisions; a new topic is not a no-change decision.
 
+A kept page's citations whose text only moved in the updated source are
+relocated when the update settles. When cited text changed or cannot be
+confirmed, the completion result lists it in `reference_warnings`; those
+citations keep their previous locations. The warning is a receipt for the
+accepted decision, not a request to resubmit it: after the current update queue
+finishes, run `context revise` on each listed page that needs a correction.
+
 The CLI keeps the previous processed version until every requested page has
 been approved, closed and built. If temporary progress is lost, inspect again
 from that version and preserve the pages already approved. A saved report or

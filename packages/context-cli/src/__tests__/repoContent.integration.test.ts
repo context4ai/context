@@ -233,6 +233,9 @@ describe("repository content", () => {
     expect(update.candidates.map(item => item.path)).toEqual(["faq/guide.md"]);
     expect(JSON.stringify(update.repo_content)).toContain('"state":"changed"');
     expect(YAML.parse(await readFile(map, "utf8")).articles[0].sections[0].references[0]).toEqual(reference);
+    await expect(completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/other.md" }],
+      scope_summary: "Wrong page", new_topics: [] })).rejects.toMatchObject({ path: ["decisions"],
+      message: expect.stringMatching(/Missing: faq\/guide\.md\. Not candidates .*: faq\/other\.md\./u) });
     await completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/guide.md" }],
       scope_summary: "The clarification does not change the published claim.", new_topics: [] });
     const settled = YAML.parse(await readFile(map, "utf8"));

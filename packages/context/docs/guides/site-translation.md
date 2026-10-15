@@ -74,23 +74,24 @@ shows the original with a notice. Navigation titles without a translation use
 the translated article title, then the primary title. Site search covers every
 language; opening a result in another language switches to it.
 
-
 ## Incremental drafts
 
-`prepare` returns section changes, title/description changes, exterior-text changes
-(including the article tail), and section order changes. It writes draft files
-and a `submission_path` template. Unchanged parts retain their translation;
-changed parts contain the current primary-language text for the Agent to translate.
-Review every pending part before submitting; generated source text is not a translation.
+`prepare` writes a draft for each pending article and a `submission_path`
+template. A stale article's draft is its current translation; a missing
+article's draft is the approved source. When Git history contains the approved
+version the translation was made from, `source_diff` names a diff from that
+version to the current article. Without such history `source_diff` is `null`;
+compare the draft with the whole approved article. Update only what changed and
+submit the draft. History is missing, for example, when several approve and
+translate rounds ran without a commit in between: the version each translation
+was made from was never recorded. Committing approved knowledge and translations
+after a round lets the next generated draft carry a diff; it does not guarantee
+one, because a kept draft never has a diff.
 
-Older current translations acquire source-part baselines without changing their
-reader text. Older stale translations report `diff: unknown` and get a full source
-draft plus a `.previous.md` translation for comparison.
-
-Repeated preparation preserves edited drafts. `draft: rebase-required` means the
-source changed while a draft was being edited; that draft is excluded from the
-submission template. Reconcile it with the current source, then explicitly add
-the returned `source_digest` to that article's submission entry. Never copy a new
-digest onto an unreconciled draft. Ordinary submissions still use `expected_digest`.
-A draft without a generation record, such as one left by an older workflow, is
-kept as `unrecorded_draft` beside a freshly generated draft.
+An existing edited draft is kept (`draft: kept`) as unfinished work, with
+`source_diff: null`; a draft whose body is still the unedited starting text is
+regenerated with its diff. A kept draft has no diff because the source may have
+changed again, even back, since it was written, so align the whole draft with
+the current approved article. Delete it
+to start again from the current translation. Successful submission removes the
+drafts and diffs it saved.

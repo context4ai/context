@@ -1,4 +1,4 @@
-import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
+import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference, articleFragmentReferenceListSchema } from "./articleStructure.js";
 import { z } from "zod";
 import type { KnowledgeCollection } from "./contracts.js";
 import { validateIndexerArtifactBundle } from "./indexerArtifactPolicy.js";
@@ -44,7 +44,7 @@ const layoutSectionSchema = z.object({
   artifact_kind: indexerIdSchema,
   state: z.enum(["structured", "rendered", "material-gap"]),
   content_digest: indexerDigestSchema.nullable(),
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
   material_question_proposal_ref: indexerCanonicalRefSchema.nullable(),
   collection_resolution_digest: indexerDigestSchema,
 }).strict();

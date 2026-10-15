@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import YAML from "yaml";
-import { withProductionFeedback } from "../project/productionFeedback.js";
+import { SubmissionInputError, withProductionFeedback } from "../project/productionFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 
@@ -30,4 +30,13 @@ test("schema and YAML failures identify the file and actual input fields; I/O re
     throw Object.assign(new Error("Read failed"), { code: "EACCES" });
   })).rejects.toMatchObject({ code: ExitCode.WorkspaceStateError,
     detail: { io_code: "EACCES", reason_code: "production-prepare-failed" } });
+});
+
+test("a correctable submitted value is user input, located at its input path", async () => {
+  const path = ["sections", 1, "references", 0, "locator"];
+  await expect(withProductionFeedback({ operation: "action", file: "revision.yaml" }, async () => {
+    throw new SubmissionInputError("Fragment answer: Source locator matched 0 regions", path);
+  })).rejects.toMatchObject({ code: ExitCode.UserError, detail: { category: "user-input-invalid", file: "revision.yaml",
+    issues: [{ path, message: "Fragment answer: Source locator matched 0 regions" }],
+    next_action: { instruction: expect.stringContaining("resubmit") } } });
 });

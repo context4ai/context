@@ -61,7 +61,8 @@ owner or inventory membership is required; avoid duplicating existing prose.
 The article may cite every authorized participating source. Cover the reader
 question and relevant handoffs defined in the task brief.
 Explain operations and handoffs in reader prose, links or diagrams, citing the
-actual source regions for each fragment (at most three locations per fragment).
+actual source regions for each fragment (at most three source files per fragment;
+several regions of one file are fine, up to eight regions in total).
 Do not emit graph edges, classify nodes or create a relationship ledger.
 
 ## Granularity and stop conditions

@@ -76,7 +76,7 @@ export const siteMarkdownConfig = String.raw`
     });
     md.block.ruler.before('paragraph', 'context_anchor', (state, line, end, silent) => {
       const raw = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
-      const match = /^<a id="(section-[a-zA-Z0-9_%.-]+)"><\/a>$/.exec(raw);
+      const match = /^<a id="(section-[a-zA-Z0-9_%.-]+|[a-zA-Z0-9_-]+)"><\/a>$/.exec(raw);
       if (!match) return false;
       if (!silent) { const token = state.push('context_anchor', '', 0); token.content = match[1]; }
       state.line = line + 1;

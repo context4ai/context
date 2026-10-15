@@ -1,5 +1,5 @@
 import { articleSourceLocatorInputSchema } from "./articleSourceLocatorInput.js";
-import { articleSourceLocatorSchema } from "./articleStructure.js";
+import { articleFragmentReferenceListSchema, articleSourceLocatorSchema } from "./articleStructure.js";
 import { indexerIdSchema } from "./indexerProtocolCommon.js";
 import { knowledgeMapUpdateSchema } from "./knowledgeMap.js";
 import { indexerArticleKeySchema, indexerArticlePlanSchema } from "./indexerArticlePlan.js";
@@ -145,7 +145,7 @@ const authorSectionSchema = z.object({
   heading: z.string().min(1),
   visuals: z.array(authorVisualSchema).optional(),
   markdown: z.string().min(1),
-  references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3).default([]),
+  references: articleFragmentReferenceListSchema(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).default([]),
   answers: z.array(z.string().min(1)).default([]),
 }).strict();
 
@@ -153,7 +153,7 @@ const authorTemplateVariablesSchema = z.record(z.union([
   z.string(),
   z.object({
     value: z.string(),
-    references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3).default([]),
+    references: articleFragmentReferenceListSchema(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).default([]),
   }).strict(),
 ]));
 
@@ -284,7 +284,7 @@ const postAuthorSectionSchema = z.object({
   heading: z.string().min(1),
   visuals: z.array(authorVisualSchema).optional(),
   markdown: z.string().min(1),
-  references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3),
+  references: articleFragmentReferenceListSchema(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()),
 }).strict();
 
 const postAuthorInputBaseSchema = z.object({

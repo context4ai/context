@@ -50,7 +50,8 @@ proof of runtime behavior. Preserve expressions without executing project code,
 distinguish declaration defaults from implementation defaults, and state unknowns.
 
 Use the current stage's Markdown and reference-file schemas. Each fragment cites
-at most three actual source locations; the CLI computes regional digests. Split
+actual source regions from at most three files (up to eight regions); the CLI
+computes regional digests. Split
 an explanation when it needs separate evidence, not to fill a fixed template.
 Reuse stable article and fragment identities when revising. Supporting documents,
 notes or sessions may contribute to the same article without becoming code facts.

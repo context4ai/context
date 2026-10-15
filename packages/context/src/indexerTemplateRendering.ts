@@ -1,4 +1,4 @@
-import { articleFragmentReferences, articleSourceReferenceSchema } from "./articleStructure.js";
+import { articleFragmentReferences, articleSourceReferenceSchema, articleFragmentReferenceListSchema } from "./articleStructure.js";
 import { z } from "zod";
 import {
   indexerDeterministicBlockRendererSchema,
@@ -177,7 +177,7 @@ const renderedSectionSchema = z.object({
   artifact_kind: indexerIdSchema,
   markdown: z.string().min(1),
   content_blocks: z.array(indexerRenderedContentBlockSchema).min(1),
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
   content_digest: indexerDigestSchema,
 }).strict();
 

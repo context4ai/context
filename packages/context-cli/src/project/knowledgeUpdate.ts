@@ -14,9 +14,11 @@ import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScope
 import { readProductionStage } from "./productionStageStore.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { SubmissionInputError } from "./productionFeedback.js";
 import { repoContentScopeMatches } from "@c4a/context";
 import { ensureRepoContentLinks } from "./repoContentLinks.js";
 import { inspectRepoContentChanges, repoContentImpactReader } from "./repoContentEvidence.js";
+import { inspectSettledReferences } from "./settledReferenceRelocation.js";
 
 export const knowledgeUpdateInputSchema = z.object({
   scopes: z.array(z.object({ requirement_ref: z.string().min(1), source_ref: z.string().min(1),
@@ -94,6 +96,23 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
   });
 }
 
+/** A receipt for decisions already accepted, not a gate: kept pages whose cited
+ * text changed or cannot be confirmed retain their previous citations. */
+async function keptReferenceWarnings(projectRoot: string,
+  decisions: ReadonlyArray<{ path: string; instruction?: string | undefined }>, scopes: readonly string[]) {
+  const kept = new Set(decisions.filter((decision) => !decision.instruction?.trim()).map((decision) => decision.path));
+  if (kept.size === 0) return {};
+  const structure = await readKnowledgeStructure(projectRoot);
+  const articles = validateArticleStructureEntries(structure.parsed?.articles ?? []).filter((article) => kept.has(article.path));
+  const { unresolved } = await inspectSettledReferences(projectRoot, articles, scopes);
+  if (unresolved.length === 0) return {};
+  return {
+    reference_warnings: unresolved.map((item) => ({ path: item.path, section_id: item.section_id, state: item.state,
+      source_ref: item.reference.source_ref, locator: item.reference.locator })),
+    reference_warning_instruction: "These pages were kept unchanged as decided. Their listed citations changed or could not be confirmed against the updated source and keep their previous locations. The decision cannot be resubmitted; after the current update queue finishes, run context revise <path> --instruction <correction> for each page that needs a correction.",
+  };
+}
+
 export async function completeKnowledgeUpdate(input: { projectRoot: string; revision: string;
   decisions: Array<{ path: string; instruction?: string | undefined; supporting_sources?: string[] | undefined }>; scope_summary: string; new_topics: NewKnowledgePage[]; structure_approved?: boolean }) {
   return withProjectWriteLock(input.projectRoot, "resolve-knowledge-update", async () => {
@@ -108,23 +127,32 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
     for (const page of input.new_topics) {
       newKnowledgePageTarget(page);
       if (page.source_refs.some((ref) => !request.scopes.some((scope) => repoContentScopeMatches(scope.source_ref, ref) || ref.startsWith(`${scope.source_ref}/`)))) {
-        throw new TypeError("New topic references material outside the confirmed update scope");
+        throw new SubmissionInputError(`New topic ${page.path} references material outside the confirmed update scope; allowed sources: ${request.scopes.map((scope) => scope.source_ref).join(", ")}`,
+          ["new_topics", input.new_topics.indexOf(page), "source_refs"]);
       }
     }
-    for (const decision of input.decisions) {
+    for (const [index, decision] of input.decisions.entries()) {
       if (decision.supporting_sources && (!decision.instruction || decision.supporting_sources.some((ref) =>
         !request.scopes.some((scope) => repoContentScopeMatches(scope.source_ref, ref))))) {
-        throw new TypeError("Supporting sources must belong to the confirmed update and accompany a concrete revision instruction");
+        throw new SubmissionInputError(`Supporting sources for ${decision.path} must belong to the confirmed update and accompany a concrete revision instruction`,
+          ["decisions", index, "supporting_sources"]);
       }
     }
     const paths = [...input.decisions.map((decision) => decision.path), ...input.new_topics.map((page) => page.path)];
-    if (new Set(paths).size !== paths.length) throw new TypeError("Update page paths must be unique");
-    const selected = new Set(input.decisions.map((decision) => decision.path));
-    if (selected.size !== input.decisions.length || selected.size !== request.candidates.length ||
-        request.candidates.some((candidate) => !selected.has(candidate.path))) {
-      throw new TypeError("Decide each source-bound candidate once; an omitted page is not a no-change decision");
+    const repeated = [...new Set(paths.filter((path, index) => paths.indexOf(path) !== index))];
+    if (repeated.length) throw new SubmissionInputError(`Update page paths must be unique; repeated: ${repeated.join(", ")}`, ["decisions"]);
+    const candidates = new Set(request.candidates.map((candidate) => candidate.path));
+    const missing = [...candidates].filter((path) => !input.decisions.some((decision) => decision.path === path));
+    const unknown = input.decisions.map((decision) => decision.path).filter((path) => !candidates.has(path));
+    if (missing.length || unknown.length) {
+      throw new SubmissionInputError([
+        "Decide each source-bound candidate once; an omitted page is not a no-change decision. List a candidate with only its path to keep it unchanged.",
+        ...(missing.length ? [`Missing: ${missing.join(", ")}.`] : []),
+        ...(unknown.length ? [`Not candidates (use new_topics for new pages): ${unknown.join(", ")}.`] : []),
+      ].join(" "), ["decisions"]);
     }
     await captureProcessedScopes(input.projectRoot, request.scopes);
+    const receipt = await keptReferenceWarnings(input.projectRoot, input.decisions, request.scopes.map((scope) => scope.source_ref));
     const revisions: Array<{ path: string; instruction: string; create?: NewKnowledgePage; supporting_sources?: string[] | undefined }> = input.decisions.filter((decision): decision is { path: string; instruction: string } =>
       typeof decision.instruction === "string" && decision.instruction.trim().length > 0);
     revisions.push(...input.new_topics.map((page) => ({ path: page.path, instruction: page.instruction, create: page })));
@@ -140,13 +168,13 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
       await commitProcessedScopes(input.projectRoot, request.scopes);
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(input.projectRoot);
-      return { outcome: "unchanged" as const };
+      return { outcome: "unchanged" as const, ...receipt };
     }
     await prepareApprovedRevision({ projectRoot: input.projectRoot, replace_current: true, selector: first.path,
       instruction: first.instruction, pending_targets: remaining, processed_scopes: request.scopes, requirements: request.requirements,
       ...(first.supporting_sources === undefined ? {} : { supporting_sources: first.supporting_sources }),
       ...(first.create === undefined ? {} : { create: first.create }) });
-    return { outcome: "revisions-prepared" as const, page_count: revisions.length };
+    return { outcome: "revisions-prepared" as const, page_count: revisions.length, ...receipt };
   });
 }
 

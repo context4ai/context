@@ -33,12 +33,21 @@ an LLM itself.
 
 ## Install the Agent integration
 
+Requires Node.js 20 or newer. Knowledge workspaces install their dependencies
+with Bun (`bun install` after `context init`), so install Bun as well.
+
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install # global installation
 # Alternatively, install only in a repository:
 context plugin install --local /path/to/repo --agent auto-detect
 ```
+
+The source repository is also a plugin marketplace. Claude Code and Codex can
+install the `c4a` plugin from it with `claude plugin marketplace add context4ai/context`
+and `claude plugin install c4a@c4a`, or `codex plugin marketplace add context4ai/context`
+and `codex plugin add c4a@c4a`. The CLI is still required; the plugin delegates
+the workflow and the bundled Indexers to it.
 
 `--local` requires explicit `--agent`: `claude`, `cursor`, `codex`, `all`, `auto-detect`, or `standalone`. The path is a repository root: explicit hosts install into `.claude`, `.cursor`, or `.agents` without detection. `all` installs all three. Only `auto-detect` checks existing `.claude`, `.cursor`, and `.agents` directories in the target repository, never PATH or installed desktop applications; it falls back to `.agents/skills` when none exist. `standalone` instead writes all skills directly to `<path>/skills`, with no commands or host subdirectory. All modes support `--dry-run` and preserve global configuration.
 

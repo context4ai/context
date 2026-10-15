@@ -27,6 +27,16 @@ describe("package knowledge consumer projection", () => {
       expect(projectPackageKnowledgeMarkdown(projected)).toBe(projected);
     }
   });
+  test("a section id is also its own anchor unless a heading already owns that slug", () => {
+    const projected = projectPackageKnowledgeMarkdown([
+      "---", "title: Guide", "---", "", "# Guide", "",
+      '<!-- context:section id="upgrade" -->', "## Upgrade", "", "Steps.", "<!-- /context:section -->", "",
+      '<!-- context:section id="context-vs-distill" -->', "## Which tool?", "", "Choose.", "<!-- /context:section -->",
+    ].join("\n"));
+    expect(projected).toContain('\n<a id="context-vs-distill"></a>\n<a id="section-context-vs-distill"></a>\n');
+    expect(projected).toContain('\n<a id="section-upgrade"></a>\n');
+    expect(projected).not.toContain('<a id="upgrade">');
+  });
   test("preserves an opening title behind a projected section anchor", () => {
     const projected = projectPackageKnowledgeMarkdown([
       "---", "title: Guide", "---", "",

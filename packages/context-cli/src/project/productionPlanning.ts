@@ -1,5 +1,5 @@
-import { migrateProductionDrafts } from "./productionDraftMigration.js";
-import { inheritedProductionSources, resolveProductionDependency } from "./productionDependencies.js";
+import { previousProductionDrafts } from "./productionDraftMigration.js";
+import { resolveProductionDependency } from "./productionDependencies.js";
 import { randomUUID } from "node:crypto";
 import { readFile, access } from "node:fs/promises";
 import { join } from "node:path";
@@ -170,15 +170,6 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (!stage.report_approved && plan.replaces.length) throw new TypeError("Before report approval, submit the complete plan instead of replacement task identities");
     if (stage.report_approved && !plan.articles.length && plan.pending_scopes === undefined) throw new TypeError("A writing-stage plan amendment needs new tasks or an explicit investigation update");
     const request = (await productionPlanningRequest(input.projectRoot))!;
-    const candidates = await readCandidateRecords(input.projectRoot);
-    const approved = productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot));
-    const authorized = authorizedProductionSources(request.requirements);
-    for (const article of plan.articles) {
-      const prior = candidates.find(candidate => candidate.path === article.path);
-      const sections = prior?.indexer_candidate?.sections.map(section => ({ references: section.references })) ?? approved.byPath.get(article.path)?.sections ?? [];
-      article.sources = await inheritedProductionSources(article.sources, sections.flatMap(section => section.references), authorized,
-        scope => productionSourceBaseline(input.projectRoot, scope).then(() => true, () => false));
-    }
     const selected = [...new Set([...plan.articles.flatMap(article => article.sources), ...plan.pending_scopes ?? []])];
     if (selected.length) selectProductionSources(request.requirements, selected);
     const existingScopes = new Set(stage.scopes.map(source => source.scope));
@@ -218,9 +209,12 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (identities.size !== plan.articles.length) throw new TypeError("Plan article paths must be unique");
     if (stage.report_approved && identities.size > 0 && [...identities.values()].every(id => stage.tasks.some(task => task.id === id))) {
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage, capabilities: plan.capabilities });
-      return { stage_state: prepared.state, next: { directory: prepared.directory, agent_directory: prepared.agent_directory, mode: prepared.mode,
+      const previous = await previousProductionDrafts(input.projectRoot, stage, stage.tasks.filter(task => [...identities.values()].includes(task.id)));
+      return { stage_state: prepared.state, ...(previous.length ? { previous_drafts: previous } : {}), next: { directory: prepared.directory, agent_directory: prepared.agent_directory, mode: prepared.mode,
         ...(prepared.submission ? { submission: prepared.submission } : {}) } };
     }
+    const candidates = await readCandidateRecords(input.projectRoot);
+    const approved = productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot));
     const tasks = [];
     for (const article of plan.articles) {
       if (stage.report_approved && stage.tasks.some(task => task.path === article.path &&
@@ -250,9 +244,9 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     const updated = validateProductionStage({ ...amended, indexer_usage: [...new Map(usage.map(item => [JSON.stringify(item), item])).values()] });
     await saveExpandedProductionScope(input.projectRoot, updated, request.requirements, additional.materials.sources);
     try {
-      const draft_migrations = await migrateProductionDrafts(input.projectRoot, stage, tasks, plan.replaces);
+      const previous = await previousProductionDrafts(input.projectRoot, updated, tasks);
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage: updated, capabilities: plan.capabilities });
-      return { stage_state: prepared.state, draft_migrations, ...(prepared.submission ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory,
+      return { stage_state: prepared.state, ...(previous.length ? { previous_drafts: previous } : {}), ...(prepared.submission ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory,
         submission: prepared.submission, mode: prepared.mode } } : { next_action: { command: "context status --format json" } }) };
     } catch (error) {
       return { stage_state: "active" as const, next_preparation: { outcome: "failed" as const,

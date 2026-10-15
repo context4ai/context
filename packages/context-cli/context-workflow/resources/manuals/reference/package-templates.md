@@ -316,8 +316,8 @@ Approved Markdown under `knowledge/` and the article index in
   and fragment `sections` with their region `references`.
 - Markdown fragment markers contain only their stable ID:
   `<!-- context:section id="usage" -->` and `<!-- /context:section -->`.
-  Structure records each corresponding ID and at most three source positions
-  per fragment, not three per article.
+  Structure records each corresponding ID and its source positions: at most
+  three distinct source files and eight regions per fragment, not per article.
 - A reference contains `source_ref`, `locator: { path, start_line, end_line }`
   and the Host-computed regional `content_digest`. Do not duplicate this in
   Markdown frontmatter or comments.

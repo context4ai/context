@@ -36,6 +36,8 @@ context status --format json
 ```
 
 Use the dependency-install command returned by initialization if it differs.
+The workspace installs its dependencies with Bun, so Bun must be installed
+alongside Node.js 20 or newer.
 Initialization creates the project configuration, source directories, package
 templates and workspace rules. Read the generated `AGENTS.md`. It does not create
 an empty `src/indexers.yaml`: the later configuration Route supplies its schema

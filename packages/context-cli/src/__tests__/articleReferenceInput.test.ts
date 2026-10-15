@@ -28,7 +28,7 @@ test("author references hash only the requested captured region and never manufa
   const resolve = articleReferenceResolver({ projectRoot: root, view });
   expect(resolve([reference, reference])).toEqual([createArticleSourceReference(reference.source_ref, reference.locator, content)]);
   expect(resolve([])).toEqual([]);
-  expect(() => resolve(Array.from({ length: 4 }, () => reference))).toThrow("at most three");
+  expect(resolve(Array.from({ length: 4 }, () => reference))).toHaveLength(1);
   for (const locator of [
     { path: "entry.ts", start_line: 0, end_line: 2 },
     { path: "entry.ts", start_line: 3, end_line: 2 },

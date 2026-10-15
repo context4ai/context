@@ -332,7 +332,7 @@ changing structure, adding a page or when a section has no unambiguous ID.
 To change a fragment's citations, include `references` alongside its `section_id`:
 each entry supplies `source_ref` and `locator` (`path`, `start_line`, `end_line`).
 Context computes the region fingerprint. This uses the same revision submission,
-with at most three source positions per fragment. Full Markdown may include a
+with at most three source files and eight regions per fragment. Full Markdown may include a
 `sections` list of reference edits; local section edits may change content,
 references, or both. Omission preserves citations; an empty list removes them.
 
@@ -697,17 +697,19 @@ Revision section edits may supply `references` as `source_ref` plus a
 `locator` containing `path`, `start_line`, and `end_line`. Context computes the
 regional digest. Omitted references preserve the current fragment's citations;
 an explicit empty list removes them, and deleting a fragment removes its
-citations. Each fragment may cite at most three source positions. Register and
+citations. Each fragment may cite at most three source files and eight regions. Register and
 authorize new material before citing it, then follow normal Review, close and
 build. Article links alone do not authorize reading new sources or prove a claim.
 
 ### Locating submitted references
 
 Submission locators also accept `{path, heading}` or `{path, quote}` instead of
-line numbers. Use exactly one form. A heading matches an exact ATX heading
-outside code fences in a Markdown source; its region ends before the next
+line numbers. Use exactly one form. A heading is the title text of an exact ATX heading
+outside code fences in a Markdown source; a leading `##` marker is optional and,
+when present, also selects the heading level; its region ends before the next
 same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The three-region limit applies after resolving and deduplicating positions.
+The per-fragment limits (three source files, eight regions) apply after
+resolving and deduplicating positions.

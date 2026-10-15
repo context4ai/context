@@ -64,6 +64,7 @@ export async function prepareActionCompletionOutput(input: {
     result_bytes: Buffer.byteLength(full),
     outcome_counts: counts,
     ...pick(result, ["workflow_summary", "composer_result", "submitted_slice"]),
+    ...(Array.isArray(result.reference_warnings) ? { reference_warning_count: result.reference_warnings.length } : {}),
     committed_count: Array.isArray(result.outcomes) ? outcomes.filter((item) => item.committed === true).length : null,
     outcomes: outcomes.map((item) => ({
       ...pick(item, ["task_key", "outcome", "committed"]),
@@ -98,6 +99,7 @@ export async function prepareActionCompletionOutput(input: {
     summary.outcomes_omitted++;
   }
   summary.details_required = summary.outcomes_omitted > 0 || failure?.outcome === "failed" ||
+    (Array.isArray(result.reference_warnings) && result.reference_warnings.length > 0) ||
     outcomes.some(item => !["accepted", "material-expanded"].includes(String(item.outcome))) ||
     (outcomes.length === 0 && result.outcome === undefined && result.workflow_summary === undefined) ||
     (next === undefined && result.workflow_summary === undefined);

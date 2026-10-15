@@ -66,20 +66,20 @@ test("a slot keeps its own references and never truncates long prose", async () 
   expect(block.references).toEqual([reference]);
 });
 
-test("separate template paragraphs can cite six regions while a single paragraph is capped at three", async () => {
+test("separate template paragraphs can cite nine regions while a single paragraph is capped at eight", async () => {
   const input = await fixture();
   const api = input.template.contract.sections.find(section => section.section_key === "api")!;
   const variable = input.template.contract.variables.find(item => item.id === "api")!;
   input.template.contract.variables = [{ ...variable, id: "first" }, { ...variable, id: "second" }];
   input.template.contract.sections = [{ ...api, variable_ids: ["first", "second"] }];
   input.template.section_bodies.api = "## API\n\n{{variable:first}}\n\n{{variable:second}}";
-  const regions = (offset: number) => [1, 2, 3].map(line => ({ ...reference,
-    locator: { ...reference.locator, start_line: line + offset, end_line: line + offset } }));
-  const semanticVariables = { first: { value: "First paragraph", references: regions(0) },
-    second: { value: "Second paragraph", references: regions(3) } };
+  const regions = (offset: number, count: number) => Array.from({ length: count }, (_, index) => ({ ...reference,
+    locator: { ...reference.locator, start_line: index + 1 + offset, end_line: index + 1 + offset } }));
+  const semanticVariables = { first: { value: "First paragraph", references: regions(0, 5) },
+    second: { value: "Second paragraph", references: regions(5, 4) } };
   applySelectedPageTemplate({ ...input, semanticVariables });
   const blocks = input.artifact.sections.find(section => section.section_key === "api")!.blocks;
-  expect(blocks.map(block => block.references.length)).toEqual([0, 3, 3]);
+  expect(blocks.map(block => block.references.length)).toEqual([0, 5, 4]);
   expect(blocks.map(block => block.markdown).join("\n\n")).toBe("## API\n\nFirst paragraph\n\nSecond paragraph");
   const ids = blocks.map(block => block.block_id);
   semanticVariables.first.value = "Updated first paragraph";

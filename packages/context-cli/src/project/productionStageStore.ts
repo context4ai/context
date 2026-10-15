@@ -7,6 +7,7 @@ import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { productionAgentDirectory } from "./productionSubmissionFiles.js";
+import { previousProductionDrafts } from "./productionDraftMigration.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
 import { productionApprovedTargetsIndex, readProductionArticleTarget } from "./productionArticleTarget.js";
@@ -213,10 +214,12 @@ export async function materializeProductionStage(input: {
             await readOptional(input.projectRoot, join(agent, output, "article.md")) === undefined);
           if (edits && await readOptional(input.projectRoot, draft) === undefined) await write(draft,
             `# Existing fragment IDs: ${JSON.stringify(sectionIds)}\n# Replace selected fragments or insert with replace: [] and after: <id>.\n# Omit references to inherit; supply references to re-confirm evidence.\nedits: []\n`);
+          const replacedDrafts = await previousProductionDrafts(input.projectRoot, stage, [task]);
           await write(join(taskRoot, "task.md"), [`# ${task.question}`, "", `Target: ${task.path}`,
             ...(edits ? [`Draft edits: ${join(agent, output, "edits.yaml")}`] : [
               `Draft Markdown: ${join(agent, output, "article.md")}`,
               `Draft references: ${join(agent, output, "references.yaml")}`]),
+            ...replacedDrafts.map(draft => `Replaced task draft (compare before reusing; not copied): ${draft.from}`),
             `Article: ${task.article_id}`, `Dependencies: ${task.after.join(", ") || "none"}`, "",
             task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
             ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,

@@ -33,6 +33,8 @@ context plugin install # 全局安装
 context plugin install --local /path/to/repo --agent auto-detect
 ```
 
+源码仓库本身也是插件市场。Claude Code 与 Codex 可以从中安装 `c4a` 插件：`claude plugin marketplace add context4ai/context` 后执行 `claude plugin install c4a@c4a`，或 `codex plugin marketplace add context4ai/context` 后执行 `codex plugin add c4a@c4a`。CLI 仍需安装，插件把工作流和随包的 Indexer 交给它执行。
+
 `--local` 必须显式搭配 `--agent`：`claude`、`cursor`、`codex`、`all`、`auto-detect` 或 `standalone`。路径为仓库根；指定宿主直接写入对应 `.claude`、`.cursor`、`.agents` 子目录，不检测是否安装宿主。`all` 全装；只有 `auto-detect` 检测目标仓库已有的 `.claude`、`.cursor`、`.agents` 目录，不检测 PATH 或桌面应用；均不存在时兜底 `.agents/skills`。`standalone` 则直接写入 `<path>/skills`，不生成 commands 或宿主子目录。均支持 `--dry-run`，不改全局配置。
 
 从 0.7.20 迁移：裸 `--local` 补充 `--agent auto-detect`；指定宿主时传仓库根，不再传宿主目录。全局安装不变。自动探测不代表宿主已加载，安装后需刷新宿主。

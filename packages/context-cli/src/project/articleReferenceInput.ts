@@ -30,7 +30,6 @@ export function articleReferenceResolver(input: {
     value: item.value as Record<string, unknown>,
   }));
   return (references: readonly ReferenceInput[]): ArticleSourceReference[] => {
-    if (references.length > 3) throw new TypeError("A fragment can cite at most three source positions");
     return articleFragmentReferences(references.map(reference => {
       const locator = articleSourceLocatorSchema.parse(reference.locator);
       const key = JSON.stringify([reference.source_ref, locator.path]);

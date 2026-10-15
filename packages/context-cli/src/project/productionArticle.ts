@@ -1,7 +1,7 @@
 import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import YAML from "yaml";
 import { z } from "zod";
-import { articleFragmentReferences, createArticleSourceReference,
+import { ARTICLE_FRAGMENT_REGION_LIMIT, ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT, articleFragmentReferences, createArticleSourceReference,
   indexerKnowledgeCollectionSchema, indexerProtocolDigest, repoContentScopeMatches } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
@@ -127,11 +127,13 @@ export async function prepareProductionArticle(input: {
   // Report all oversized fragments together before reading source bodies.
   // Duplicate declarations of the same region still count only once.
   const oversized = declared.sections.flatMap(section => {
+    const files = new Set(section.references.map(ref => JSON.stringify([ref.source_ref, ref.locator.path]))).size;
+    if (files > ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT) return [`${section.id}: ${files} distinct source files (maximum ${ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT})`];
     if (section.references.some(ref => !("start_line" in ref.locator))) return [];
     const count = new Set(section.references.map(ref => indexerProtocolDigest({
       source_ref: ref.source_ref, locator: ref.locator,
     }))).size;
-    return count > 3 ? [`${section.id}: ${count} distinct source regions (maximum 3)`] : [];
+    return count > ARTICLE_FRAGMENT_REGION_LIMIT ? [`${section.id}: ${count} distinct source regions (maximum ${ARTICLE_FRAGMENT_REGION_LIMIT})`] : [];
   });
   if (oversized.length) throw articleError(task, files.references.path,
     `Split the claims or choose sufficient references for these fragments: ${oversized.join("; ")}.`);

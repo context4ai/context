@@ -1,7 +1,10 @@
+import { ZodError } from "zod";
 import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
-import { articleFragmentReferences, articleSourceRegionDigest, createArticleSourceReference,
-  locateArticleRegion, repoContentScopeMatches, type ArticleStructureEntry } from "@c4a/context";
-import { readArticleRegionBaseline, rememberArticleRegion } from "./articleRegionBaselines.js";
+import { SubmissionInputError } from "./productionFeedback.js";
+import { articleFragmentReferences, createArticleSourceReference,
+  repoContentScopeMatches, type ArticleStructureEntry } from "@c4a/context";
+import { rememberArticleRegion } from "./articleRegionBaselines.js";
+import { relocateUnchangedReference } from "./settledReferenceRelocation.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import type { RevisionContentInput } from "./approvedRevisionEdits.js";
 
@@ -19,8 +22,9 @@ export async function prepareRevisionReferences(input: {
     throw new TypeError(`Reference edit targets a missing fragment: ${id}`);
   }
   let read: Awaited<ReturnType<typeof registeredArticleSourceReader>> | undefined;
+  const inScope = (source: string) => input.sourceRefs.some(scope => repoContentScopeMatches(scope, source));
   const readSource = async (source: string, path: string) => {
-    if (!input.sourceRefs.some(scope => repoContentScopeMatches(scope, source))) throw new TypeError(`Source is outside this revision: ${source}`);
+    if (!inScope(source)) throw new TypeError(`Source is outside this revision: ${source}`);
     read ??= await registeredArticleSourceReader(input.projectRoot);
     return read(source, path, true);
   };
@@ -28,34 +32,36 @@ export async function prepareRevisionReferences(input: {
   for (const id of input.sectionIds) {
     const edit = edits.get(id);
     if (edit?.references !== undefined) {
+      const at = ["sections", input.edits!.indexOf(edit), "references"];
       const references = [];
-      for (const reference of edit.references) {
+      for (const [index, reference] of edit.references.entries()) {
+        if (!inScope(reference.source_ref)) throw new SubmissionInputError(
+          `Fragment ${id} cites ${reference.source_ref}, which is outside this revision; allowed sources: ${input.sourceRefs.join(", ")}. `
+          + "To cite new independent evidence, register it as a source, associate it with the selected requirement in src/indexers.yaml, then run context task adjust for this revision.",
+          [...at, index, "source_ref"]);
         const text = await readSource(reference.source_ref, reference.locator.path);
-        const resolved = createArticleSourceReference(reference.source_ref, resolveSubmittedSourceLocator(reference.locator, text), text);
+        let locator;
+        try { locator = resolveSubmittedSourceLocator(reference.locator, text); }
+        catch (error) {
+          if (error instanceof SubmissionInputError) throw new SubmissionInputError(`Fragment ${id}: ${error.message}`, [...at, index, "locator"]);
+          throw error;
+        }
+        const resolved = createArticleSourceReference(reference.source_ref, locator, text);
         rememberArticleRegion(input.projectRoot, resolved, text);
         references.push(resolved);
       }
-      result.push({ id, references: articleFragmentReferences(references) });
+      try { result.push({ id, references: articleFragmentReferences(references) }); }
+      catch (error) {
+        if (error instanceof ZodError) throw new SubmissionInputError(`Fragment ${id}: ${error.issues.map(issue => issue.message).join("; ")}`, at);
+        throw error;
+      }
       continue;
     }
     const references = [];
     for (const reference of input.previous.find(section => section.id === id)?.references ?? []) {
-      let resolved = reference;
-      try {
-        const text = await readSource(reference.source_ref, reference.locator.path);
-        let digest: string | undefined;
-        try { digest = articleSourceRegionDigest(text, reference.locator); }
-        catch (error) { if (!(error instanceof RangeError)) throw error; }
-        if (digest !== reference.content_digest) {
-          const previous = readArticleRegionBaseline(input.projectRoot, reference.content_digest);
-          const locator = previous === undefined ? null : locateArticleRegion(previous, text, reference.locator.path);
-          if (locator) resolved = { ...reference, locator };
-        }
-      } catch {
-        // An expression-only revision need not recapture unavailable sources.
-        // Keep the old reference so normal region warnings remain observable.
-      }
-      references.push(resolved);
+      // An expression-only revision need not recapture unavailable sources.
+      // Unresolved references stay unchanged so normal region warnings remain observable.
+      references.push((await relocateUnchangedReference(input.projectRoot, readSource, reference)).reference);
     }
     result.push({ id, references });
   }

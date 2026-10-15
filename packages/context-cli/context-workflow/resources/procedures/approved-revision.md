@@ -34,6 +34,8 @@ association. Then retry the same `task adjust` without refresh and, once materia
 is available, with `refresh: true`; reread the resulting revision. Do not invent
 module references, replace an older note, delete sources or clear the task to
 satisfy this boundary. Already imported material does not need to be imported again.
+The adjusted source stays citable by the remaining pages queued in the same revision;
+repeating the adjustment for an unchanged source keeps already prepared pages.
 A managed-source `base_digest` protects file replacement from conflicts; it is not
 source-scope authorization and is not interchangeable with a snapshot hash.
 
@@ -137,7 +139,7 @@ Action schema and the same source and baseline validation.
 
 When a fragment's support changes, include `references` with its actual
 `source_ref` and `locator` (`path`, `start_line`, `end_line`). Each fragment allows
-up to three positions; Context reads the captured region and computes its digest.
+regions from up to three source files, eight regions in total; Context reads the captured region and computes its digest.
 For full Markdown, optional `sections` contains only `{ section_id, references }`
 entries; for local edits it can accompany `content` or update references alone.
 An explicit empty list removes that fragment's citations. Deleted fragments lose
@@ -174,10 +176,12 @@ accepted tasks or an empty Composer result alone do not demonstrate a correction
 ### Locating submitted references
 
 Submission locators also accept `{path, heading}` or `{path, quote}` instead of
-line numbers. Use exactly one form. A heading matches an exact ATX heading
-outside code fences in a Markdown source; its region ends before the next
+line numbers. Use exactly one form. A heading is the title text of an exact ATX heading
+outside code fences in a Markdown source; a leading `##` marker is optional and,
+when present, also selects the heading level; its region ends before the next
 same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The three-region limit applies after resolving and deduplicating positions.
+The per-fragment limits (three source files, eight regions) apply after
+resolving and deduplicating positions.

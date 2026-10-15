@@ -85,7 +85,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 - Approved Markdown 头部维护 `title`、`type`、`description`、`timestamp`，按需保留真实 `resource` 和阅读标签。正文保留稳定片段 ID；文章身份、路径、知识分类、可见性和片段来源区域仅在 `knowledge/structure.yaml` 的 `articles` 中维护。导出由结构引用生成读者溯源，不能要求 Agent 再维护一份来源列表。构建清单记录发布路径到批准文章的映射，不得改写 `knowledge/`。
 - PART1 重构不再要求 prose/structure knowledge 提取独立主体、填写 node_type 或主体 tags；文章知识分类仍保留，不以主体分类推导。
 - Markdown 不写 `article_id`、`sources`、`source_refs`、`visibility` 或 `code_symbols`；片段标记为 `<!-- context:section id="..." -->` 和对应结束标记，不附证据属性。
-- 实际引用由 `source_ref`、区域 `locator` 与工具计算的 `content_digest` 表达；每个输出片段最多 3 个位置，不是章节或文章的总上限。不维护独立事实／证据 ID 或逐绑定指纹。
+- 实际引用由 `source_ref`、区域 `locator` 与工具计算的 `content_digest` 表达；每个输出片段最多引用 3 个不同来源文件、共 8 个区域，不是章节或文章的总上限。不维护独立事实／证据 ID 或逐绑定指纹。
 - 当前 Indexer approved Markdown 不保存 `candidate_fingerprint`、Indexer digest 或 `code_origin`；
   current/stale 由本机 runtime 与批准页面的实际正文、来源共同判定。
 - 不写 `schema` 字段。协议版本由工具/文档和 verify 约束,不是 approved MD 的 frontmatter 字段。

@@ -24,9 +24,21 @@ describe("article structure", () => {
       { ...section, references: [reference(), reference(), reference()] },
       { ...section, id: "next", references: [reference(), reference(), reference()] },
     ] }])[0]!.sections).toHaveLength(2);
+    const lines = Array.from({ length: 10 }, (_, index) => `line ${index}`).join("\n");
+    const at = (path: string, line: number) => createArticleSourceReference("repo:app", { path, start_line: line, end_line: line }, lines);
+    const regions = (count: number) => Array.from({ length: count }, (_, index) => at("src/login.ts", index + 1));
+    expect(validateArticleStructureEntries([{ ...article(), sections: [
+      { ...section, references: regions(8) },
+    ] }])[0]!.sections[0]!.references).toHaveLength(8);
     expect(() => validateArticleStructureEntries([{ ...article(), sections: [
-      { ...section, references: [reference(), reference(), reference(), reference()] },
-    ] }])).toThrow();
+      { ...section, references: regions(9) },
+    ] }])).toThrow("at most 8 source regions");
+    expect(validateArticleStructureEntries([{ ...article(), sections: [
+      { ...section, references: ["a.ts", "a.ts", "b.md", "c.md"].map((path, index) => at(path, index + 1)) },
+    ] }])[0]!.sections[0]!.references).toHaveLength(4);
+    expect(() => validateArticleStructureEntries([{ ...article(), sections: [
+      { ...section, references: ["a.ts", "b.md", "c.md", "d.md"].map(path => at(path, 1)) },
+    ] }])).toThrow("at most 3 distinct source files");
   });
 
   test("rejects duplicate identities or paths instead of overwriting", () => {

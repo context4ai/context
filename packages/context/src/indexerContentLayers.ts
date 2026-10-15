@@ -1,7 +1,7 @@
 import { publicContractSupport, reconcilePublicContractFacts } from "./indexerPublicContractFacts.js";
 import { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
 import { z } from "zod";
-import { articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
+import { articleSourceReferenceSchema, type ArticleSourceReference, articleFragmentReferenceListSchema } from "./articleStructure.js";
 import {
   canonicalIndexerJson,
   compareIndexerCanonicalText,
@@ -44,13 +44,13 @@ export const indexerArtifactContentBlockSchema = z.object({
   block_id: indexerIdSchema,
   layer: z.literal("semantic-prose"),
   markdown: z.string().min(1),
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
 }).strict();
 
 const renderedContentBlockPayloadSchema = z.object({
   layer: z.enum(["deterministic-block", "semantic-prose"]),
   markdown: z.string().min(1),
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
 }).strict();
 
 export const indexerRenderedContentBlockSchema = renderedContentBlockPayloadSchema.extend({

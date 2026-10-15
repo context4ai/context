@@ -22,5 +22,5 @@ reader value must return the normal result envelope with `fragments: []`.
 
 Use only the supplied primary artifacts and their actual regional references.
 Do not require a primary Fact table, evidence IDs, or graph nodes. Each derived
-output fragment retains at most three real source locations; no reference
-ledger is reconstructed from the full inventory.
+output fragment retains real source regions from at most three files (up to
+eight regions); no reference ledger is reconstructed from the full inventory.

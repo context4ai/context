@@ -150,7 +150,7 @@ test("late development context updates one code page without moving its code ver
     `\n<!-- context:section id="rationale" -->\n\nThe development discussion chose separate constants for separate callers. This is intent, not a runtime guarantee.\n\n<!-- /context:section -->\n`;
   const locator = { path: note.path.split("/").at(-1)!, start_line: 1, end_line: 1 };
   await expect(completeApprovedRevision({ projectRoot: root, revision: request.revision, preview: true,
-    markdown, sections: [{ section_id: "rationale", references: [{ source_ref: "note:unregistered/extra", locator }] }] })).rejects.toThrow("outside this revision");
+    markdown, sections: [{ section_id: "rationale", references: [{ source_ref: "note:unregistered/extra", locator }] }] })).rejects.toThrow(/outside this revision[\s\S]*context task adjust/u);
   await complete(root, { stage: "approved-revision", markdown,
     sections: [{ section_id: "rationale", references: [{ source_ref: note.source_ref, locator: { ...locator, start_line: 3, end_line: 3 } }] }] });
   expect(await currentLedger(root)).toBeUndefined();
@@ -265,7 +265,7 @@ test("same-task input adjustment keeps the approved body and queued pages and re
   await adjustCurrentTaskSources(root, { ...addition, refresh: true });
   const extended = (await readApprovedRevision(root))!;
   expect(extended.target.source_refs).toContain(note.source_ref);
-  expect(extended.pending_targets).toEqual(old.pending_targets);
+  expect(extended.pending_targets).toEqual(old.pending_targets?.map(item => ({ ...item, supporting_sources: [note.source_ref] })));
   expect(extended.processed_scopes).toHaveLength(2);
   expect(await baseline(root)).toEqual([]);
 
