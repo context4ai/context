@@ -16,6 +16,29 @@ function inside(root: string, path: string): void {
   }
 }
 
+/** Reads a registered repository file at an earlier commit; callers must verify
+ * the result against a recorded digest before trusting it. */
+export async function registeredRepoHistoryReader(projectRoot: string) {
+  const workspace = await realpath(projectRoot);
+  const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+  const roots = new Map<string, Promise<string>>();
+  return async (sourceRef: string, path: string, commit: string): Promise<string> => {
+    if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(commit)) throw new TypeError("History reads require a fixed commit");
+    let root = roots.get(sourceRef);
+    if (!root) {
+      const name = sourceRef.startsWith("repo:") ? sourceRef.slice("repo:".length) : undefined;
+      const entry = registry.repos.find(item => item.id === name || item.name === name);
+      if (!entry) throw new TypeError(`Source is not a registered repository: ${sourceRef}`);
+      root = realpath(resolve(workspace, entry.materializedAt)).then(actual => { inside(workspace, actual); return actual; });
+      roots.set(sourceRef, root);
+    }
+    const blob = await execute("git", ["-C", await root, "show", `${commit}:./${path}`], {
+      encoding: "buffer", timeout: 5000, maxBuffer: 16 * 1024 * 1024,
+    });
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(blob.stdout);
+  };
+}
+
 /** One submission/check, one read per cited file. Registration identifies the
  * source; a document manifest identifies its files even in a shared date folder.
  * This never prepares parsers or loads uncited document bodies. */

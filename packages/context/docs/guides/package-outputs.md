@@ -107,8 +107,8 @@ top bar, homepage and articles share a centered 1440px container with 32px
 margins (16px on phones); on wide screens the sidebar sits at its left edge and
 articles keep a wide reading area and a smaller outline. Navigation is centered
 in the top bar, which ends with icon buttons for search, theme, social links and
-reader language; search, or Cmd/Ctrl+K, opens a dialog over a blurred page. The theme follows the
-operating system until the reader switches it; that choice is remembered in
+reader language; search, or Cmd/Ctrl+K, opens a dialog over a blurred page. The theme opens
+in light mode until the reader switches it; that choice is remembered in
 browser storage. Search runs locally, without a search service.
 Mermaid renders in the browser using the website theme, with fit, original-size,
 zoom, full-screen and source controls. Controls appear on hover or keyboard focus

@@ -13,6 +13,8 @@ import { buildFixturePackages as buildProjectPackages } from "./workspaceVersion
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { readApprovedRevision } from "../project/approvedRevision.js";
 import { collectProjectStatus } from "../project/status.js";
+import { validateApprovedStructure } from "../project/verifyApprovedStructure.js";
+import type { ProjectVerifyIssue } from "../project/verifyTypes.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -41,6 +43,12 @@ async function citedLines(root: string) {
     .map(article => [article.path, article.sections[0]!.references[0]!]));
 }
 
+async function structureIssues(root: string) {
+  const issues: ProjectVerifyIssue[] = [];
+  await validateApprovedStructure({ projectRoot: root, issues });
+  return issues;
+}
+
 async function keepAll(root: string) {
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
@@ -60,6 +68,7 @@ test("keeping pages relocates uniquely moved unchanged citations at settlement",
     expect(reference.locator.start_line).toBe(2);
     expect(reference.content_digest).toBe(before[path]!.content_digest);
   }
+  expect(await structureIssues(root)).toEqual([]);
 }, 60_000);
 
 test("keeping pages whose cited text changed returns a receipt and retains the old citation", async () => {
@@ -84,6 +93,32 @@ test("a missing region baseline is reported, never treated as unchanged", async 
   expect(await citedLines(root)).toEqual(before);
 }, 60_000);
 
+test("a missing region baseline is recovered from the previously settled commit", async () => {
+  const root = await initialRevisionKnowledge(roots);
+  await keepAll(root);
+  const before = await citedLines(root);
+  await commitSource(root, `// header\n${await readFile(join(root, "fixture-source/src/index.ts"), "utf8")}`);
+  await rm(join(root, ".tmp/context-runtime/source-regions"), { recursive: true, force: true });
+  const result = await keepAll(root);
+  expect(result.reference_warnings).toBeUndefined();
+  for (const [path, reference] of Object.entries(await citedLines(root))) {
+    expect(reference.locator.start_line).toBe(2);
+    expect(reference.content_digest).toBe(before[path]!.content_digest);
+  }
+  expect(await structureIssues(root)).toEqual([]);
+}, 60_000);
+
+test("a recovered baseline still reports cited text that changed", async () => {
+  const root = await initialRevisionKnowledge(roots);
+  await keepAll(root);
+  const before = await citedLines(root);
+  await commitSource(root, "export const answer = 43;\n");
+  await rm(join(root, ".tmp/context-runtime/source-regions"), { recursive: true, force: true });
+  const result = await keepAll(root);
+  expect((result.reference_warnings as Array<{ state: string }>).map(item => item.state)).toEqual(["changed", "changed"]);
+  expect(await citedLines(root)).toEqual(before);
+}, 60_000);
+
 test("a mixed batch relocates the kept page when the revision queue settles", async () => {
   const root = await initialRevisionKnowledge(roots);
   await commitSource(root, `// header\n${await readFile(join(root, "fixture-source/src/index.ts"), "utf8")}`);
@@ -103,4 +138,5 @@ test("a mixed batch relocates the kept page when the revision queue settles", as
   const after = await citedLines(root);
   expect(after[kept!.path]!.locator.start_line).toBe(2);
   expect(after[revised!.path]!.locator.start_line).toBe(2);
+  expect(await structureIssues(root)).toEqual([]);
 }, 60_000);

@@ -64,11 +64,18 @@ export async function commitProcessedScopes(projectRoot: string, scopes: readonl
   await captureProcessedScopes(projectRoot, scopes);
   const structure = await readKnowledgeStructure(projectRoot);
   if (structure.parsed === null) throw new TypeError("A closed knowledge structure is required before recording processed scopes");
-  const processed = mergeProcessedScopes(readProcessedScopes(structure.parsed), scopes);
+  const settled = readProcessedScopes(structure.parsed);
+  const processed = mergeProcessedScopes(settled, scopes);
+  const previous = validateArticleStructureEntries(structure.parsed.articles ?? []);
   const repoContent = await advanceRepoContentReferences(projectRoot,
-    validateArticleStructureEntries(structure.parsed.articles ?? []), scopes.filter(scope => !scope.module_refs).map(scope => scope.source_ref));
-  const { articles } = await inspectSettledReferences(projectRoot, repoContent, scopes.map(scope => scope.source_ref));
-  await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, articles, processed_scopes: processed }));
+    previous, scopes.filter(scope => !scope.module_refs).map(scope => scope.source_ref));
+  const { articles } = await inspectSettledReferences(projectRoot, repoContent, scopes.map(scope => scope.source_ref), settled);
+  // Rewritten references are hashed metadata; a structure that was already stale stays stale for Close.
+  const { approvedStructureInputHashFor } = await import("./close.js");
+  const input_hash = structure.parsed.input_hash === await approvedStructureInputHashFor(projectRoot, previous)
+    ? await approvedStructureInputHashFor(projectRoot, articles)
+    : structure.parsed.input_hash;
+  await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, input_hash, articles, processed_scopes: processed }));
 }
 
 /** Clear only proofs whose purpose/boundary changed, before committing that

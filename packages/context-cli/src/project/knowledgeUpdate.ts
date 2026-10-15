@@ -59,8 +59,9 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
     }
     const versions = new Map<string, Promise<string>>();
     const scopes = await captureProcessedScopes(projectRoot, await Promise.all(input.scopes.map(async (scope) => {
+      if (scope.processed_version !== undefined) return { ...scope, processed_version: scope.processed_version };
       if (!versions.has(scope.source_ref)) versions.set(scope.source_ref, currentScopeSourceVersion(projectRoot, scope.source_ref));
-      return { ...scope, processed_version: scope.processed_version ?? await versions.get(scope.source_ref)! };
+      return { ...scope, processed_version: await versions.get(scope.source_ref)! };
     })));
     const structure = await readKnowledgeStructure(projectRoot);
     if (!structure.parsed) throw new TypeError("Close the existing knowledge before checking source updates");
@@ -97,19 +98,35 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
 }
 
 /** A receipt for decisions already accepted, not a gate: kept pages whose cited
- * text changed or cannot be confirmed retain their previous citations. */
+ * text changed or cannot be confirmed retain their previous citations, except
+ * repository content, which settlement still re-signs to the current text. */
 async function keptReferenceWarnings(projectRoot: string,
   decisions: ReadonlyArray<{ path: string; instruction?: string | undefined }>, scopes: readonly string[]) {
   const kept = new Set(decisions.filter((decision) => !decision.instruction?.trim()).map((decision) => decision.path));
   if (kept.size === 0) return {};
   const structure = await readKnowledgeStructure(projectRoot);
   const articles = validateArticleStructureEntries(structure.parsed?.articles ?? []).filter((article) => kept.has(article.path));
-  const { unresolved } = await inspectSettledReferences(projectRoot, articles, scopes);
-  if (unresolved.length === 0) return {};
+  const { unresolved } = await inspectSettledReferences(projectRoot, articles, scopes, readProcessedScopes(structure.parsed));
+  const repoScopes = scopes.filter((scope) => scope.startsWith("repo-content:"));
+  const repoReferences = articles.flatMap((article) => article.sections.flatMap((section) => section.references
+    .filter((reference) => reference.source_ref.startsWith("repo-content:") && repoScopes.some((scope) => repoContentScopeMatches(scope, reference.source_ref)))
+    .map((reference) => ({ path: article.path, section_id: section.id, reference }))));
+  const impact = repoReferences.length ? await repoContentImpactReader(projectRoot) : undefined;
+  const resigned = (await Promise.all(repoReferences.map(async (item) => {
+    const { state } = await impact!(item.reference);
+    return state === "changed" ? { ...item, state: "changed" as const }
+      : state === "unavailable" || state === "worktree" ? { ...item, state: "unavailable" as const } : undefined;
+  }))).filter((item) => item !== undefined);
+  if (unresolved.length === 0 && resigned.length === 0) return {};
   return {
-    reference_warnings: unresolved.map((item) => ({ path: item.path, section_id: item.section_id, state: item.state,
+    reference_warnings: [...unresolved, ...resigned].map((item) => ({ path: item.path, section_id: item.section_id, state: item.state,
       source_ref: item.reference.source_ref, locator: item.reference.locator })),
-    reference_warning_instruction: "These pages were kept unchanged as decided. Their listed citations changed or could not be confirmed against the updated source and keep their previous locations. The decision cannot be resubmitted; after the current update queue finishes, run context revise <path> --instruction <correction> for each page that needs a correction.",
+    reference_warning_instruction: [
+      "These pages were kept unchanged as decided.",
+      ...(unresolved.length ? ["Their listed citations changed or could not be confirmed against the updated source and keep their previous locations."] : []),
+      ...(resigned.length ? ["Listed repo-content citations changed or could not be confirmed; settlement still re-signs them to the current repository text, so verify will not report them later."] : []),
+      "The decision cannot be resubmitted; after the current update queue finishes, run context revise <path> --instruction <correction> for each page that needs a correction.",
+    ].join(" "),
   };
 }
 
