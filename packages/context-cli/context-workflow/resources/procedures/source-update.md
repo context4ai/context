@@ -29,7 +29,9 @@ review process as revisions; a new topic is not a no-change decision.
 A kept page's citations whose text only moved in the updated source are
 relocated when the update settles. When cited text changed or cannot be
 confirmed, the completion result lists it in `reference_warnings`; those
-citations keep their previous locations. The warning is a receipt for the
+citations keep their previous locations. Listed `repo-content:` citations are
+still re-signed to the current repository text, so `verify` will not report
+them later; check those pages from the receipt. The warning is a receipt for the
 accepted decision, not a request to resubmit it: after the current update queue
 finishes, run `context revise` on each listed page that needs a correction.
 

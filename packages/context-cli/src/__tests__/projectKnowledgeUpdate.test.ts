@@ -50,6 +50,17 @@ async function commitSource(root: string, content = "export const answer = 43;\n
   return version;
 }
 
+test("source update with an explicit target releases the write lock when the checkout differs from the pinned ref", async () => {
+  const root = await initialRevisionKnowledge(roots);
+  const source = join(root, "fixture-source");
+  await writeFile(join(source, "src/index.ts"), "export const answer = 43;\n");
+  execFileSync("git", ["commit", "-qam", "move checkout"], { cwd: source });
+  const moved = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
+  await expect(beginKnowledgeUpdate(root, { scopes: [{ ...scope, processed_version: moved }] })).rejects.toThrow();
+  await expect(readFile(join(root, ".tmp/context-runtime/locks/project-write.lock/owner.json"))).rejects.toThrow();
+  expect(await readKnowledgeUpdate(root)).toBeUndefined();
+});
+
 test("source update preserves old baseline until every revised page is built and resumes after temporary loss", async () => {
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });

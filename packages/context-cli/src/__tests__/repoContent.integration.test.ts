@@ -236,12 +236,33 @@ describe("repository content", () => {
     await expect(completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/other.md" }],
       scope_summary: "Wrong page", new_topics: [] })).rejects.toMatchObject({ path: ["decisions"],
       message: expect.stringMatching(/Missing: faq\/guide\.md\. Not candidates .*: faq\/other\.md\./u) });
-    await completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/guide.md" }],
+    const receipt: Record<string, unknown> = await completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/guide.md" }],
       scope_summary: "The clarification does not change the published claim.", new_topics: [] });
+    expect(receipt.reference_warnings).toEqual([{ path: "faq/guide.md", section_id: "contract", state: "changed",
+      source_ref: reference.source_ref, locator }]);
+    expect(receipt.reference_warning_instruction).toContain("re-signs");
     const settled = YAML.parse(await readFile(map, "utf8"));
     expect(settled.processed_scopes).toHaveLength(1);
     expect(settled.articles[0].sections[0].references[0].source_ref).toBe(`repo-content:docs@${sha}+worktree`);
     expect(settled.articles[0].sections[0].references[0].content_digest).not.toBe(reference.content_digest);
+  });
+  test("keeping a page after an unrelated repository edit returns no citation warning", async () => {
+    const root = await fixture(); const sha = await commit(root);
+    const locator = { path: "docs/guide.md", start_line: 2, end_line: 2 };
+    const reference = { source_ref: `repo-content:docs@${sha}`, locator,
+      content_digest: articleSourceRegionDigest(await readFile(join(root, locator.path), "utf8"), locator) };
+    await mkdir(join(root, "src")); await mkdir(join(root, "knowledge/faq"), { recursive: true });
+    await writeFile(join(root, "src/indexers.yaml"), YAML.stringify({ requirements: [{ id: "docs", purpose: "Explain the contract",
+      target_scope: { targets: [{ source_ref: "repo-content:docs" }] } }] }));
+    await writeFile(join(root, "knowledge/faq/guide.md"), "---\ntitle: Guide\n---\n\n<!-- context:section id=\"contract\" -->\nThe contract.\n<!-- /context:section -->\n");
+    await writeFile(join(root, "knowledge/structure.yaml"), YAML.stringify({ schema_version: "context.approved-structure.v1", articles: [{ article_id: "guide",
+      path: "faq/guide.md", collection: "faq", visibility: "public", sections: [{ id: "contract", references: [reference] }] }] }));
+    await writeFile(join(root, locator.path), "# Guide\nStable contract.\nChanged other detail.\n");
+    await beginKnowledgeUpdate(root, { scopes: [{ requirement_ref: "docs", source_ref: "repo-content:docs" }] });
+    const update = (await readKnowledgeUpdate(root))!;
+    const receipt: Record<string, unknown> = await completeKnowledgeUpdate({ projectRoot: root, revision: update.revision, decisions: [{ path: "faq/guide.md" }],
+      scope_summary: "Only an unrelated detail changed.", new_topics: [] });
+    expect(receipt.reference_warnings).toBeUndefined();
   });
   test("Skill script changes and untracked resources are candidates even with unchanged SKILL.md", async () => {
     const root = await fixture({ skills: { kind: "skills", path: ".agents/skills" } });

@@ -2,6 +2,14 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.72 - 2026-10-15
+
+- Settling a source update or a revision queue no longer leaves `knowledge/structure.yaml` stale. When citations were relocated or repository content references advanced, the structure kept its previous input hash, so `verify` reported "Structure is stale; run Close" until Close ran again. The hash is now recomputed with the rewritten references; a structure that was already stale stays stale for Close.
+- Settlement can relocate citations on a machine without the local source region cache, such as a fresh clone. For repository sources it reads the cited region from the previously settled commit and uses it only when it still matches the recorded digest; otherwise the citation is kept and reported as before.
+- A source update whose scopes name `processed_version` no longer leaves the workspace write lock behind when the repository checkout differs from its pinned ref. The error is returned and the lock is released.
+- Kept pages whose `repo-content:` citations changed or cannot be confirmed are now listed in the source update's `reference_warnings`. Settlement still re-signs these citations to the current repository text, so the receipt is the only place they are reported.
+- The package output guide no longer says the website theme follows the operating system; websites open in light mode until the reader switches.
+
 ## 0.7.71 - 2026-10-14
 
 - `translate prepare` uses the stale translation itself as the draft and, when Git history holds the approved version it was translated from, writes a `source_diff` from that version. Without history, `source_diff` is `null`. Translations no longer store `source_parts`; existing ones are read as before. Drafts are never overwritten and are removed after a successful submission. A kept draft (`draft: kept`) has no `source_diff` and must be aligned with the whole current article, because the source may have changed again since it was written. The draft generation records, `rebase-required`, `*.unrecorded.md`, `*.previous.md` and the per-article `source_digest` submission field are removed.

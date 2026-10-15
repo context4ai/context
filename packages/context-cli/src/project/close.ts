@@ -83,6 +83,16 @@ export async function approvedKnowledgeInputHash(projectRoot: string): Promise<s
   return inputHash;
 }
 
+/** Input hash of the current approved Markdown with the given article metadata, as `verify` computes it. */
+export async function approvedStructureInputHashFor(projectRoot: string, articles: readonly Record<string, unknown>[]): Promise<string> {
+  const files = await approvedKnowledgeFiles(projectRoot);
+  return approvedStructureInputHash({
+    schemaVersion: STRUCTURE_SCHEMA_VERSION,
+    files: approvedStructureInputFiles(files.map(file => ({ ...file, content: compactApprovedKnowledgeMarkdown(file.content) }))),
+    metadata: articles,
+  });
+}
+
 function approvedStructureInputFiles(files: readonly ApprovedKnowledgeFile[]): ApprovedStructureInputFile[] {
   return files.map((file) => ({
     path: file.relPath,
