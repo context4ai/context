@@ -42,12 +42,24 @@ for the method and results.
 
 ## Quick start
 
-Install the CLI and its Agent plugin once. The plugin is installed for the
-Claude Code, Codex and Cursor hosts that are available on the machine:
+You need Node.js 20 or newer and [Bun](https://bun.sh), which knowledge
+workspaces use to install their dependencies. Install the CLI and its Agent
+plugin once. The plugin is installed for the Claude Code, Codex and Cursor
+hosts that are available on the machine:
 
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install
+```
+
+This repository is also a plugin marketplace. In Claude Code or Codex you can
+add it and install the `c4a` plugin through the host instead of
+`context plugin install`; the CLI is still required, because the plugin
+delegates the workflow and the bundled Indexers to it:
+
+```bash
+claude plugin marketplace add context4ai/context && claude plugin install c4a@c4a
+codex plugin marketplace add context4ai/context && codex plugin add c4a@c4a
 ```
 
 Restart the Agent session and describe the knowledge you want:

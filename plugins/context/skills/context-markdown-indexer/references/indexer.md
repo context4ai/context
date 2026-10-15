@@ -27,8 +27,8 @@ needed section edits when appropriate. Stable section markers and title and
 description follow that schema; there is no ArtifactResult, subject identity
 or profile-owned output mapping to assemble.
 
-For each output fragment, cite the actual source regions used, at most three
-locations. Use source_ref and an inclusive file/line locator; the CLI computes
+For each output fragment, cite the actual source regions used, from at most
+three source files (up to eight regions in total). Use source_ref and an inclusive file/line locator; the CLI computes
 content digests. Do not attach an entire corpus to a generic paragraph or
 combine unrelated locations into a fabricated continuous span. Split genuinely
 distinct explanations when they need distinct references.

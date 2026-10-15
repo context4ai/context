@@ -211,7 +211,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
   }
   const sources = buildIndexerAuthorSourceItems({ view });
   if (workset.stage === "author") {
-    output.push("Write section content and references: source_ref plus locator { path, start_line, end_line }. Choose only the regions actually used, at most three per fragment; split the fragment when necessary. Context computes regional digests. Do not submit parser facts, evidence IDs or file-wide unions.", "");
+    output.push("Write section content and references: source_ref plus locator { path, start_line, end_line }. Choose only the regions actually used: at most three source files and eight regions per fragment; split the fragment when necessary. Context computes regional digests. Do not submit parser facts, evidence IDs or file-wide unions.", "");
     for (const source of sources.choices) {
       const body = [`### ${source.path}`, "", readingBlock({
         source_ref: source.source_ref, path: source.path, available_ranges: source.ranges,

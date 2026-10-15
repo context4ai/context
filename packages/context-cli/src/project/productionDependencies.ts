@@ -1,18 +1,4 @@
-import { repoContentScopeMatches } from "@c4a/context";
 import type { ProductionStage } from "./productionStage.js";
-
-/** Sources cited by the article being revised join its task when they are
- * already authorized. Unavailable history is still inherited at submission;
- * it is never promoted into a new read permission or captured baseline. */
-export async function inheritedProductionSources(sources: readonly string[], references: ReadonlyArray<{ source_ref: string }>,
-  authorized: readonly string[], available: (scope: string) => Promise<boolean>): Promise<string[]> {
-  const result = [...sources];
-  for (const ref of references) {
-    const scope = authorized.find(value => repoContentScopeMatches(value, ref.source_ref));
-    if (scope && !result.includes(scope) && await available(scope)) result.push(scope);
-  }
-  return result;
-}
 
 export function resolveProductionDependency(value: string, incoming: ReadonlyMap<string, string>, stage: ProductionStage, replaces: readonly string[]): string {
   const fresh = incoming.get(value);

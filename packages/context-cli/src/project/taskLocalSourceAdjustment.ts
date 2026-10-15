@@ -6,7 +6,7 @@ import { readProductionStage } from "./productionStageStore.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { validateArticleStructureEntries, indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
+import { validateArticleStructureEntries, indexerProtocolDigest, readProcessedScopes, type IndexerProjectFileTarget } from "@c4a/context";
 import { readApprovedRevision, requestDigest, currentApprovedRevisionTarget } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
@@ -88,7 +88,21 @@ export async function adjustLocalRevisionSources(root: string, input: {
     const ids = new Set(scopes.map((scope) => scope.requirement_ref));
     const requirements = registry.requirements.filter((item) => ids.has(item.id));
     if (revision) {
-      const affected = additions.length > 0 || revision.target.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)));
+      const cites = (ref: string, sources: string[]) => sources.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`));
+      // Selecting a source already fixed at the same version only widens what
+      // this task's pages may cite; prepared work that cites it stays valid.
+      // Without a task baseline, the delivered knowledge baseline is the version they cited.
+      const delivered = readProcessedScopes((await readKnowledgeStructure(root)).parsed);
+      const unchanged: string[] = [];
+      for (const source of selected) {
+        const fixed = (revision.processed_scopes ?? []).filter((old) => old.source_ref === source);
+        const versions = (fixed.length ? fixed : delivered.filter((old) => old.source_ref === source)).map((old) => old.processed_version);
+        const current = await currentScopeSourceVersion(root, source);
+        if (versions.length > 0 && versions.every((version) => version === current)) unchanged.push(source);
+      }
+      const refreshed = selected.filter((source) => !unchanged.includes(source));
+      const targetAdditions = selected.filter((source) => !revision.target.source_refs.some((ref) => cites(ref, [source])));
+      const affected = targetAdditions.length > 0 || revision.target.source_refs.some((ref) => cites(ref, refreshed));
       const currentTarget = affected ? await currentApprovedRevisionTarget(root, revision) : revision.target;
       const { refresh_sources: _refresh, candidate, ...rest } = revision;
       void _refresh;
@@ -98,7 +112,9 @@ export async function adjustLocalRevisionSources(root: string, input: {
       const changedSources = selected.filter((source) =>
         (revision.processed_scopes ?? []).some((old) => old.source_ref === source &&
           scopes.some((scope) => scope.source_ref === source && scope.processed_version !== old.processed_version)));
-      const pending = [...(revision.pending_targets ?? [])];
+      // The adjustment belongs to the whole queued task, not only the page open now.
+      const pending: NonNullable<typeof revision.pending_targets> = (revision.pending_targets ?? []).map((item) => targetAdditions.length === 0 ? item
+        : { ...item, supporting_sources: [...new Set([...item.supporting_sources ?? [], ...targetAdditions])] });
       const known = new Set([revision.target.path, ...pending.map((item) => item.path)]);
       const structure = await readKnowledgeStructure(root);
       for (const article of validateArticleStructureEntries(structure.parsed?.articles ?? [])) {
@@ -108,7 +124,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
         known.add(article.path);
       }
       const keptBatch = (revision.batch_candidates ?? []).filter((item) => {
-        if (!item.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)))) return true;
+        if (!item.source_refs.some((ref) => cites(ref, refreshed))) return true;
         discardIds.add(item.candidate_id);
         if (!known.has(item.path)) {
           pending.push({ path: item.path, instruction: `${item.review.reason}\n${input.instruction}`,
@@ -124,7 +140,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
           currentTarget.sections.flatMap(section => section.references))
         : revision.program_blocks;
       const payload = { ...rest, ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
-        target: affected ? { ...currentTarget, markdown: candidate?.body ?? currentTarget.markdown, source_refs: [...new Set([...currentTarget.source_refs, ...additions.map((scope) => scope.source_ref)])] } : revision.target,
+        target: affected ? { ...currentTarget, markdown: candidate?.body ?? currentTarget.markdown, source_refs: [...new Set([...currentTarget.source_refs, ...targetAdditions])] } : revision.target,
         instruction: affected ? `${revision.instruction}\n\n${input.instruction}` : revision.instruction };
       next = { ...payload, revision: requestDigest(payload), ...(!affected && candidate ? { candidate } : {}) };
       if (affected && candidate) discardIds.add(candidate.candidate_id);

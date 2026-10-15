@@ -2,6 +2,24 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.71 - 2026-10-14
+
+- `translate prepare` uses the stale translation itself as the draft and, when Git history holds the approved version it was translated from, writes a `source_diff` from that version. Without history, `source_diff` is `null`. Translations no longer store `source_parts`; existing ones are read as before. Drafts are never overwritten and are removed after a successful submission. A kept draft (`draft: kept`) has no `source_diff` and must be aligned with the whole current article, because the source may have changed again since it was written. The draft generation records, `rebase-required`, `*.unrecorded.md`, `*.previous.md` and the per-article `source_digest` submission field are removed.
+- Replacing a task in a plan amendment no longer copies its draft. The old draft directory is listed in `previous_drafts`, also when the same amendment is replayed, and in the new task's `task.md` on every preparation.
+- Planning no longer adds a revised article's cited sources to its task. Omitted citations are still inherited when submitting; list a source in the plan to re-confirm it.
+- Submission receipts no longer echo `resolved_references`.
+- Installation instructions list Bun alongside Node.js 20: knowledge workspaces install their dependencies with `bun install`.
+- A fragment may cite regions from at most three distinct source files, with several regions per file and up to eight regions in total; previously it was limited to three regions. Existing knowledge stays valid, but structures with more than three regions in a fragment cannot be read by earlier CLIs.
+- Rejected revision references are reported as user input (`user-input-invalid`) with the fragment and input path: an unmatched locator, an oversized fragment, or a source outside the revision, which now lists the allowed sources. Source-update decisions that omit a candidate page or name a page that is not one are reported the same way and list those pages.
+- A `heading` locator may include its ATX marker (`## Install`); the marker also selects the heading level.
+- `translate prepare` reseeds a leftover draft whose body is still the unedited seed, such as one left by an earlier CLI, and gives it a `source_diff` instead of reporting it as `kept`.
+- Reader pages also expose each fragment ID as an anchor, so links such as `page.md#upgrade` resolve, unless a heading on that page already owns the slug.
+- When a source update settles, citations of kept pages whose text only moved in the updated source are relocated, so `verify` no longer reports them. Repository content keeps its own settlement. Kept pages whose cited text changed or cannot be confirmed are listed in the completion result's `reference_warnings`; the citations keep their previous locations, and the pages can be corrected with `context revise` after the update queue finishes.
+- A revision citing a source outside its scope explains how to add new independent evidence: register the source, associate it with the requirement in `src/indexers.yaml`, then run `context task adjust`.
+- A source added with `context task adjust` during a multi-page revision stays citable by the remaining queued pages. Repeating the adjustment for an unchanged source no longer discards pages already prepared in the batch.
+- The translation guide explains that `source_diff` is `null` when approve-and-translate rounds ran without a commit in between.
+- The README documents installing the `c4a` plugin in Claude Code or Codex by adding this repository as a plugin marketplace; the CLI is still installed from npm.
+
 ## 0.7.70 - 2026-10-14
 
 - Revising an existing article no longer fails because its old citations are outside the new task's sources. A fragment that omits `references` keeps its validated citations; listing references re-confirms them against the task's authorized sources. Only candidate or approved citations are trusted, never a failed draft's.

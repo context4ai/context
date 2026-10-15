@@ -8,13 +8,12 @@ knowledge map title that is missing or stale for each declared locale, with the
 `expected_digest` to submit. Approved knowledge in the primary language remains
 the only source of truth; translations never change it.
 
-Use the returned draft and submission paths. Preserve unchanged translated parts
-and translate the listed changes in a natural tone. For `diff: unknown`, compare
-with the previous translation. A `rebase-required` draft must be reconciled with
-the current source before explicitly confirming its `source_digest`.
-
-For each article, read the approved file and write a complete translation to a
-temporary file under `.tmp/agent-payloads/`. Keep its structure exactly:
+Edit each returned draft `file` and submit the returned `submission_path`. With
+`draft: generated`, a stale article's draft is its current translation; when
+`source_diff` is a path, apply those source changes. A missing article's draft
+is the approved source to translate in a natural tone. With `draft: kept`, or
+whenever `source_diff` is `null`, align the whole draft with the current
+approved article before submitting. Keep the translation's structure exactly:
 
 - frontmatter contains only a translated `title` and optional `description`;
 - keep every `context:section` marker, id and order unchanged;

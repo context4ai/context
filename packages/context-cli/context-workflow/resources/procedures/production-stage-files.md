@@ -70,7 +70,7 @@ complete article with stable `context:section` markers. References contain
 `sections`, each with its matching `id` and `references` list. A reference is
 `source_ref` plus `locator: {path, start_line, end_line}` from actual authorized
 text. CLI computes source digests. A fragment may cite at most three distinct
-source positions; an article may have multiple fragments.
+source files and eight regions; an article may have multiple fragments.
 
 When prose names a file, directory or Skill from a cited repository, write its
 exact repository-relative path, or the unique name of its directory such as a
@@ -108,10 +108,12 @@ Partial delivery must include the approved articles needed by its local links.
 ### Locating submitted references
 
 Submission locators also accept `{path, heading}` or `{path, quote}` instead of
-line numbers. Use exactly one form. A heading matches an exact ATX heading
-outside code fences in a Markdown source; its region ends before the next
+line numbers. Use exactly one form. A heading is the title text of an exact ATX heading
+outside code fences in a Markdown source; a leading `##` marker is optional and,
+when present, also selects the heading level; its region ends before the next
 same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The three-region limit applies after resolving and deduplicating positions.
+The per-fragment limits (three source files, eight regions) apply after
+resolving and deduplicating positions.

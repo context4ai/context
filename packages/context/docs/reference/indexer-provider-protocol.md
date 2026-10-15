@@ -255,8 +255,8 @@ partial outcome reopens the owning semantic step; it does not create a profile
 revision ledger or an override route.
 
 Artifact content contains reader Markdown and actual source-region references.
-Each semantic-prose block supplies at most three positions using `source_ref`
-and a file/line `locator`; the Host verifies the current authorized source and
+Each semantic-prose block supplies positions from at most three source files
+(up to eight regions) using `source_ref` and a file/line `locator`; the Host verifies the current authorized source and
 computes the region `content_digest`. The limit applies to an output fragment,
 not the whole article. Select necessary references or split the writing by
 meaning; never truncate necessary references or merge disjoint source regions.

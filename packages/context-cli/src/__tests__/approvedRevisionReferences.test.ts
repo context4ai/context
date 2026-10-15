@@ -40,10 +40,22 @@ test("revision resolves exact regions, retains untouched citations and removes d
       { section_id: "first", references: [] }] })).rejects.toThrow();
     await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "first", references: [
       { source_ref: "note:20260912/other.md", locator },
-    ] }] })).rejects.toThrow(/outside this revision/);
+    ] }] })).rejects.toMatchObject({ message: expect.stringContaining(`allowed sources: ${sourceRef}`),
+      path: ["sections", 0, "references", 0, "source_ref"] });
+    await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "first", references: [
+      { source_ref: sourceRef, locator: { path: "source.md", quote: "Missing behavior" } },
+    ] }] })).rejects.toMatchObject({ message: expect.stringContaining("Fragment first:"),
+      path: ["sections", 0, "references", 0, "locator"] });
     await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "first", references: [
       { source_ref: sourceRef, locator: { ...locator, path: "other.md" } },
     ] }] })).rejects.toThrow(/not owned/);
+    await writeFile(join(root, "sources/note/20260912/source.md"), Array.from({ length: 12 }, (_, line) => `Line ${line}`).join("\n"));
+    const lines = (count: number) => Array.from({ length: count }, (_, index) =>
+      ({ source_ref: sourceRef, locator: { path: "source.md", start_line: index + 1, end_line: index + 1 } }));
+    expect((await prepareRevisionReferences({ ...input, edits: [{ section_id: "second", references: lines(8) }] }))[1]!.references).toHaveLength(8);
+    await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "first", references: [] }, { section_id: "second", references: lines(9) }] }))
+      .rejects.toMatchObject({ message: expect.stringContaining("Fragment second: A fragment can cite at most 8 source regions"),
+        path: ["sections", 1, "references"] });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

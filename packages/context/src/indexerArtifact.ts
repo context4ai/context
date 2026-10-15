@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { articleSourceReferenceSchema } from "./articleStructure.js";
+import { articleSourceReferenceSchema, articleFragmentReferenceListSchema } from "./articleStructure.js";
 import {
   indexerArtifactContentBlockSchema,
   indexerCanonicalJsonSchema,
@@ -23,7 +23,7 @@ const indexerArtifactSectionSchema = indexerArtifactSectionProjectionSchema.exte
 
 const indexerArtifactTemplateVariableSchema = z.object({
   value: indexerCanonicalJsonSchema,
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
 }).strict();
 
 const artifactCommonFields = {

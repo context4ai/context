@@ -45,7 +45,7 @@ submit the short stage-relative manifest. Title and description belong to the
 article, not an internal layout-mapping tuple.
 
 Keep stable article and fragment identities when revising. Each fragment cites
-at most three actual source regions. The CLI handles source digests and safety;
+actual source regions from at most three files (up to eight regions). The CLI handles source digests and safety;
 the Agent judges whether the evidence supports the explanation. For a local
 failure, use the returned fragment identifier or position to repair the affected
 part. Completed independent tasks can be submitted without the rest of the batch.

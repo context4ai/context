@@ -29,11 +29,18 @@ Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版
 
 ## 快速开始
 
-安装 CLI 与 Agent 插件（一次即可）。插件会安装到本机可用的 Claude Code、Codex 与 Cursor：
+需要 Node.js 20 及以上，以及 [Bun](https://bun.sh)（知识工作区用它安装依赖）。安装 CLI 与 Agent 插件（一次即可）。插件会安装到本机可用的 Claude Code、Codex 与 Cursor：
 
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install
+```
+
+本仓库本身也是插件市场。在 Claude Code 或 Codex 中，可以添加它并通过宿主安装 `c4a` 插件，代替 `context plugin install`；CLI 仍需安装，因为插件把工作流和随包的 Indexer 交给它执行：
+
+```bash
+claude plugin marketplace add context4ai/context && claude plugin install c4a@c4a
+codex plugin marketplace add context4ai/context && codex plugin add c4a@c4a
 ```
 
 重启 Agent 会话，用自然语言说明想要的知识：

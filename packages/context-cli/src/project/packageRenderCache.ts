@@ -5,7 +5,7 @@ import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { projectPackageKnowledgeMarkdown } from "./packageKnowledgeProjection.js";
 
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
-export const PACKAGE_READER_MARKDOWN_VERSION = "package-reader-markdown/v4";
+export const PACKAGE_READER_MARKDOWN_VERSION = "package-reader-markdown/v5";
 
 /** One replaceable cache entry per page/projection. A later batch reuses reader
  * Markdown when its exact input has not changed; nothing is added to the page. */

@@ -21,9 +21,27 @@ export const articleSourceReferenceSchema = z.object({
   content_digest: indexerDigestSchema,
 }).strict();
 
+/** A fragment cites at most three distinct source files. Several regions of one
+ * file are allowed, within a total region cap, so a long file does not force the
+ * author to merge unrelated lines into one wide range. */
+export const ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT = 3;
+export const ARTICLE_FRAGMENT_REGION_LIMIT = 8;
+
+export function articleFragmentReferenceListSchema<T extends z.ZodType<{ source_ref: string; locator: { path: string } }>>(item: T) {
+  return z.array(item).max(ARTICLE_FRAGMENT_REGION_LIMIT, {
+    message: `A fragment can cite at most ${ARTICLE_FRAGMENT_REGION_LIMIT} source regions`,
+  }).superRefine((references, context) => {
+    const files = new Set(references.map(reference => JSON.stringify([reference.source_ref, reference.locator.path])));
+    if (files.size > ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT) context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `A fragment can cite at most ${ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT} distinct source files (got ${files.size}); split the fragment or drop a supporting file`,
+    });
+  });
+}
+
 export const articleSectionSchema = z.object({
   id: z.string().min(1),
-  references: z.array(articleSourceReferenceSchema).max(3),
+  references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
 }).strict();
 
 export const articleStructureEntrySchema = z.object({

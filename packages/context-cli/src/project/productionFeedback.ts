@@ -5,6 +5,12 @@ import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 
+/** A submitted value that the author can correct in the same input file, such as
+ * an unmatched locator, an unauthorized source or an oversized fragment. */
+export class SubmissionInputError extends TypeError {
+  constructor(message: string, readonly path: ReadonlyArray<string | number> = []) { super(message); }
+}
+
 /** Add recovery information at the production boundary, without new checks,
  * retries or reads. Existing specific errors keep their category and reason. */
 export async function withProductionFeedback<T>(input: {
@@ -13,15 +19,18 @@ export async function withProductionFeedback<T>(input: {
   try { return await run(); }
   catch (error) {
     const schemaError = error instanceof ZodError;
+    const inputError = error instanceof SubmissionInputError;
     const syntaxError = error instanceof YAMLParseError;
     const existing = error instanceof ContextError ? error : undefined;
     const ioCode = (error as NodeJS.ErrnoException | undefined)?.code;
     const detail: Record<string, unknown> = {
-      category: schemaError || syntaxError ? ErrorCategory.UserInputInvalid : ErrorCategory.WorkspaceStateInvalid,
+      category: schemaError || syntaxError || inputError ? ErrorCategory.UserInputInvalid : ErrorCategory.WorkspaceStateInvalid,
       reason_code: `production-${input.operation}-failed`,
-      next_action: { command: "context status --format json", ...(input.recovery ? { instruction: input.recovery } : {}) },
+      next_action: { command: "context status --format json", ...(input.recovery ? { instruction: input.recovery }
+        : inputError ? { instruction: "Correct the reported item in the input file and resubmit it with the same revision." } : {}) },
       ...(input.file ? { file: input.file } : {}),
       ...(schemaError ? { issues: error.issues.map(issue => ({ path: issue.path, message: issue.message })) } : {}),
+      ...(inputError ? { issues: [{ path: error.path, message: error.message }] } : {}),
       ...(syntaxError && error.linePos ? { location: error.linePos } : {}),
       ...(typeof ioCode === "string" ? { io_code: ioCode } : {}),
       ...existing?.detail,
@@ -30,7 +39,7 @@ export async function withProductionFeedback<T>(input: {
     if (input.schema && detail.input_schema === undefined) {
       detail.input_schema = zodToJsonSchema(input.schema, { $refStrategy: "none" });
     }
-    throw new ContextError(existing?.code ?? (schemaError || syntaxError ? ExitCode.UserError : ExitCode.WorkspaceStateError),
+    throw new ContextError(existing?.code ?? (schemaError || syntaxError || inputError ? ExitCode.UserError : ExitCode.WorkspaceStateError),
       error instanceof Error ? error.message : String(error), detail);
   }
 }

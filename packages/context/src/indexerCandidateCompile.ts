@@ -1,4 +1,4 @@
-import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
+import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference, articleFragmentReferenceListSchema } from "./articleStructure.js";
 import { z } from "zod";
 import {
   indexerArtifactResultDigest,
@@ -91,7 +91,7 @@ const candidateFilePayloadSchema = z.object({
   sections: z.array(z.object({
     section_ref: z.string().min(1),
     section_key: indexerIdSchema,
-    references: z.array(articleSourceReferenceSchema).max(3),
+    references: articleFragmentReferenceListSchema(articleSourceReferenceSchema),
     markdown: z.string().min(1),
     markdown_digest: indexerDigestSchema,
   }).strict()).min(1),

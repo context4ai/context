@@ -180,6 +180,42 @@ test("writing amendments append once, preserve issued work and explicitly replac
   expect((await readProductionStage(projectRoot))!.pending_scopes).toEqual([]);
 });
 
+test("a replaced task's draft stays discoverable after the first planning response is lost", async () => {
+  const parent = resolve(".tmp/production-planning-entry-tests");
+  await mkdir(parent, { recursive: true });
+  const outer = await mkdtemp(join(parent, "previous-draft-")); roots.push(outer);
+  const { projectRoot } = await initContextProject({ cwd: outer, projectDir: "workspace", dev: true });
+  const note = await importManagedDocument(projectRoot, { type: "note", name: "20260913/decisions.md", markdown: "# Decisions\nService boundaries." });
+  await writeFile(join(projectRoot, "src/indexers.yaml"), YAML.stringify({ requirements: [{ id: "service", purpose: "Explain service decisions",
+    target_scope: { targets: [{ source_ref: note.source_ref }] } }] }));
+  await prepareCurrentProductionStage({ projectRoot, revision: (await productionPlanningRequest(projectRoot))!.revision });
+  const stage = (await readProductionStage(projectRoot))!;
+  const agent = join(projectRoot, productionAgentDirectory(stage.id));
+  await mkdir(join(agent, "submissions"), { recursive: true });
+  const article = { path: "decision/service.md", question: "Explain the service boundary", sources: [note.source_ref], batch: "service" };
+  const plan = { stage: stage.id, capabilities: { multi_agent: false, skills: [] }, articles: [article] };
+  await writeFile(join(agent, "submissions/plan.yaml"), YAML.stringify(plan));
+  await submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/plan.yaml" });
+  await writeFile(join(agent, "submissions/report.yaml"), YAML.stringify({ stage: stage.id, decision: "approved" }));
+  await approveProductionReport({ projectRoot, stage: stage.id, revision: productionReportRevision((await readProductionStage(projectRoot))!), path: "submissions/report.yaml" });
+  const issued = (await readProductionStage(projectRoot))!.tasks[0]!;
+  const from = join(productionAgentDirectory(stage.id), "batches", issued.batch, issued.id);
+  await mkdir(join(projectRoot, from), { recursive: true });
+  await writeFile(join(projectRoot, from, "article.md"), "# Service\nWork in progress.\n");
+  const amendmentPath = join(agent, "submissions/amendment.yaml");
+  await writeFile(amendmentPath, YAML.stringify({ ...plan, replaces: [issued.id], articles: [{ ...article, question: "Explain the revised boundary" }] }));
+  const args = ["action", "complete-current", "--revision", stage.id, "--input", amendmentPath];
+  const first = command(projectRoot, args);
+  const next = (await readProductionStage(projectRoot))!.tasks.find(task => task.status !== "replaced")!;
+  const expected = [{ task: next.id, from, to: join(productionAgentDirectory(stage.id), "batches", next.batch, next.id) }];
+  expect(first.previous_drafts).toEqual(expected);
+  expect(command(projectRoot, args).previous_drafts).toEqual(expected);
+  command(projectRoot, ["action", "prepare-current", "--revision", stage.id]);
+  expect(await readFile(join(projectRoot, productionStageDirectory(stage.id), "batches", next.batch, "tasks", next.id, "task.md"), "utf8"))
+    .toContain(`Replaced task draft (compare before reusing; not copied): ${from}`);
+  await expect(readFile(join(projectRoot, expected[0]!.to, "article.md"), "utf8")).rejects.toThrow();
+});
+
 test("rejected prose follows the actual route through section repair, repeated Review and close", async () => {
   const parent = resolve(".tmp/production-planning-entry-tests");
   await mkdir(parent, { recursive: true });
