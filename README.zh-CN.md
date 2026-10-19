@@ -17,7 +17,7 @@ Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版
 
 观看 4 分钟 Context 介绍视频：
 
-[![观看 4 分钟 Context 介绍视频](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg)](https://context4ai.org/intro/)
+<a href="https://context4ai.org/intro/"><img src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" alt="观看 4 分钟 Context 介绍视频" width="720"></a>
 
 文档站与英文共用同一地址，按浏览器语言或手动选择显示中文。
 

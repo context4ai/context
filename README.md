@@ -20,7 +20,7 @@ only when they need exact detail.
 
 Watch the 4-minute introduction to Context:
 
-[![Watch the 4-minute introduction to Context](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg)](https://context4ai.org/intro/)
+<a href="https://context4ai.org/intro/"><img src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" alt="Watch the 4-minute introduction to Context" width="720"></a>
 
 ## Why Context
 
