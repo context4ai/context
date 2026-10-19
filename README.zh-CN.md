@@ -15,9 +15,9 @@ Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版
 [参与贡献](./CONTRIBUTING.md) ·
 [发布说明](./CHANGELOG.md)
 
-<video src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4" poster="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" controls muted width="100%"></video>
+观看 4 分钟 Context 介绍视频：
 
-[观看 4 分钟 Context 介绍视频](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4)
+[![观看 4 分钟 Context 介绍视频](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg)](https://context4ai.org/intro/)
 
 文档站与英文共用同一地址，按浏览器语言或手动选择显示中文。
 
