@@ -18,9 +18,9 @@ only when they need exact detail.
 [Contributing](./CONTRIBUTING.md) ·
 [Release Notes](./CHANGELOG.md)
 
-<video src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4" poster="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" controls muted width="100%"></video>
+Watch the 4-minute introduction to Context:
 
-[Watch the 4-minute introduction to Context](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4)
+[![Watch the 4-minute introduction to Context](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg)](https://context4ai.org/intro/)
 
 ## Why Context
 
