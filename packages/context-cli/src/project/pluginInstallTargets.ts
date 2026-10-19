@@ -59,7 +59,8 @@ async function runExternalOptional(command: string, args: readonly string[]): Pr
 }
 
 export async function commandAvailable(command: string): Promise<boolean> {
-  return runExternalOptional("sh", ["-lc", `command -v ${command} >/dev/null 2>&1`]);
+  // Probe the same inherited PATH used by execFile; login profiles can replace it.
+  return runExternalOptional("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`]);
 }
 
 async function claudePluginInstalled(pluginId: string): Promise<boolean> {

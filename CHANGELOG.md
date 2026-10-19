@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.73 - 2026-10-19
+
+- Plugin host discovery now preserves the inherited PATH, matching the environment used to launch commands, and safely quotes executable names.
+- Permission-sensitive production submission tests use a native temporary filesystem so shared development mounts do not change their assertions.
+
 ## 0.7.72 - 2026-10-15
 
 - Settling a source update or a revision queue no longer leaves `knowledge/structure.yaml` stale. When citations were relocated or repository content references advanced, the structure kept its previous input hash, so `verify` reported "Structure is stale; run Close" until Close ran again. The hash is now recomputed with the rewritten references; a structure that was already stale stays stale for Close.
