@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import YAML from "yaml";
 import { execFileSync, spawnSync } from "node:child_process";
 import { completeProductionSubmission, productionSourceBaseline } from "../project/productionSubmission.js";
@@ -34,8 +35,7 @@ import { registerKnowledgeMaintenance, observeKnowledgeMaintenance, maintenanceR
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
-async function fixture(initialize = false) {
-  const parent = resolve(".tmp/production-submission-tests");
+async function fixture(initialize = false, parent = resolve(".tmp/production-submission-tests")) {
   await mkdir(parent, { recursive: true });
   const outer = await mkdtemp(join(parent, "case-"));
   roots.push(outer);
@@ -333,7 +333,8 @@ test("changed long-term scope blocks pending acceptance without discarding accep
 });
 
 test("accepted production reaches actual Review apply without a Provider compile or revision batch", async () => {
-  const f = await fixture(true);
+  // Permission failure checks need native filesystem semantics, not a host bind mount.
+  const f = await fixture(true, join(tmpdir(), "context-production-submission-tests"));
   // Isolate formal version discovery from the parent repository's ignored .tmp.
   execFileSync("git", ["init", "--quiet"], { cwd: f.root });
   await expect(readProductionReviewCandidates(f.root)).rejects.toThrow("Complete the current production stage");
