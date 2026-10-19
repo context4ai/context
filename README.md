@@ -18,6 +18,10 @@ only when they need exact detail.
 [Contributing](./CONTRIBUTING.md) ·
 [Release Notes](./CHANGELOG.md)
 
+<video src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4" poster="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" controls muted width="100%"></video>
+
+[Watch the 4-minute introduction to Context](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4)
+
 ## Why Context
 
 - **Knowledge as an index.** Indexer Skills extract what matters from each
@@ -137,29 +141,22 @@ projects ([source](https://github.com/context4ai/portal)).
 | [Source Graph](https://github.com/context4ai/sourcegraph) | Code search and reading at pinned Git revisions; Context reads code evidence through it remotely |
 | [Portal](https://github.com/context4ai/portal) | [context4ai.org](https://context4ai.org): the homepage and the documentation site |
 
-## Repository map
+## Repository layout
 
-| Module | Role | Documentation |
-|---|---|---|
-| `@c4a/context` | Declarative project SDK for sources, phases, review gates and outputs | [English](./packages/context/README.md) · [中文](./packages/context/README.zh-CN.md) |
-| `@c4a/context-cli` | Local workflow runtime, Agent plugin and website builder | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
-| `@c4a/core` | Shared schemas, identities, errors and extraction contracts | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
-| `@c4a/extract` | Language-plugin protocol and repository extraction runner | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
-| `@c4a/extract-ts` | TypeScript/JavaScript and TSX/JSX structure extraction | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
-| `@c4a/extract-go` | Optional Go structure extraction | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
-| `@c4a/extract-rush` | Optional Rush workspace structure index | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
-| `@c4a/extract-mdx` | Optional MDX component and example catalog | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
-| `@c4a/extract-proto` | Optional Protocol Buffers IDL catalog | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
-| `@c4a/extract-thrift` | Optional Apache Thrift IDL catalog | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
-| `@c4a/extract-contract` | Optional OpenAPI and GraphQL contract catalog | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
-| `@c4a/extract-sql` | Optional dialect-bound SQL evidence | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
-| `@c4a/extract-style` | Optional CSS and SCSS evidence | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
-| `context-evidence-wasm` | Source Graph read plugin that attaches registered section sources | [English](./packages/context-evidence-wasm/README.md) |
-| `@c4a/dev-cli` | Repository development and release menu | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
-| `@c4a/tui` | Shared terminal components for development tools | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
+You install one package, `@c4a/context-cli`. It provides the `context` command
+and the Agent plugin, and bundles the code extractors. Knowledge workspaces it
+creates depend on `@c4a/context`.
 
-[Module Layout](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)
-explains how these packages depend on each other and where a change lands;
+| Path | Contents |
+|---|---|
+| [`packages/context-cli`](./packages/context-cli) | `@c4a/context-cli`: the CLI, workflow runtime, Agent plugin and website builder |
+| [`packages/context`](./packages/context) | `@c4a/context`: the SDK a workspace's `src/index.ts` uses to declare sources and outputs |
+| [`plugins/context`](./plugins/context) | Skills and Indexers shipped in the Agent plugin |
+| `packages/core`, `packages/extract*` | Shared contracts and language extractors bundled into the CLI |
+| `packages/dev-cli`, `packages/tui` | Tools for developing and releasing this repository |
+
+Each package has its own README. [Module Layout](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)
+explains how the packages depend on each other and where a change lands;
 [ARCHITECTURE.md](./ARCHITECTURE.md) covers the internals.
 
 ## Documentation

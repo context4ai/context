@@ -15,6 +15,10 @@ Context 把代码仓库、文档、笔记和会话整理成经过审阅、带版
 [参与贡献](./CONTRIBUTING.md) ·
 [发布说明](./CHANGELOG.md)
 
+<video src="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4" poster="https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-img.jpeg" controls muted width="100%"></video>
+
+[观看 4 分钟 Context 介绍视频](https://github.com/context4ai/portal/releases/download/intro-video-2026-10-15/context4ai-v2-with-music.mp4)
+
 文档站与英文共用同一地址，按浏览器语言或手动选择显示中文。
 
 ## 为什么用 Context
@@ -96,26 +100,17 @@ Context 本身不调用模型。用户负责目标、来源权限与审阅决定
 
 ## 仓库结构
 
-| 模块 | 角色 | 文档 |
-|---|---|---|
-| `@c4a/context` | 声明来源、阶段、审阅门禁与产物的项目 SDK | [English](./packages/context/README.md) · [中文](./packages/context/README.zh-CN.md) |
-| `@c4a/context-cli` | 本地工作流运行时、Agent 插件与网站构建 | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
-| `@c4a/core` | 共享 Schema、身份、错误与抽取契约 | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
-| `@c4a/extract` | 语言插件协议与仓库抽取运行器 | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
-| `@c4a/extract-ts` | TypeScript/JavaScript 与 TSX/JSX 结构抽取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
-| `@c4a/extract-go` | 可选的 Go 结构抽取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
-| `@c4a/extract-rush` | 可选的 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
-| `@c4a/extract-mdx` | 可选的 MDX 组件与示例目录 | [English](./packages/extract-mdx/README.md) · [中文](./packages/extract-mdx/README.zh-CN.md) |
-| `@c4a/extract-proto` | 可选的 Protocol Buffers IDL 目录 | [English](./packages/extract-proto/README.md) · [中文](./packages/extract-proto/README.zh-CN.md) |
-| `@c4a/extract-thrift` | 可选的 Apache Thrift IDL 目录 | [English](./packages/extract-thrift/README.md) · [中文](./packages/extract-thrift/README.zh-CN.md) |
-| `@c4a/extract-contract` | 可选的 OpenAPI 与 GraphQL 契约目录 | [English](./packages/extract-contract/README.md) · [中文](./packages/extract-contract/README.zh-CN.md) |
-| `@c4a/extract-sql` | 可选的方言绑定 SQL 证据 | [English](./packages/extract-sql/README.md) · [中文](./packages/extract-sql/README.zh-CN.md) |
-| `@c4a/extract-style` | 可选的 CSS 与 SCSS 证据 | [English](./packages/extract-style/README.md) · [中文](./packages/extract-style/README.zh-CN.md) |
-| `context-evidence-wasm` | 为已登记小节附带来源的 Source Graph 读取插件 | [English](./packages/context-evidence-wasm/README.md) |
-| `@c4a/dev-cli` | 仓库开发与发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
-| `@c4a/tui` | 开发工具共用的终端组件 | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
+只需安装一个包：`@c4a/context-cli`。它提供 `context` 命令与 Agent 插件，并内置代码抽取器；它创建的知识工作区依赖 `@c4a/context`。
 
-[模块布局](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)说明这些包之间的依赖以及改动落在哪里；内部实现见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+| 路径 | 内容 |
+|---|---|
+| [`packages/context-cli`](./packages/context-cli) | `@c4a/context-cli`：CLI、工作流运行时、Agent 插件与网站构建 |
+| [`packages/context`](./packages/context) | `@c4a/context`：工作区 `src/index.ts` 用来声明来源与产物的 SDK |
+| [`plugins/context`](./plugins/context) | 随 Agent 插件发布的技能与 Indexer |
+| `packages/core`、`packages/extract*` | 共享契约与语言抽取器，打包进 CLI |
+| `packages/dev-cli`、`packages/tui` | 本仓库的开发与发布工具 |
+
+每个包都有自己的 README。[模块布局](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)说明这些包之间的依赖以及改动落在哪里；内部实现见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
 ## 文档
 
