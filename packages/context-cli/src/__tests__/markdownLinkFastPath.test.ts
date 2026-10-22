@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { withCommandReadCache } from "../project/commandReadCache.js";
 import { markdownInlineLinks, markdownReaderLinks } from "../project/markdownLinks.js";
 
 test("link-free Markdown does not invent inline or reference links", () => {
@@ -14,4 +15,23 @@ test("one Markdown tree preserves reference links, images, escaped labels and fe
   expect(markdownReaderLinks(text).map(link => [link.image, link.target])).toEqual([
     [false, "guide.md#section"], [false, "other.md"], [true, "image.png"],
   ]);
+});
+
+
+test("command-local link reuse isolates callers and distinguishes changed input", async () => {
+  const original = "[Guide](guide.md)\n![Asset](image.png)";
+  const expected = markdownInlineLinks(original);
+  await withCommandReadCache(async () => {
+    const first = markdownInlineLinks(original);
+    first[0]!.target = "mutated.md";
+    first.reverse();
+    first.pop();
+    expect(markdownInlineLinks(original)).toEqual(expected);
+    expect(markdownInlineLinks(original.replace("guide.md", "updated.md"))[0]!.target).toBe("updated.md");
+    expect(markdownInlineLinks(original)).toEqual(expected);
+    expect(markdownInlineLinks("```md\n[Guide](guide.md)\n```\n")).toEqual([]);
+  });
+  await withCommandReadCache(async () => {
+    expect(markdownInlineLinks(original)).toEqual(expected);
+  });
 });

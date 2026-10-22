@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.80 - 2026-10-21
+
+- Reuse Markdown link parsing within a command and its in-process workflow steps. Pure parsing results have a separate bounded cache, leaving file freshness and workflow authority checks unchanged. Returned links remain isolated from caller edits; no background service or cross-process cache is introduced.
+
 ## 0.7.73 - 2026-10-19
 
 - Plugin host discovery now preserves the inherited PATH, matching the environment used to launch commands, and safely quotes executable names.
