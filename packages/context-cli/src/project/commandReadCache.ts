@@ -2,6 +2,7 @@ import { recordContextDebugPerformance, currentDebugProjectRoot } from "./debugT
 import { AsyncLocalStorage } from "node:async_hooks";
 import { readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { DerivedValueCache } from "./derivedValueCache.js";
 
 interface CachedRead {
   stamp: string;
@@ -10,6 +11,7 @@ interface CachedRead {
 
 const commandReads = new AsyncLocalStorage<Map<string, CachedRead>>();
 const MAX_READS = 64;
+const commandValues = new AsyncLocalStorage<DerivedValueCache>();
 
 /** Cache one directory listing, never the entire subtree. Every traversal
  * checks each child directory so nested additions/removals remain visible. */
@@ -23,7 +25,7 @@ export async function readCommandDirectory(path: string) {
  * mutable workspace files, and never cache failures or missing files. */
 export function withCommandReadCache<T>(action: () => Promise<T>): Promise<T> {
   return commandReads.getStore() === undefined
-    ? commandReads.run(new Map(), action)
+    ? commandValues.run(new DerivedValueCache(), () => commandReads.run(new Map(), action))
     : action();
 }
 
@@ -77,13 +79,6 @@ export async function reuseCommandFileRead<T>(input: {
 /** Pure, synchronous derived values share the existing command lifetime. Keys
  * must include all actual inputs; never use this for workspace authority checks. */
 export function reuseCommandValue<T>(key: string, calculate: () => T): T {
-  const cache = commandReads.getStore();
-  if (!cache) return calculate();
-  const cacheKey = `derived:${key}`;
-  const existing = cache.get(cacheKey) as (CachedRead & { derived?: T }) | undefined;
-  if (existing && "derived" in existing) return existing.derived as T;
-  const derived = calculate();
-  if (cache.size >= MAX_READS) cache.delete(cache.keys().next().value!);
-  cache.set(cacheKey, { stamp: key, value: Promise.resolve(derived), derived } as CachedRead & { derived: T });
-  return derived;
+  const cache = commandValues.getStore();
+  return cache ? cache.get(key, calculate) : calculate();
 }

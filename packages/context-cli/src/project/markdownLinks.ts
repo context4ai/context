@@ -1,5 +1,6 @@
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { reuseCommandValue } from "./commandReadCache.js";
 
 interface MdastPoint {
   line?: number;
@@ -125,8 +126,12 @@ function destinationRange(raw: string): { start: number; end: number; labelEnd: 
 
 export function markdownInlineLinks(content: string): MarkdownInlineLink[] {
   if (!content.includes("[")) return [];
-  const tree = unified().use(remarkParse).parse(content) as MdastNode;
-  return inlineLinksFromTree(content, tree);
+  const links = reuseCommandValue(`markdown-inline-links:${content}`, () => {
+    const tree = unified().use(remarkParse).parse(content) as MdastNode;
+    return inlineLinksFromTree(content, tree);
+  });
+  // Callers may edit or reorder results; keep the command-local value private.
+  return links.map(link => ({ ...link }));
 }
 
 function inlineLinksFromTree(content: string, tree: MdastNode): MarkdownInlineLink[] {

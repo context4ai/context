@@ -20,6 +20,7 @@ import {
 } from "../project/knowledgeAssetRepair.js";
 import { projectPackageKnowledgeAssets } from "../project/packageAssets.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
+import { withCommandReadCache } from "../project/commandReadCache.js";
 
 describe("0.6.2 knowledge resource projection", () => {
   test("moves approved resources into knowledge/assets and package others/assets", async () => {
@@ -218,15 +219,23 @@ describe("0.6.2 knowledge resource projection", () => {
         "",
         "> Whiteboard: lark:whiteboard:board-token",
       ].join("\n"), "utf8");
-      const result = await verifyProjectWorkspace(projectRoot);
-      expect(result.issues.map((issue) => issue.code)).toContain("approved-resource-missing");
-      expect(result.issues.map((issue) => issue.code)).not.toContain("approved-resource-placeholder-unresolved");
-      const asset = join(projectRoot, "knowledge", "assets", "image", "missing.png");
-      await mkdir(dirname(asset), { recursive: true });
-      await writeFile(asset, Buffer.from("example-image", "utf8"));
-      const withExistingResource = await verifyProjectWorkspace(projectRoot);
-      expect(withExistingResource.issues.filter((issue) => issue.code.startsWith("approved-resource-")))
-        .toEqual([]);
+      await withCommandReadCache(async () => {
+        const result = await verifyProjectWorkspace(projectRoot);
+        expect(result.issues.map((issue) => issue.code)).toContain("approved-resource-missing");
+        expect(result.issues.map((issue) => issue.code)).not.toContain("approved-resource-placeholder-unresolved");
+        const asset = join(projectRoot, "knowledge", "assets", "image", "missing.png");
+        await mkdir(dirname(asset), { recursive: true });
+        await writeFile(asset, Buffer.from("example-image", "utf8"));
+        const withExistingResource = await verifyProjectWorkspace(projectRoot);
+        expect(withExistingResource.issues.filter((issue) => issue.code.startsWith("approved-resource-")))
+          .toEqual([]);
+        await rm(asset);
+        const removedAgain = await verifyProjectWorkspace(projectRoot);
+        expect(removedAgain.issues.map(issue => issue.code)).toContain("approved-resource-missing");
+        await writeFile(page, (await readFile(page, "utf8")).replace("![Missing](../assets/image/missing.png)", "No image."));
+        const edited = await verifyProjectWorkspace(projectRoot);
+        expect(edited.issues.map(issue => issue.code)).not.toContain("approved-resource-missing");
+      });
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }
