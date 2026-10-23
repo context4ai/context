@@ -63,8 +63,9 @@ each source. Registration itself does not fetch remote content or grant access.
 
 Register the scope the user actually requested, not the containing monorepo merely
 because it is convenient to clone. Reuse one local checkout and register its
-confirmed module directories through the existing source registration command.
-Read that command's current schema for local path/subpath fields. Keep a source
+confirmed module directories through the existing source registration command:
+point `local` at the module directory, or give the checkout root or `remote` and
+`ref` together with a repository-relative `subpath`. Keep a source
 for each independently selected application/service boundary; names alone do not
 restrict filesystem reads. `modules: []` means no registered child boundary, not
 that the repository has no directories or cannot be narrowed.
