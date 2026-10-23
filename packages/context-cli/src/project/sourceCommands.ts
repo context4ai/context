@@ -318,6 +318,9 @@ repo.local is resolved from the Context project root. A valid local Git checkout
 lets the CLI infer origin and the current commit; remote/ref are needed only when
 that local identity cannot be resolved. If local is omitted, the CLI also accepts
 one uniquely named Git directory at <project-root>/<module> or ../<module>.
+repo.subpath is an optional repository-relative module directory. Use it with
+remote/ref, or with local pointing at the checkout root; a local module directory
+already sets the subpath.
 The current source-boundary Route requires the completed, presented work-start
 report shown above. A direct maintenance call outside that Route may omit it.
 For long batches, add --checkpoint --progress. Resume with --resume <job-id>;
@@ -366,6 +369,7 @@ Resume performs registration only unless --configure is explicitly supplied.
     .option("--remote <url>", "repo remote URL; inferred from local origin when omitted")
     .option("--ref <sha>", "pinned commit/ref; inferred from local HEAD when omitted")
     .option("--local <path>", "local checkout path; may point at a monorepo subdirectory")
+    .option("--subpath <dir>", "repo-relative module directory; use with --remote/--ref or a --local repository root")
     .option("--format <format>", "output format: json | yaml | table", "table")
     .action(async (namespace: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
@@ -382,6 +386,7 @@ Resume performs registration only unless --configure is explicitly supplied.
       const local = optionalString(options.local);
       const remote = optionalString(options.remote);
       const ref = optionalString(options.ref);
+      const subpath = optionalString(options.subpath);
       const result = await addRepoSource({
         projectRoot,
         namespace: sourceNamespace.name,
@@ -389,6 +394,7 @@ Resume performs registration only unless --configure is explicitly supplied.
         ...(local !== undefined ? { local } : {}),
         ...(remote !== undefined ? { remote } : {}),
         ...(ref !== undefined ? { ref } : {}),
+        ...(subpath !== undefined ? { subpath } : {}),
       });
       writeFormatted(options.configure ? { ...result, configuration: await configureRegisteredSources(projectRoot,
         [{ type: "repo", name: `${sourceNamespace.name}/${module}` }]) } : result, format);

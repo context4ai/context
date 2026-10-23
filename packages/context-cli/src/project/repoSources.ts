@@ -36,6 +36,8 @@ export interface AddRepoSourceInput {
   local?: string;
   remote?: string;
   ref?: string;
+  /** Repo-relative scope; `.` selects the repository root. */
+  subpath?: string;
 }
 
 export interface RepoSourceStatus {
@@ -85,6 +87,43 @@ function normalizeSubpath(value: string | undefined): string | undefined {
     .filter((part) => part.length > 0 && part !== ".")
     .join("/");
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function explicitSubpath(value: string, sourceName: string): string | undefined {
+  const parts = value.replace(/\\/g, "/").split("/");
+  if (isAbsolute(value) || /^[A-Za-z]:/.test(value) || parts.includes("..")) {
+    throw new ContextError(ExitCode.UserError, `repo source subpath must stay inside the repository: ${value}`, {
+      category: ErrorCategory.UserInputInvalid,
+      sourceName,
+      subpath: value,
+      next: "Pass --subpath as a repository-relative directory such as apps/web, or . for the repository root.",
+    });
+  }
+  return normalizeSubpath(value);
+}
+
+function requestedSubpath(input: {
+  value: string | undefined;
+  sourceName: string;
+  current: string | undefined;
+  localScoped: boolean;
+}): string | undefined {
+  if (input.value === undefined) return input.current;
+  const { value, sourceName } = input;
+  const localScope = input.localScoped ? input.current : undefined;
+  const requested = explicitSubpath(value, sourceName);
+  // A local path inside the checkout already names its scope; --subpath may only
+  // narrow a local repository root or repeat the same scope.
+  if (localScope !== undefined && localScope !== requested) {
+    throw new ContextError(ExitCode.UserError, `repo source subpath ${requested ?? "."} conflicts with local path scope ${localScope}`, {
+      category: ErrorCategory.UserInputInvalid,
+      sourceName,
+      subpath: value,
+      localSubpath: localScope,
+      next: "Pass --local at the repository root together with --subpath, or pass only --local pointing at the module directory.",
+    });
+  }
+  return requested;
 }
 
 function scopedLocalPath(rootAbs: string, subpath: string | undefined): string {
@@ -366,6 +405,13 @@ async function normalizeAddInput(input: AddRepoSourceInput, existing: RepoSource
       }
     }
   }
+
+  subpath = requestedSubpath({
+    value: input.subpath,
+    sourceName,
+    current: subpath,
+    localScoped: localWasResolvedFromInput && gitRootAbs !== null,
+  });
 
   if (input.local !== undefined && (explicitRemote === null || explicitRef === null)) {
     if (originalLocalAbs === null || !existsSync(originalLocalAbs)) {

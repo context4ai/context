@@ -18,12 +18,12 @@ import {
 } from "./sourceBatchJournal.js";
 
 export type SourceBatchItem =
-  | { type: "repo"; module: string; local?: string; remote?: string; ref?: string }
+  | { type: "repo"; module: string; local?: string; remote?: string; ref?: string; subpath?: string }
   | { type: "file"; module: string; local: string; include?: readonly string[] }
   | { type: "lark"; module: string; url?: string; docToken?: string; wikiToken?: string; title?: string };
 
 const ITEM_KEYS = {
-  repo: new Set(["type", "module", "local", "remote", "ref"]),
+  repo: new Set(["type", "module", "local", "remote", "ref", "subpath"]),
   file: new Set(["type", "module", "local", "include"]),
   lark: new Set(["type", "module", "url", "docToken", "wikiToken", "title"]),
 } as const;
@@ -71,7 +71,12 @@ function optionalStringArray(record: Record<string, unknown>, field: string, pat
 function assertAllowedKeys(record: Record<string, unknown>, type: keyof typeof ITEM_KEYS, path: string): void {
   const unknown = Object.keys(record).filter((key) => !ITEM_KEYS[type].has(key as never));
   if (unknown.length > 0) {
-    throw inputError(`${path} has unsupported field(s): ${unknown.join(", ")}`, { path, fields: unknown });
+    const allowed = [...ITEM_KEYS[type]].join(", ");
+    throw inputError(`${path} has unsupported field(s): ${unknown.join(", ")}; ${type} items accept ${allowed}`, {
+      path,
+      fields: unknown,
+      allowed: [...ITEM_KEYS[type]],
+    });
   }
 }
 
@@ -88,12 +93,14 @@ function parseBatchItem(value: unknown, index: number): SourceBatchItem {
     const local = optionalString(record, "local", path);
     const remote = optionalString(record, "remote", path);
     const ref = optionalString(record, "ref", path);
+    const subpath = optionalString(record, "subpath", path);
     return {
       type,
       module,
       ...(local !== undefined ? { local } : {}),
       ...(remote !== undefined ? { remote } : {}),
       ...(ref !== undefined ? { ref } : {}),
+      ...(subpath !== undefined ? { subpath } : {}),
     };
   }
   if (type === "file") {

@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.81 - 2026-10-22
+
+- Repo sources accept an optional repository-relative `subpath`, both as a `source add batch` repo field and as `source add repo --subpath`. A module directory inside a monorepo can now be registered from `remote` and `ref` alone, or from a checkout root. A `local` path inside the checkout still sets the scope itself, and a conflicting `subpath` is rejected rather than silently overriding it.
+- Unsupported batch fields now list the fields that item type accepts. The source-capture procedure describes the registration fields directly instead of asking the Agent to look up the command schema.
+
 ## 0.7.80 - 2026-10-21
 
 - Reuse Markdown link parsing within a command and its in-process workflow steps. Pure parsing results have a separate bounded cache, leaving file freshness and workflow authority checks unchanged. Returned links remain isolated from caller edits; no background service or cross-process cache is introduced.
