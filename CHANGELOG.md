@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.83 - 2026-10-23
+
+- Upgrading the CLI now re-renders an existing website on the next build, even when its knowledge and settings are unchanged. Page and navigation rendering live in the CLI, so the site renderer version now includes the CLI version; previously only theme changes invalidated a built site, and an upgrade such as 0.7.82's sidebar order did not appear until the site output was deleted. Fresh clones were not affected.
+
 ## 0.7.82 - 2026-10-23
 
 - Website sidebars and section pages follow the knowledge map order at every level. Articles and directories can now be interleaved, for example an overview article before a guides directory; directories are no longer moved ahead of sibling articles. Sites whose map already lists directories first look the same.

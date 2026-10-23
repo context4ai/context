@@ -22,13 +22,17 @@ import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } fr
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
 import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
+import { readPackageVersion } from "../lib/packageVersion.js";
 import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, restoreOriginNavLinks, siteLocaleCss, siteLocaleScript,
   siteMoreTargets, siteNavigationConfig, siteReaderLocales, type SiteNavItem } from "./packageSiteLocales.js";
 
-// Include shipped presentation assets: theme-only upgrades must invalidate an
-// existing site's receipt even when its knowledge and configuration are unchanged.
+// Include the CLI version and shipped presentation assets: any CLI upgrade or
+// theme change must invalidate an existing site's receipt even when its
+// knowledge and configuration are unchanged, because page and navigation
+// rendering live in the CLI itself.
 export const PACKAGE_SITE_VERSION = `vitepress-site-v50-light-shared-preferences:${createHash("sha256")
-  .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
+  .update(JSON.stringify([readPackageVersion(), siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript,
+    siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
 export interface SitePage {
