@@ -25,7 +25,7 @@ const structure = updateKnowledgeMap(undefined, { expected_revision: null, upser
   { key: "future", parent: null, title: "Pending", target: { artifact_ref: "article:future" } },
 ] });
 
-test("mixed navigation keeps sibling depth and stable directory-first order recursively", () => {
+test("mixed navigation keeps sibling depth and the authored order of articles and directories", () => {
   const leaf = (key: string) => ({ key, title: key, href: `/${key}.html`, children: [] });
   const nested = { key: "nested", title: "nested", children: [leaf("nested-page")] };
   const input = [{ key: "root", title: "Root", children: [leaf("first"),
@@ -33,13 +33,13 @@ test("mixed navigation keeps sibling depth and stable directory-first order recu
     leaf("second"), { key: "another", title: "Another", children: [leaf("last")] }] }];
   const snapshot = JSON.stringify(input);
   const section = siteSections(input)[0]!;
-  expect(section.entries.map(entry => entry.key)).toEqual(["folder", "another", "first", "second"]);
-  expect(section.entries[0]!.children.map(entry => entry.key)).toEqual(["nested", "child"]);
+  expect(section.entries.map(entry => entry.key)).toEqual(["first", "folder", "second", "another"]);
+  expect(section.entries[1]!.children.map(entry => entry.key)).toEqual(["child", "nested"]);
   expect(section.items).toMatchObject([
-    { text: "Folder", link: "/overview.html", collapsed: true },
-    { text: "Another", collapsed: true },
     { text: "first", link: "/first.html", items: [] },
+    { text: "Folder", link: "/overview.html", collapsed: true },
     { text: "second", link: "/second.html", items: [] },
+    { text: "Another", collapsed: true },
   ]);
   expect(JSON.stringify(input)).toBe(snapshot);
 });
@@ -99,7 +99,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
       actor: { name: "Example User", kind: "git" },
     })) }));
     const mixedStructure = updateKnowledgeMap(structure, { expected_revision: structure.revision, upsert: [
-      { key: "folder", parent: "business", title: "Folder" },
+      { key: "folder", parent: "business", title: "Folder", order: 10 },
       { key: "nested-next", parent: "folder", title: "Nested next", target: { artifact_ref: "article:start" } },
     ] });
     await writePackageSite({ projectRoot: root, pkg, selected: sourced, structure: mixedStructure, siteUrl: "https://example.com/docs/" });
@@ -135,7 +135,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     const sidebarHtml = article.match(/<aside\b[^>]*class="VPSidebar[\s\S]*?<\/aside>/u)![0];
     const sidebarItems = [...sidebarHtml.matchAll(/<(?:div|section) class="VPSidebarItem level-(\d)[\s\S]*?class="text"[^>]*>([^<]*)</gu)];
     expect(sidebarItems.map(match => [match[1], match[2]])).toEqual([
-      ["0", "Folder"], ["1", "Nested next"], ["0", "Entry"], ["0", "Getting started"],
+      ["0", "Entry"], ["0", "Getting started"], ["0", "Folder"], ["1", "Nested next"],
     ]);
     expect(article).not.toContain("context-history-button");
     expect(article).toMatch(/LLM Docs[\s\S]*?Changelog[\s\S]*?VPNavBarAppearance/u);
@@ -189,11 +189,12 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     for (const section of map.sections) {
       expect(await readFile(join(root, packageSiteOutputDir(pkg), section.href.slice(1)), "utf8")).toContain(section.title);
     }
-    // A group becomes its own card; loose articles share one card.
+    // A group becomes its own card; consecutive loose articles share one card in authored order.
     const business = await readFile(join(root, packageSiteOutputDir(pkg), map.sections[0].href.slice(1)), "utf8");
     expect(business).toContain('class="context-section-grid"');
     expect(business.match(/class="context-section-card"/gu)).toHaveLength(2);
     expect(business).toMatch(/class="context-section-card"><h2[^>]*>Folder[\s\S]*?Nested next/u);
+    expect(business.indexOf("Getting started")).toBeLessThan(business.indexOf("Folder"));
     const navMenu = article.match(/<nav\b[^>]*class="VPNavBarMenu[\s\S]*?<\/nav>/u)![0];
     expect(navMenu.indexOf("Overview")).toBeLessThan(navMenu.indexOf("Business"));
     expect(navMenu.indexOf("Business")).toBeLessThan(navMenu.indexOf("Blog"));
