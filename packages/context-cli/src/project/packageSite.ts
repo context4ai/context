@@ -130,17 +130,12 @@ function sidebar(entries: ProjectedKnowledgeMapEntry[], label: (entry: Projected
 }
 
 export function siteSections(entries: ProjectedKnowledgeMapEntry[]) {
-  const directoriesFirst = (siblings: ProjectedKnowledgeMapEntry[]): ProjectedKnowledgeMapEntry[] => {
-    const ordered = [...siblings.filter(entry => entry.children.length > 0),
-      ...siblings.filter(entry => entry.children.length === 0)];
-    return ordered.map(entry => ({ ...entry, children: directoriesFirst(entry.children) }));
-  };
   const pageLinks = (entry: ProjectedKnowledgeMapEntry): string[] => [
     ...(entry.href ? [entry.href.split("#")[0]!] : []), ...entry.children.flatMap(pageLinks),
   ];
-  // Keep top navigation order; partition each section recursively without
-  // changing the authored map or the order within directories and articles.
-  return entries.map(entry => ({ ...entry, children: directoriesFirst(entry.children) })).map(entry => ({ key: entry.key, title: entry.title, entry,
+  // The knowledge map order is the sidebar order at every level, so articles
+  // and directories can be interleaved as authored.
+  return entries.map(entry => ({ key: entry.key, title: entry.title, entry,
     href: `/sections/${createHash("sha256").update(entry.key).digest("hex").slice(0, 20)}.html`,
     pages: [...new Set(pageLinks(entry))],
     items: sidebar(entry.href ? [entry] : entry.children),
@@ -321,7 +316,8 @@ export async function writePackageSite(input: {
       lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${title}](${entry.href})` : title}`);
       menu(lines, entry.children, level + 1, tag);
     });
-    // Each first-level group is one card; loose articles share a final card.
+    // Each first-level group is one card; consecutive loose articles share a card
+    // at their authored position.
     // Blank lines around the wrappers keep the card contents parsed as Markdown.
     const card = (lines: string[], heading: string | undefined, entries: ProjectedKnowledgeMapEntry[], tag: string) => {
       lines.push('<div class="context-section-card">', "");
@@ -333,14 +329,20 @@ export async function writePackageSite(input: {
     for (const section of sections) {
       await writeFile(join(temporary, section.href.slice(1).replace(/\.html$/u, ".md")), localizer.variants(tag => {
         const lines = [`# ${mdLabel(localizer.entryTitle(tag, section.entry))}`, "", '<div class="context-section-grid">', ""];
-        const groups = section.entries.filter(entry => entry.children.length > 0);
-        const articles = section.entries.filter(entry => entry.children.length === 0);
-        for (const group of groups) {
-          card(lines, group.href ? `[${mdLabel(localizer.entryTitle(tag, group))}](${group.href})` : mdLabel(localizer.entryTitle(tag, group)),
-            group.children, tag);
+        const grouped = section.entries.some(entry => entry.children.length > 0);
+        let articles: ProjectedKnowledgeMapEntry[] = [];
+        const flush = () => { if (articles.length) card(lines, undefined, articles, tag); articles = []; };
+        for (const entry of section.entries) {
+          if (entry.children.length === 0) {
+            articles.push(entry);
+            if (!grouped) flush();
+            continue;
+          }
+          flush();
+          card(lines, entry.href ? `[${mdLabel(localizer.entryTitle(tag, entry))}](${entry.href})` : mdLabel(localizer.entryTitle(tag, entry)),
+            entry.children, tag);
         }
-        if (groups.length === 0) for (const article of articles) card(lines, undefined, [article], tag);
-        else if (articles.length) card(lines, undefined, articles, tag);
+        flush();
         lines.push("</div>");
         return lines.join("\n") + "\n";
       }));

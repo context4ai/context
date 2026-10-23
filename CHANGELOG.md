@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.82 - 2026-10-23
+
+- Website sidebars and section pages follow the knowledge map order at every level. Articles and directories can now be interleaved, for example an overview article before a guides directory; directories are no longer moved ahead of sibling articles. Sites whose map already lists directories first look the same.
+
 ## 0.7.81 - 2026-10-22
 
 - Repo sources accept an optional repository-relative `subpath`, both as a `source add batch` repo field and as `source add repo --subpath`. A module directory inside a monorepo can now be registered from `remote` and `ref` alone, or from a checkout root. A `local` path inside the checkout still sets the scope itself, and a conflicting `subpath` is rejected rather than silently overriding it.
