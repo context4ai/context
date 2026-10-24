@@ -163,16 +163,17 @@ describe("plugin and workflow workspace guard", () => {
 
   test("SDK package templates preserve current OKF root mapping", async () => {
     const template = await readFile(
-      join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates", "kb", "skills", "knowledge-query", "SKILL.md"),
+      join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates", "kb", "skills", "context-knowledge-query", "SKILL.md"),
       "utf8",
     );
     expect(template).toContain("Query Procedure");
-    expect(template).toContain("Package Roots");
-    expect(template).toContain("Start from `{{guidesRoot}}/index.md`");
-    expect(template).toContain("Start from `{{rulesRoot}}/index.md`");
+    expect(template).toContain("Find The Packages");
+    expect(template).toContain("Going Back To The Sources");
+    expect(template).toContain("`{{guidesRoot}}/`");
+    expect(template).toContain("`{{rulesRoot}}/`");
     expect(template).toContain("context-build-inventory.json");
     expect(template).toContain("{{!-- Template author guidance");
-    expect(template).toContain("edit it before publishing");
+    expect(template).toContain("others/context/search-guide.md");
     expect(template).not.toContain("C4A");
 
     const agents = await readFile(
@@ -184,12 +185,12 @@ describe("plugin and workflow workspace guard", () => {
     expect(agents).toContain("`{{rulesRoot}}/` maps from `standards` and `test`");
 
     const localizedTemplate = await readFile(
-      join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates.zh-CN", "kb", "skills", "knowledge-query", "SKILL.md"),
+      join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates.zh-CN", "kb", "skills", "context-knowledge-query", "SKILL.md"),
       "utf8",
     );
-    expect(localizedTemplate).toContain("## 知识根目录");
-    expect(localizedTemplate).toContain("{{!-- 模板作者建议");
-    expect(localizedTemplate).toContain("正式发布前");
+    expect(localizedTemplate).toContain("## 找到知识包");
+    expect(localizedTemplate).toContain("{{!-- 模板作者说明");
+    expect(localizedTemplate).toContain("others/context/search-guide.md");
     expect(localizedTemplate).not.toContain("C4A");
     for (const queryTemplate of [template, localizedTemplate]) {
       // Published pages intentionally omit production attribution. The default
@@ -199,11 +200,14 @@ describe("plugin and workflow workspace guard", () => {
       expect(queryTemplate).not.toContain("#section-id");
       expect(queryTemplate).toContain("dist_path");
       expect(queryTemplate).toContain("approved_path");
+      // The Skill is shared by every package, so it must render without package values.
+      expect(queryTemplate).not.toMatch(/\{\{\s*(?:displayName|packageName|knowledgeCount)\s*\}\}/u);
+      expect(queryTemplate).toContain('shared: "true"');
       const published = Handlebars.compile(queryTemplate)({
-        name: "sample-library", knowledgeCount: 2,
+        skillName: "context-knowledge-query", contextVersion: "1.0.0",
         wikisRoot: "wikis", guidesRoot: "guides", rulesRoot: "rules", featsRoot: "feats",
       });
-      expect(published).not.toMatch(/Template author guidance|模板作者建议|edit it before publishing|正式发布前/u);
+      expect(published).not.toMatch(/Template author guidance|模板作者说明/u);
       expect(published).toContain("context-build-inventory.json");
       expect(published).not.toContain("{{");
     }

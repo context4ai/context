@@ -1,4 +1,5 @@
 import type { PackageDefinition, TemplateVarValue } from "@c4a/context";
+import { readPackageVersion } from "../lib/packageVersion.js";
 import { okfPackagePathForKnowledgePath, type OkfOutputRoot } from "./okfTypes.js";
 
 export function packageKnowledgeNamespace(pkg: PackageDefinition): string | undefined {
@@ -51,5 +52,6 @@ export function packageDistributionTemplateVars(input: {
     featsRoot: packageOkfRootPath(input.pkg, "feats"),
     skillName: skill?.name ?? "",
     skillPath: skill?.path ?? "",
+    contextVersion: readPackageVersion(),
   };
 }

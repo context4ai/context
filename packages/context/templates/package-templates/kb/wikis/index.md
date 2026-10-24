@@ -39,5 +39,5 @@ Use this index as the entry point, then open the linked knowledge pages for sour
 ## How To Use
 
 - Start from the navigation above, then open linked pages or child indexes for source-linked details.
-- Use the bundled knowledge-query Skill when this bundle is installed as an agent knowledge package.
+- Use the bundled context-knowledge-query Skill when this bundle is installed as an agent knowledge package.
 - Package authors should replace or edit this generic index before publishing when the package needs bundle scope, known gaps, project-specific reading paths, or task entry points; otherwise explicitly accept the unchanged default during Context package-template review.

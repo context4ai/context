@@ -339,7 +339,7 @@ async function listStaticTemplateFiles(root: string, dir: string = root): Promis
   return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function resolveContextPackageTemplatesRoot(): string {
+export function resolveContextPackageTemplatesRoot(): string {
   try {
     const packageJsonPath = createRequire(import.meta.url).resolve("@c4a/context/package.json");
     const templateRoot = join(dirname(packageJsonPath), "templates", "package-templates");

@@ -2,6 +2,12 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.84 - 2026-10-24
+
+- The default package query Skill is now `context-knowledge-query`, replacing `knowledge-query`. It is identical in every Context package and declares `metadata.shared` and its Context version, so a package manager can install one copy that searches every Context package available to a project. Its search script lists the packages it found (`--list`), ranks across them or within one (`--package`), and also reads directories named in `CONTEXT_KNOWLEDGE_PACKAGES`. When a page's text does not settle a question, the Skill follows the page's repository sources at their recorded commit through authorized host tools.
+- Package-specific search hints move to a new `others/context/search-guide.md` template file, so tuning one package no longer changes the shared Skill.
+- `context build` replaces a workspace's `knowledge-query` Skill with the new one when it is exactly a version Context shipped, and reports an edited one as an agent hint instead of changing it.
+
 ## 0.7.83 - 2026-10-23
 
 - Upgrading the CLI now re-renders an existing website on the next build, even when its knowledge and settings are unchanged. Page and navigation rendering live in the CLI, so the site renderer version now includes the CLI version; previously only theme changes invalidated a built site, and an upgrade such as 0.7.82's sidebar order did not appear until the site output was deleted. Fresh clones were not affected.

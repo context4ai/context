@@ -35,5 +35,5 @@ node_modules/@c4a/context/docs/reference/template-variables.md
 ## 使用方式
 
 - 从上方导航开始，再进入知识页或子目录索引。
-- 安装为 Agent 知识包后，可以使用随包提供的 knowledge-query Skill。
+- 安装为 Agent 知识包后，可以使用随包提供的 context-knowledge-query Skill。
 - 如果包需要专用范围、已知缺口、阅读路径或任务入口，作者应替换或编辑本通用索引；否则应在 Context 包模板 Review 中明确接受未修改模板。

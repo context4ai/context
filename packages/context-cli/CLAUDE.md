@@ -258,7 +258,7 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 - Prompt/cache-stable 输出：必要且不变的指令与 schema 放前段，当前任务的材料和问题放后段；不重复携带已退场的主体矩阵或事实账本。CLI JSON 字段顺序稳定，不为刷新输出制造时间戳或随机 ID；授权材料位置与命令所需路径按现有 Route 交付。
 - Knowledge 本身就是 lookup registry。不新增动态 registry 文件；Agent 通过
   当前 status、任务材料、approved `knowledge/structure.yaml`、OKF
-  indexes、build inventory 和生成包里的 `knowledge-query` skill 获取
+  indexes、build inventory 和生成包里的 `context-knowledge-query` skill 获取
   相关知识文章及其来源区域。lookup 输出可带知识分类和排序,
   不带存储路径或临时时间戳。
 

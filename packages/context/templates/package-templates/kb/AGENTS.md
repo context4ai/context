@@ -11,8 +11,10 @@ Approved knowledge files: `{{knowledgeCount}}`
 Use the Markdown files in this package as source-linked product and code
 knowledge. Prefer cited facts from the included knowledge pages over memory.
 
-The bundled knowledge-query Skill teaches agents how to navigate OKF indexes
-and cite copied OKF root directories, starting with `{{wikisRoot}}/`.
+The bundled context-knowledge-query Skill teaches agents how to navigate OKF
+indexes, search across the Context packages available to the project, and cite
+copied OKF root directories, starting with `{{wikisRoot}}/`. Package-specific
+search hints live in `others/context/search-guide.md`.
 
 Selected OKF root directories such as `{{wikisRoot}}/`, `{{guidesRoot}}/`,
 `{{rulesRoot}}/`, and `{{featsRoot}}/` follow an OKF-compatible Context profile:

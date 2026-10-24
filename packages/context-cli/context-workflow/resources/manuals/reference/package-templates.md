@@ -135,7 +135,7 @@ that name inside the package's knowledge roots.
 Templates keep a logical, consumer-neutral layout:
 
 ```text
-skills/knowledge-query/SKILL.md
+skills/context-knowledge-query/SKILL.md
 wikis/index.md
 guides/...
 rules/...
@@ -145,7 +145,7 @@ feats/...
 For `name: "component-lib-kb"`, `context build` writes:
 
 ```text
-skills/knowledge-query/SKILL.md
+skills/context-knowledge-query/SKILL.md
 wikis/index.md
 guides/...
 rules/...
@@ -219,8 +219,11 @@ src/package-templates/
 │   ├── AGENTS.md
 │   ├── wikis/
 │   │   └── index.md
+│   ├── others/
+│   │   └── context/
+│   │       └── search-guide.md
 │   └── skills/
-│       └── knowledge-query/
+│       └── context-knowledge-query/
 │           ├── SKILL.md
 │           └── scripts/
 │               └── search.mjs
@@ -237,16 +240,25 @@ rejects it.
 
 The default kb template includes:
 
-- `skills/knowledge-query/SKILL.md`, a reusable skill that teaches agents to
-  navigate copied knowledge pages, cite relevant text and its exported source
-  attribution, and report gaps instead of inventing unsupported answers. The
+- `skills/context-knowledge-query/SKILL.md`, a reusable skill shared by every
+  Context package (`metadata.shared: "true"`, `metadata.version` set to the
+  Context version). It finds the Context packages available to the project,
+  navigates copied knowledge pages, cites relevant text and its exported source
+  attribution, follows repository sources at their recorded commit when the page
+  text is not enough, and reports gaps instead of inventing unsupported answers.
+  It uses no package-specific template values, so every package renders the same
+  file. The
   default entry OKF root is `wikis/`; packages that select additional internal
   collections expose
   `guides/`, `rules/`, or `feats/` indexes when those roots are selected.
-- `skills/knowledge-query/scripts/search.mjs`, a dependency-free BM25 fallback
-  for exact terms, mixed keyword queries, and large Markdown indexes. It chunks
-  mechanically, returns inspectable paths and line ranges, and never replaces
-  reading the relevant source-backed explanation.
+- `skills/context-knowledge-query/scripts/search.mjs`, a dependency-free BM25
+  fallback for exact terms, mixed keyword queries, and large Markdown indexes.
+  `--list` shows the packages it found; without `--package` it ranks across all
+  of them. It chunks mechanically, returns package, path and line range, and
+  never replaces reading the relevant source-backed explanation.
+- `others/context/search-guide.md`, the package's own search hints: terms,
+  synonyms, common questions and preferred entry pages. Edit this file, not the
+  shared Skill, to tune search for one package.
 - `wikis/index.md`, the editable OKF bundle entry page for the generated
   `dist/<package-name>/wikis/` directory.
 

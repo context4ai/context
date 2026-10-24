@@ -10,7 +10,7 @@
 
 将包内 Markdown 作为经过审核、可追溯来源的产品与代码知识。回答问题时优先使用知识页中的可见正文，不要依赖记忆补全。
 
-随包提供的 knowledge-query Skill 会指导 Agent 从 `{{wikisRoot}}/` 等 OKF 索引开始导航，并引用实际读取的知识页。
+随包提供的 context-knowledge-query Skill 会指导 Agent 从 `{{wikisRoot}}/` 等 OKF 索引开始导航，在项目可用的多个 Context 知识包中检索，并引用实际读取的知识页。本包专有的检索提示写在 `others/context/search-guide.md`。
 
 包内可能包含以下 OKF 根目录：
 
@@ -27,4 +27,4 @@
 
 ## 模板作者建议
 
-这是可直接工作的通用模板。正式发布前，如果知识包存在专用术语、常见用户意图、推荐入口、已知边界或固定任务流程，作者应替换或编辑本文件及 knowledge-query Skill；如果通用行为已经足够，应在 Context 的包模板 Review 中明确接受未修改模板。
+这是可直接工作的通用模板。正式发布前，如果知识包存在专用术语、常见用户意图、推荐入口、已知边界或固定任务流程，作者应替换或编辑本文件及 `others/context/search-guide.md`（context-knowledge-query Skill 本身保持不变，以便多个知识包共用一份）；如果通用行为已经足够，应在 Context 的包模板 Review 中明确接受未修改模板。

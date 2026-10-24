@@ -90,6 +90,16 @@ export async function writeStarterTemplateReviewMarker(templateRoot: string): Pr
   return true;
 }
 
+/** Re-record an untouched starter template after Context replaced a shipped default in it. */
+export async function refreshStarterTemplateDigest(templateRoot: string): Promise<void> {
+  const marker = await readMarker(templateRoot);
+  if (marker === null || marker === "invalid") return;
+  await writeFile(join(templateRoot, PACKAGE_TEMPLATE_REVIEW_FILE), `${JSON.stringify({
+    ...marker,
+    starter_digest: await templateDigest(templateRoot),
+  }, null, 2)}\n`, "utf8");
+}
+
 export async function inspectPackageTemplateReview(
   projectRoot: string,
   pkg: PackageDefinition,
