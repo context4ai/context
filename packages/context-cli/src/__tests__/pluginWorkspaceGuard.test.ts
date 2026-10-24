@@ -166,9 +166,10 @@ describe("plugin and workflow workspace guard", () => {
       join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates", "kb", "skills", "context-knowledge-query", "SKILL.md"),
       "utf8",
     );
-    expect(template).toContain("Query Procedure");
     expect(template).toContain("Find The Packages");
-    expect(template).toContain("Going Back To The Sources");
+    expect(template).toContain("Follow The Evidence Chain");
+    expect(template).toContain("Read The Sources");
+    expect(template).toContain("Code at a recorded commit");
     expect(template).toContain("`{{guidesRoot}}/`");
     expect(template).toContain("`{{rulesRoot}}/`");
     expect(template).toContain("context-build-inventory.json");
@@ -189,6 +190,8 @@ describe("plugin and workflow workspace guard", () => {
       "utf8",
     );
     expect(localizedTemplate).toContain("## 找到知识包");
+    expect(localizedTemplate).toContain("## 沿证据链查询");
+    expect(localizedTemplate).toContain("### 记录提交上的代码");
     expect(localizedTemplate).toContain("{{!-- 模板作者说明");
     expect(localizedTemplate).toContain("others/context/search-guide.md");
     expect(localizedTemplate).not.toContain("C4A");
