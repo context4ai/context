@@ -60,14 +60,15 @@ describe("0.6.0 project init and source ensure", () => {
       expect(gitignore).toContain("sources/**/.cache/");
       expect(existsSync(join(project, "src", "index.ts"))).toBe(true);
       expect(existsSync(join(project, "src", "package-templates", "kb", "wikis", "index.md"))).toBe(true);
-      expect(existsSync(join(project, "src", "package-templates", "kb", "skills", "knowledge-query", "SKILL.md"))).toBe(true);
+      expect(existsSync(join(project, "src", "package-templates", "kb", "skills", "context-knowledge-query", "SKILL.md"))).toBe(true);
+      expect(existsSync(join(project, "src", "package-templates", "kb", "others", "context", "search-guide.md"))).toBe(true);
       expect(existsSync(join(
         project,
         "src",
         "package-templates",
         "kb",
         "skills",
-        "knowledge-query",
+        "context-knowledge-query",
         "scripts",
         "search.mjs",
       ))).toBe(true);
@@ -80,22 +81,22 @@ describe("0.6.0 project init and source ensure", () => {
       expect(kbIndexTemplate).toContain("knowledge_count: {{knowledgeCount}}");
       expect(kbIndexTemplate).not.toContain("\ncontext:\n");
       const knowledgeQueryTemplate = await readFile(
-        join(project, "src", "package-templates", "kb", "skills", "knowledge-query", "SKILL.md"),
+        join(project, "src", "package-templates", "kb", "skills", "context-knowledge-query", "SKILL.md"),
         "utf8",
       );
-      expect(knowledgeQueryTemplate).toContain("Answer from the approved knowledge");
+      expect(knowledgeQueryTemplate).toContain("Answer from approved knowledge packages");
       expect(knowledgeQueryTemplate).toContain("Query Procedure");
-      expect(knowledgeQueryTemplate).toContain("Package Roots");
+      expect(knowledgeQueryTemplate).toContain("Find The Packages");
       expect(knowledgeQueryTemplate).toContain("Evidence Contract");
-      expect(knowledgeQueryTemplate).toContain("Route By Intent");
-      expect(knowledgeQueryTemplate).toContain("Search Fallback");
+      expect(knowledgeQueryTemplate).toContain("Going Back To The Sources");
+      expect(knowledgeQueryTemplate).toContain("## Search");
       expect(knowledgeQueryTemplate).toContain("heading");
       expect(knowledgeQueryTemplate).toContain("Treat every hit as a lead");
       expect(knowledgeQueryTemplate).toContain("Do not infer a relationship from page co-occurrence");
-      expect(knowledgeQueryTemplate).toContain("Gap: this package does not contain evidence");
+      expect(knowledgeQueryTemplate).toContain("Gap: the available packages do not contain evidence");
       expect(knowledgeQueryTemplate).toContain("Template author guidance");
       expect(knowledgeQueryTemplate).not.toContain("C4A");
-      expect(knowledgeQueryTemplate).toContain("Search only when indexes and page structure");
+      expect(knowledgeQueryTemplate).toContain("Search when indexes and page structure do not identify a useful scope");
       expect(existsSync(join(project, "sources", "repo", "index.yaml"))).toBe(true);
       expect(existsSync(join(project, ".context"))).toBe(false);
       const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
@@ -156,7 +157,7 @@ describe("0.6.0 project init and source ensure", () => {
         "package-templates",
         "kb",
         "skills",
-        "knowledge-query",
+        "context-knowledge-query",
         "SKILL.md",
       ), "utf8");
       expect(result.language).toBe("zh-CN");
@@ -171,8 +172,8 @@ describe("0.6.0 project init and source ensure", () => {
       expect(readme).toContain("这是一个项目内的 Context 工作区");
       expect(readme).toContain('TMPDIR="$PWD/.tmp/install" bun install');
       expect(readme).toContain("`.tmp/install/`");
-      expect(skill).toContain("# 知识查询");
-      expect(skill).toContain("模板作者建议（不进入分发的查询 Skill）");
+      expect(skill).toContain("# Context 知识查询");
+      expect(skill).toContain("模板作者说明（不属于发布的 Skill）");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

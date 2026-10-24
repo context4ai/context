@@ -8,6 +8,7 @@ import { dispatchProductionStage, productionCapabilitiesSchema } from "./product
 import { readProductionStage } from "./productionStageStore.js";
 import { assertProductionDeliveryReady, finishProductionDelivery } from "./productionDelivery.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { LEGACY_QUERY_SKILL, QUERY_SKILL, migrateLegacyQuerySkills } from "./packageQuerySkillMigration.js";
 import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
 import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
@@ -104,6 +105,12 @@ export interface ProjectBuildResult {
 }
 
 export type PackageBuildAgentHint = RuntimeEventPendingAgentHint | {
+  reason_code: "package-query-skill-migrated";
+  severity: "info";
+  package_name: string;
+  template_path: string;
+  message: string;
+} | {
   reason_code: "website-deployment-ready";
   severity: "info";
   package_name: string;
@@ -468,6 +475,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     });
   }
   const approved = await listApprovedKnowledge(projectRoot);
+  const querySkillMigrations = await migrateLegacyQuerySkills(projectRoot, packages);
   const templateReviews = await inspectPackageTemplateReviews(projectRoot, packages);
   const unresolvedTemplateReviews = templateReviews.filter((review) =>
     review.state === "review-required" || review.state === "invalid"
@@ -512,7 +520,13 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     }
   }
   const summaries: PackageBuildSummary[] = [];
-  const agentHints: PackageBuildAgentHint[] = [];
+  const agentHints: PackageBuildAgentHint[] = querySkillMigrations.map((migration) => ({
+    reason_code: "package-query-skill-migrated" as const,
+    severity: "info" as const,
+    package_name: migration.packageName,
+    template_path: migration.templatePath,
+    message: `Replaced the retired ${LEGACY_QUERY_SKILL} Skill with ${QUERY_SKILL} in the package template; package-specific search hints belong in others/context/search-guide.md.`,
+  }));
   for (const pkg of packages) {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);

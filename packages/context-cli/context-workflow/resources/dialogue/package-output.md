@@ -8,7 +8,7 @@ mediaType: text/markdown
 
 Explain output shapes before SDK factory names. Offer:
 
-- an Agent knowledge-base package with `AGENTS.md`, a knowledge-query Skill,
+- an Agent knowledge-base package with `AGENTS.md`, the shared context-knowledge-query Skill,
   approved OKF roots, and adaptive indexes;
 - a searchable documentation website with the approved knowledge map, source cards and local-time update timestamps;
 - one LLM text bundle for model context or RAG import.

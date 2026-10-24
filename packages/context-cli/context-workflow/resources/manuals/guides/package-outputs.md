@@ -207,8 +207,9 @@ Typical output:
 dist/<package-name>/
 ├── AGENTS.md
 ├── skills/
-│   └── knowledge-query/
+│   └── context-knowledge-query/
 │       └── SKILL.md
+├── others/context/search-guide.md
 └── wikis/
     ├── index.md
     └── ...
@@ -238,7 +239,7 @@ The package name already identifies the surrounding build folder, so the
 output does not repeat it inside each root:
 
 ```text
-skills/knowledge-query/SKILL.md
+skills/context-knowledge-query/SKILL.md
 wikis/index.md
 guides/...
 rules/...
@@ -255,8 +256,14 @@ final template directory name directly—for
 example `skills/android-query/SKILL.md`. Package-root layout never renames a
 Skill.
 
-The default `knowledge-query` Skill is a complete generic query entry. It
-carries the structure-first query discipline: start from OKF directory indexes, use
+The default `context-knowledge-query` Skill is a complete generic query entry,
+identical in every Context package. It declares `metadata.shared: "true"` and
+its Context version, so a package manager that supports shared Skills can
+install one copy for all Context packages in a project, and that copy searches
+every package it can find: the surrounding package, `--root`, packages under
+`--base`, directories in `CONTEXT_KNOWLEDGE_PACKAGES`, and packages recorded by
+the host's package manager when the distribution supports one. It carries the
+structure-first query discipline: start from OKF directory indexes, use
 `context-build-inventory.json` edge records for package-visible relationships,
 read candidate pages, cite their visible headings and relevant passages, and
 report gaps when the package does not cover a requested fact. Consumer pages
@@ -269,10 +276,21 @@ scope, or a candidate page is too large to read directly, its bundled
 bounded Markdown chunks. Search results are leads; page bodies and typed edge
 records establish what the package actually says. Package authors edit the source
 template when project-specific terminology, entry points or task workflows are
-needed. Authoring instructions should be template comments or separate guidance,
-not a final section addressed to authors in the delivered query Skill. The
-current template-review Route can accept an intentionally sufficient generic
-default under its applicable authority.
+needed: put terms, synonyms, common questions and preferred entry pages in
+`others/context/search-guide.md`, which the Skill reads first, and keep the
+shared Skill unchanged. Editing the Skill makes it package-specific; rename its
+directory and `name` so it installs separately. When a page's text does not
+settle a question, the Skill follows the page's `Sources` entries: repository
+links are read at their recorded commit through authorized host tools, document
+links open the current document, and entries without links stay unreachable
+from the package. The current template-review Route can accept an intentionally
+sufficient generic default under its applicable authority.
+
+Workspaces created before the rename keep `skills/knowledge-query/` in their
+template. `context build` replaces it with `context-knowledge-query` in the old
+Skill's language, adds `others/context/search-guide.md` when it is missing, and
+reports the replacement as an agent hint. Move any package-specific wording the
+old Skill carried into the search guide.
 
 When approved pages reference materialized resources, Context keeps their
 production copies in content-addressed `knowledge/assets/` paths and bundles
