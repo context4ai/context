@@ -105,8 +105,8 @@ export interface ProjectBuildResult {
 }
 
 export type PackageBuildAgentHint = RuntimeEventPendingAgentHint | {
-  reason_code: "package-query-skill-migrated" | "package-query-skill-customized";
-  severity: "info" | "warning";
+  reason_code: "package-query-skill-migrated";
+  severity: "info";
   package_name: string;
   template_path: string;
   message: string;
@@ -520,21 +520,13 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     }
   }
   const summaries: PackageBuildSummary[] = [];
-  const agentHints: PackageBuildAgentHint[] = querySkillMigrations.map((migration) => migration.state === "migrated"
-    ? {
-      reason_code: "package-query-skill-migrated" as const,
-      severity: "info" as const,
-      package_name: migration.packageName,
-      template_path: migration.templatePath,
-      message: `Replaced the unedited ${LEGACY_QUERY_SKILL} Skill with ${QUERY_SKILL} and added others/context/search-guide.md to the package template.`,
-    }
-    : {
-      reason_code: "package-query-skill-customized" as const,
-      severity: "warning" as const,
-      package_name: migration.packageName,
-      template_path: migration.templatePath,
-      message: `The package template keeps an edited ${LEGACY_QUERY_SKILL} Skill. The default query Skill is now ${QUERY_SKILL}: move package-specific terms and entry pages to others/context/search-guide.md and replace the old Skill, or rename it to a package-specific Skill name.`,
-    });
+  const agentHints: PackageBuildAgentHint[] = querySkillMigrations.map((migration) => ({
+    reason_code: "package-query-skill-migrated" as const,
+    severity: "info" as const,
+    package_name: migration.packageName,
+    template_path: migration.templatePath,
+    message: `Replaced the retired ${LEGACY_QUERY_SKILL} Skill with ${QUERY_SKILL} in the package template; package-specific search hints belong in others/context/search-guide.md.`,
+  }));
   for (const pkg of packages) {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);

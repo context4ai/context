@@ -281,10 +281,10 @@ from the package. The current template-review Route can accept an intentionally
 sufficient generic default under its applicable authority.
 
 Workspaces created before the rename keep `skills/knowledge-query/` in their
-template. `context build` replaces it with `context-knowledge-query` and adds
-`others/context/search-guide.md` when the old Skill is exactly a version Context
-shipped; an edited old Skill is left in place and reported as an agent hint,
-so its author can move package-specific wording into the search guide.
+template. `context build` replaces it with `context-knowledge-query` in the old
+Skill's language, adds `others/context/search-guide.md` when it is missing, and
+reports the replacement as an agent hint. Move any package-specific wording the
+old Skill carried into the search guide.
 
 When approved pages reference materialized resources, Context keeps their
 production copies in content-addressed `knowledge/assets/` paths and bundles

@@ -6,7 +6,7 @@ All notable changes to Context are documented here.
 
 - The default package query Skill is now `context-knowledge-query`, replacing `knowledge-query`. It is identical in every Context package and declares `metadata.shared` and its Context version, so a package manager can install one copy that searches every Context package available to a project. Its search script lists the packages it found (`--list`), ranks across them or within one (`--package`), and also reads directories named in `CONTEXT_KNOWLEDGE_PACKAGES`. When a page's text does not settle a question, the Skill follows the page's repository sources at their recorded commit through authorized host tools.
 - Package-specific search hints move to a new `others/context/search-guide.md` template file, so tuning one package no longer changes the shared Skill.
-- `context build` replaces a workspace's `knowledge-query` Skill with the new one when it is exactly a version Context shipped, and reports an edited one as an agent hint instead of changing it.
+- `context build` replaces a workspace template's `knowledge-query` Skill with `context-knowledge-query`, adds the search guide when it is missing, and reports the replacement as an agent hint.
 
 ## 0.7.83 - 2026-10-23
 
