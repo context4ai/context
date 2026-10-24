@@ -84,11 +84,11 @@ describe("0.6.0 project init and source ensure", () => {
         join(project, "src", "package-templates", "kb", "skills", "context-knowledge-query", "SKILL.md"),
         "utf8",
       );
-      expect(knowledgeQueryTemplate).toContain("Answer from approved knowledge packages");
-      expect(knowledgeQueryTemplate).toContain("Query Procedure");
+      expect(knowledgeQueryTemplate).toContain("follow their\nevidence chain");
+      expect(knowledgeQueryTemplate).toContain("Follow The Evidence Chain");
       expect(knowledgeQueryTemplate).toContain("Find The Packages");
-      expect(knowledgeQueryTemplate).toContain("Evidence Contract");
-      expect(knowledgeQueryTemplate).toContain("Going Back To The Sources");
+      expect(knowledgeQueryTemplate).toContain("Read The Sources");
+      expect(knowledgeQueryTemplate).toContain("Investigating code");
       expect(knowledgeQueryTemplate).toContain("## Search");
       expect(knowledgeQueryTemplate).toContain("heading");
       expect(knowledgeQueryTemplate).toContain("Treat every hit as a lead");
