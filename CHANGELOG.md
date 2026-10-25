@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.85 - 2026-10-25
+
+- Website bold and italic text now closes after CJK punctuation. CommonMark only ends `**…**` after punctuation such as `？`, `）` or `、` when whitespace or more punctuation follows, so Chinese like `**用 MCP 还是知识包？**不在…` showed the asterisks literally. The site renderer now treats a Chinese, Japanese or Korean letter on the outer side of the markers like whitespace. Delimiters with no CJK letter beside them render exactly as before, and sites built with an earlier CLI re-render on the next build.
+- The `context-knowledge-query` Skill now answers along an evidence chain: it navigates package pages, widens to linked pages and candidates, traces each claim's recorded sources, investigates code at the recorded commit along imports and calls, and stops once the remaining gaps cannot change the answer. It also covers duplicate definitions, versions, document evidence, conditional answers and reporting knowledge updates.
+
 ## 0.7.84 - 2026-10-24
 
 - The default package query Skill is now `context-knowledge-query`, replacing `knowledge-query`. It is identical in every Context package and declares `metadata.shared` and its Context version, so a package manager can install one copy that searches every Context package available to a project. Its search script lists the packages it found (`--list`), ranks across them or within one (`--package`), and also reads directories named in `CONTEXT_KNOWLEDGE_PACKAGES`. When a page's text does not settle a question, the Skill follows the page's repository sources at their recorded commit through authorized host tools.
