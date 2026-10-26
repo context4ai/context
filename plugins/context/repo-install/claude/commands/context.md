@@ -240,6 +240,23 @@ Within an active Context workflow, requests include, but are not limited to:
 | Commit workspace results | Save selected workspace files in local Git, without pushing or including unrelated changes. |
 | Restore a historical workspace version | Select a saved commit, restore only the agreed workspace scope and make its sources usable again. |
 
+### A prepared source checklist
+
+A reader may arrive with a filled checklist — a page listing the material, its
+owners and whether the knowledge depends on it — instead of describing sources
+in conversation. Read it and register from it. Never require one: material
+described in conversation is equally valid. A team that wants a starting point
+can copy [the source checklist](../resources/context/source-checklist.md).
+
+- One row is one source, and the row's note becomes the source note.
+- The dependency column decides the treatment: a row marked as a dependency is
+  registered and pinned to a commit or version, so later changes reach the pages
+  that rest on it; a first-time reference is read for this round and cited in the
+  text, not registered.
+- The owner named on a row is who to ask when a link fails or ownership is
+  unclear, instead of guessing.
+- Report rows you cannot open or are not allowed to read; never drop one silently.
+
 ### Where each request goes
 
 - **Sources, notes, sessions or changed upstream material:** read

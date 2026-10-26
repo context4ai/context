@@ -36,7 +36,12 @@ an audience enters production; do not count registration as completed research.
 1. Identify the selected project's existing `PLAN-*.md`, workspace and Git root.
    Reuse a matching plan. Inspect its current stage, permissions and pending work
    before expanding research; do not reset a live Context workflow.
-2. Read [project-planning.md](references/project-planning.md). Review the existing
+2. Ask once whether a prepared source checklist exists for this project, and take
+   its link if so: a filled checklist names each source, its owner and whether the
+   knowledge depends on it, which shortens inventory. The `context` Skill carries
+   a template under `references/source-checklist.md`. It is never required —
+   without one, continue and register material from the conversation.
+3. Read [project-planning.md](references/project-planning.md). Review the existing
    knowledge workspace and relevant approved articles before grouping new material.
    Map overlaps, gaps and relationships between documents, repositories and pages;
    distinguish reuse, revision, consolidation and new coverage in the PLAN.
@@ -47,11 +52,11 @@ an audience enters production; do not count registration as completed research.
    evidence already available; do not wait for a complete PLAN. Follow the early
    scope rules in project-planning.md, including previously confirmed choices.
    Reuse accessible local checkouts and saved research before fetching again.
-3. Create or update `PLAN-YYYYMMDD-slug.md` at that project's Git root using
+4. Create or update `PLAN-YYYYMMDD-slug.md` at that project's Git root using
    [the report template](templates/PLAN.md). Keep downloaded research under
    `.tmp/context-plans/YYYYMMDD-slug/`; the layout is a working convention,
    not a new CLI validation rule.
-4. Present the first report and complete its review before production. By default,
+5. Present the first report and complete its review before production. By default,
    obtain the user's approval; only an authorized `plan_review: delegate` override
    permits Agent review as described below.
    Resolve the reporting preference: report after all stages, or after each
