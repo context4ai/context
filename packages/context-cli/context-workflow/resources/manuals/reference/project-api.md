@@ -191,7 +191,8 @@ the same build, beside the KB directory. `<base>` removes one trailing `-kb`
 from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,
 `lang`, a deployment `base` path, an optional top-bar `titleLink`, and an
 optional `home` presentation. Navigation and language fields are `nav`, `more`,
-`socialLinks`, `locales` and `localePreferenceKey`; see
+`socialLinks`, `locales` and `localePreferenceKey`; `sourceMap: false` replaces
+the per-article source map with a plain source list; see
 [Package Outputs](../guides/package-outputs.md) and
 [Site translation](../guides/site-translation.md). `home`
 accepts `title`, `slogan`, `description`, hero `actions`, and `resources` shown

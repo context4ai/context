@@ -18,6 +18,8 @@ import { knowledgeMapSectionAnchor } from "./packageKnowledgeMap.js";
 import { markdownReaderLinks } from "./markdownLinks.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { articleProvenanceMarkdown, siteArticleSources, siteSourceLinks } from "./packageSiteSources.js";
+import { createSiteSourceMaps, siteDocumentKey, siteSectionHeadings, type SiteSourceMap, type SiteSourceMapArticle } from "./packageSiteSourceMap.js";
+import { readTranslatedArticle } from "./siteTranslation.js";
 import { siteMarkdownConfig, siteMarkdownImports, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
@@ -185,6 +187,47 @@ export function siteHomeHero(options: PackageSiteDefinition,
   };
 }
 
+/** Everything the source maps need is recorded at build time: references, registered sources,
+ * committed snapshots and notes, and translated headings. Nothing is asked of an agent. */
+async function siteSourceMaps(input: { projectRoot: string; registry: Awaited<ReturnType<typeof loadSourcesRegistry>>; repositoryRemote?: string | undefined;
+  pages: readonly SitePage[]; sourceContent: ReadonlyMap<string, ApprovedKnowledgeFile>; tags: readonly string[] }) {
+  const [primary, ...extra] = input.tags as [string, ...string[]];
+  const articles: SiteSourceMapArticle[] = [];
+  const documents = new Map<string, string>();
+  for (const page of input.pages) {
+    const file = input.sourceContent.get(page.package_path);
+    if (!file?.article) continue;
+    const titles: Record<string, string> = { [primary]: page.title };
+    const headings = new Map([[primary, siteSectionHeadings(file.content)]]);
+    for (const tag of extra) {
+      const translation = await readTranslatedArticle(input.projectRoot, tag, file);
+      if (!translation) continue;
+      titles[tag] = translation.title;
+      headings.set(tag, siteSectionHeadings(translation.body));
+    }
+    // An empty title is a section without a heading; the theme names it the article opening.
+    const sectionTitles = Object.fromEntries(file.article.sections.map(section => [section.id, Object.fromEntries(input.tags.map(tag =>
+      [tag, headings.get(tag)?.get(section.id) ?? headings.get(primary)!.get(section.id) ?? ""]))]));
+    file.article.sections.forEach(section => section.references.forEach(({ source_ref: ref, locator }) => {
+      const note = ref.startsWith("note:") ? input.registry.notes.find(entry => ref === `note:${entry.id}`) : undefined;
+      const lark = ref.startsWith("lark:") ? input.registry.larks.find(entry => ref === `lark:${entry.id}` || ref === `lark:${entry.name}`) : undefined;
+      const path = note ? note.materializedAt : lark && !lark.title ? posix.join(lark.materializedAt, locator.path) : undefined;
+      if (path && !posix.normalize(path).startsWith("../")) documents.set(siteDocumentKey(ref, locator.path), path);
+    }));
+    articles.push({ article: file.article, href: `/${page.site_path}`, titles, sectionTitles });
+  }
+  // Lark snapshots and notes are committed, so their own titles are stable across builds.
+  const titles = new Map<string, string>();
+  for (const [key, file] of documents) {
+    const content = await readFile(join(input.projectRoot, file), "utf8").catch(() => undefined);
+    const title = content && (/^title:[ \t]*["']?(.+?)["']?[ \t]*$/mu.exec(/^---\r?\n([\s\S]*?)\r?\n---/u.exec(content)?.[1] ?? "")?.[1] ??
+      /^#[ \t]+(.+?)[ \t#]*$/mu.exec(content)?.[1]);
+    if (title) titles.set(key, title.trim());
+  }
+  return createSiteSourceMaps({ articles, registry: input.registry, titles,
+    ...(input.repositoryRemote ? { repositoryRemote: input.repositoryRemote } : {}) });
+}
+
 export async function writePackageSite(input: {
   projectRoot: string; pkg: PackageDefinition; selected: readonly ApprovedKnowledgeFile[]; structure?: KnowledgeMap; siteUrl?: string;
 }) {
@@ -237,9 +280,10 @@ export async function writePackageSite(input: {
     }
     const readers = siteReaderLocales(options, pkg.name);
     const marker = createLocaleMarker();
+    const theme = await resolveSiteTheme(projectRoot, options.theme, true);
     await writeFile(join(configRoot, "theme/index.js"), siteThemeScript);
     await writeFile(join(configRoot, "theme/style.css"), siteThemeCss + siteLocaleCss(readers) +
-      siteThemeVariables(await resolveSiteTheme(projectRoot, options.theme, true)));
+      siteThemeVariables(theme));
     await writeSiteExtensions(projectRoot, temporary, options.extensions);
     const localizer = await createSiteLocalizer({ projectRoot, readers, marker, selected, byPath, resources });
     await mkdir(join(temporary, "pages"), { recursive: true });
@@ -258,8 +302,12 @@ export async function writePackageSite(input: {
       const pageContent = provenance && content.endsWith(provenance) ? content.slice(0, -provenance.length) : content;
       return siteMarkdown(pageContent, page.package_path, byPath, resources);
     };
+    const sourceMaps = options.sourceMap === false ? new Map<string, SiteSourceMap>() : await siteSourceMaps({
+      projectRoot, registry, repositoryRemote, pages: [...byPath.values()], sourceContent,
+      tags: readers.translated ? readers.tags : [readers.primary] });
     const pageFrontmatter = (page: SitePage, content: string, titles?: Record<string, string>) => {
       const original = sourceContent.get(page.package_path);
+      const sourceMap = original?.article ? sourceMaps.get(original.article.article_id) : undefined;
       const sources = siteArticleSources(original?.article, registry, repositoryRemote);
       const sourceLinks = siteSourceLinks(original?.article, registry, repositoryRemote);
       const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
@@ -267,7 +315,8 @@ export async function writePackageSite(input: {
         ? new Date(timestamp).toISOString() : null;
       return `---\ntitle: ${JSON.stringify(page.title)}\n${titles ? `contextTitles: ${JSON.stringify(titles)}\n` : ""}` +
         `contextSources: ${JSON.stringify(sources)}\n` +
-        `${Object.keys(sourceLinks).length ? `contextSourceLinks: ${JSON.stringify(sourceLinks)}\n` : ""}contextUpdated: ${JSON.stringify(updated)}\n---\n`;
+        `${Object.keys(sourceLinks).length ? `contextSourceLinks: ${JSON.stringify(sourceLinks)}\n` : ""}` +
+        `${sourceMap ? `contextSourceMap: ${JSON.stringify(sourceMap)}\n` : ""}contextUpdated: ${JSON.stringify(updated)}\n---\n`;
     };
     for (const page of byPath.values()) {
       const content = await readFile(join(root, page.package_path), "utf8");

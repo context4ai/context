@@ -121,7 +121,18 @@ zoom, full-screen and source controls. Controls appear on hover or keyboard focu
 (and remain visible on touch devices). Layout and source/copy actions are on the
 left, sizing actions on the right. Source view replaces the diagram. Flowcharts default to ELK and can switch to Dagre without changing the article. Offline Review reports use the same
 viewer and include its resources only when a candidate contains Mermaid.
-Article provenance initially shows ten sources; Show more reveals the full list.
+Each article ends with its sources as a map: the article's sections in the
+middle and the documents they cite around them, grouped by where each document
+comes from (a repository directory, Lark documents or notes). Sections are purple;
+sources are coloured by type: repository files green, Skills magenta, Lark
+documents blue and notes orange. Hovering a section
+or document highlights what it is linked to; clicking a document opens the cited
+lines, and clicking a section scrolls to it. A List view shows the same documents
+by group with their cited line ranges, and narrow screens show only the list.
+Below the map, other articles citing the same documents are linked. The map is
+computed while building from the recorded references, so it needs no agent
+step; set `site.sourceMap: false` to show the plain source list instead, which
+initially shows ten sources; Show more reveals the full list.
 Invalid diagrams and diagrams with embedded image/HTML resources retain their
 source with a rendering notice instead of blocking publication. Code samples and raw HTML are
 displayed as content, not executed as Vue components or scripts.

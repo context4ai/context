@@ -83,6 +83,11 @@ export const packageSiteSchema = z.object({
   /** Items appended to the More menu after LLM Docs and Changelog. */
   more: z.array(packageSiteMoreItemSchema).optional(),
   socialLinks: z.array(packageSiteSocialLinkSchema).optional(),
+  /**
+   * Show each article's sources as a map (sections, the documents they cite, grouped by source)
+   * with a list view to switch to. On by default; `false` keeps the plain source list.
+   */
+  sourceMap: z.boolean().optional(),
   /** Shared localStorage key so sites on one origin keep the same reader language. */
   localePreferenceKey: z.string().regex(/^[a-zA-Z0-9:._-]+$/u).optional(),
   /** Trusted presentation code, relative to the workspace; never captured knowledge. */

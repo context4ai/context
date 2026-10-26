@@ -167,7 +167,12 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(article).not.toContain("<script>unsafe()");
     expect(article).not.toContain("unsafe-script");
     expect(article).toContain("language-mermaid");
-    expect(article).toContain('class="context-sources"');
+    // Recorded references render as the source map by default, linking sections, cited lines and articles citing the same file.
+    expect(article).toContain('class="context-sources context-source-map"');
+    expect(article).not.toContain('class="context-sources"');
+    expect(article).toContain('id="context-source-line-1"');
+    expect(article).toContain('href="#section-source"');
+    expect(article).toMatch(/class="context-source-others"[\s\S]*?href="\/docs\/pages\/[0-9a-f]+\.html"/u);
     expect(article).toContain("https://github.com/example/components/blob/abc123/packages/ui/src/entry.ts#L1-L1");
     const sourceLinks = [...article.matchAll(/<a class="context-source-link" href="([^"]+)"[^>]*><code>([^<]+)<\/code><\/a>/gu)].map(match => [match[2], match[1]]);
     expect(sourceLinks).toEqual([
@@ -220,6 +225,25 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);
 
+
+test("site.sourceMap false keeps the plain source list", async () => {
+  const root = await mkdtemp(join(tmpdir(), "context-site-"));
+  try {
+    const plain = kbPackage({ name: "sample", template: "src/templates", site: { title: "Knowledge", sourceMap: false } });
+    const files = selected.slice(0, 1).map(file => ({ ...file, article: { ...file.article, sections: [{ id: "entry", references: [{
+      source_ref: "repo:20260910/sample", locator: { path: "src/entry.ts", start_line: 2, end_line: 4 }, content_digest: "sha256:" + "a".repeat(64) }] }] } }));
+    const page = createSiteNavigation(plain, files).pages[0]!;
+    await mkdir(join(root, plain.outDir, page.package_path, ".."), { recursive: true });
+    await writeFile(join(root, plain.outDir, page.package_path), "# Start\n\n## Entry\n");
+    await mkdir(join(root, "sources/repo"), { recursive: true });
+    await writeFile(join(root, "sources/repo/index.yaml"), 'sources:\n  - name: "20260910"\n    modules:\n      - name: sample\n        git:\n          remote: https://github.com/example/components.git\n          ref: abc123\n');
+    await writePackageSite({ projectRoot: root, pkg: plain, selected: files });
+    const html = await readFile(join(root, packageSiteOutputDir(plain), page.site_path), "utf8");
+    expect(html).toContain('class="context-sources"');
+    expect(html).not.toContain("context-source-map");
+    expect(html).toContain("https://github.com/example/components/blob/abc123/src/entry.ts#L2-L4");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 120000);
 
 test("deployment roots retain subpaths and reject non-site URLs without network access", async () => {
   expect(normalizeSiteUrl("https://example.com/docs")).toBe("https://example.com/docs/");

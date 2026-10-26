@@ -5,6 +5,9 @@ test("website is opt-in and deployment paths are constrained", () => {
   const base = { name: "sample", template: "src/templates" };
   expect(kbPackage(base).site).toBeUndefined();
   expect(kbPackage({ ...base, site: {} }).site).toEqual({ base: "/", lang: "en-US" });
+  // The source map is on unless a site turns it off; the default adds nothing to the parsed config.
+  expect(kbPackage({ ...base, site: { sourceMap: false } }).site?.sourceMap).toBe(false);
+  expect(() => kbPackage({ ...base, site: { sourceMap: "off" as never } })).toThrow();
   expect(kbPackage({ ...base, site: { base: "/docs/" } }).site?.base).toBe("/docs/");
   expect(kbPackage({ ...base, site: { home: {
     title: "Team knowledge", slogan: "Find the next answer", actions: [{ text: "Browse", link: "/guide/" }],

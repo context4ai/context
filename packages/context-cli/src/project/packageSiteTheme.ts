@@ -361,12 +361,202 @@ export default {
         return part('year') + '-' + part('month') + '-' + part('day') + ' ' +
           part('hour') + ':' + part('minute') + ':' + part('second') + ' ' + part('timeZoneName');
       });
+      // The source map: sections in the middle, cited documents in flat blobs by where they come from.
+      // Layout is computed at build time; the page only draws it and follows the pointer.
+      const sourceView = ref('graph');
+      const sourceFocus = ref(null);
+      const allOthers = ref(false);
+      onMounted(() => { try { if (localStorage.getItem('context-source-view') === 'list') sourceView.value = 'list'; } catch {} });
+      const setSourceView = view => {
+        sourceView.value = view; sourceFocus.value = null;
+        try { localStorage.setItem('context-source-view', view); } catch {}
+      };
+      // One element per reader language unless every language reads the same.
+      const localized = (element, values, props) => values.every(value => value === values[0]) ? [h(element, props, values[0])]
+        : readers.value.tags.map((tag, index) => h(element, { ...props, 'data-context-locales': tag, lang: tag }, values[index]));
+      const mapValues = (text, fallback) => readers.value.tags.map(tag => {
+        if (typeof text === 'string') return text;
+        if (text && !(tag in text) && 'zh' in text && 'en' in text) return isChinese(tag) ? text.zh : text.en;
+        return (text && (text[tag] || text[readers.value.primary])) || fallback(tag);
+      });
+      const sectionValues = section => mapValues(section.titles, tag => isChinese(tag) ? '开头' : 'Opening');
+      // Wide (CJK) characters count twice, so labels in any language take about the same room.
+      const wideChar = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/;
+      const labelWidth = text => [...text].reduce((sum, char) => sum + (wideChar.test(char) ? 2 : 1), 0);
+      const cut = (value, size) => {
+        let room = size, text = '';
+        for (const char of value) { room -= wideChar.test(char) ? 2 : 1; if (room < 0) return text.trimEnd() + '…'; text += char; }
+        return text;
+      };
+      // At most two lines; words stay whole and break after - / _, wide characters break anywhere, the rest is cut.
+      const wrap = (value, size) => {
+        const tokens = value.match(/\s+|[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]|[^\s\/_\-\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]*[\/_-]+|[^\s\/_\-\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]+/g) || [];
+        const lines = [];
+        let line = '';
+        for (let index = 0; index < tokens.length; index++) {
+          const token = tokens[index];
+          if (!line.trim() && !token.trim()) continue;
+          // Closing punctuation never starts a line.
+          if (line && /^[、。，；：！？）」』》〉,.;:!?)\]]$/.test(token)) { line += token; continue; }
+          if (!line || labelWidth(line + token) <= size) { line += token; continue; }
+          if (lines.length) { line += tokens.slice(index).join(''); break; }
+          lines.push(line); line = token.trim() ? token : '';
+        }
+        return [...lines, line].map(text => cut(text.trim(), size)).filter(Boolean);
+      };
+      // A node label stays on one line when it fits the free space on its row (very long names
+      // still wrap), slides sideways into that space as needed, and otherwise wraps to two lines.
+      const placeLabel = (value, node, wrapAt) => {
+        const units = labelWidth(value), room = (node.rl ?? 60) + (node.rr ?? 60) - 6;
+        // Two lines are balanced, so a short tail never sits alone on the second line.
+        const size = units * 6.2 <= room && units <= wrapAt * 1.6 ? units
+          : Math.max(6, Math.min(Math.floor(room / 6.2), Math.ceil(units / 2) + 1, 20));
+        const width = Math.min(units, size) * 6.2;
+        const centre = width <= room ? Math.max(-(node.rl ?? 60) + 3 + width / 2, Math.min((node.rr ?? 60) - 3 - width / 2, 0)) : 0;
+        return { size, dx: Math.max(-width / 2 + 6, Math.min(width / 2 - 6, centre)) };
+      };
+      const svgLabel = (values, node, wrapAt, props) => {
+        const render = value => {
+          const { size, dx } = placeLabel(value, node, wrapAt);
+          return wrap(value, size).map((line, index) => h('tspan', { x: dx, dy: index ? 13 : 0 }, line));
+        };
+        return values.every(value => value === values[0]) ? [h('text', props, render(values[0]))]
+          : readers.value.tags.map((tag, index) => h('text', { ...props, 'data-context-locales': tag, lang: tag }, render(values[index])));
+      };
+      const sourceMapSection = map => {
+        const focus = sourceFocus.value;
+        const links = [];
+        map.docs.forEach((doc, d) => [...new Set(doc.refs.map(ref => ref.s))].forEach(s => links.push([s, d])));
+        const touches = link => focus && (focus.kind === 's' ? link[0] === focus.index : link[1] === focus.index);
+        const near = focus && new Set([focus.kind + focus.index, ...links.filter(touches).map(link => focus.kind === 's' ? 'd' + link[1] : 's' + link[0])]);
+        const dim = key => near && !near.has(key) ? ' is-dim' : '';
+        const refCount = map.docs.reduce((sum, doc) => sum + doc.refs.length, 0);
+        const sectionsOf = doc => [...new Set(doc.refs.map(ref => ref.s))];
+        const regions = doc => [...new Map(doc.refs.map(ref => ['L' + ref.lines[0] + '–L' + ref.lines[1], ref.href])).entries()];
+        const docHref = doc => doc.refs.find(ref => ref.href)?.href;
+        const external = { target: '_blank', rel: 'noopener noreferrer' };
+        const sectionHref = section => '#section-' + encodeURIComponent(section.id);
+        const point = event => {
+          const box = event.currentTarget.closest('.context-source-graph').getBoundingClientRect();
+          return [event.clientX - box.left, event.clientY - box.top, box.width];
+        };
+        const track = (kind, index) => ({
+          onMouseenter: event => { sourceFocus.value = { kind, index, at: point(event) }; },
+          onMousemove: event => { sourceFocus.value = { kind, index, at: point(event) }; },
+          onMouseleave: () => { sourceFocus.value = null; },
+        });
+        const colorOf = area => area < 0 ? '#7c5cff' : map.areas[area].color;
+        // Blur then sharpen alpha: nearby circles melt into one blob with a flat fill. A slightly
+        // larger copy in the area colour underneath, half transparent, reads as a soft outline.
+        // Filter colours resolve where the filter is defined, so each colour has its own filter.
+        const clusters = [-1, ...map.areas.map((_, index) => index)];
+        const goo = (id, color) => h('filter', { id, x: '-30%', y: '-30%', width: '160%', height: '160%' }, [
+          h('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: '12', result: 'blur' }),
+          h('feColorMatrix', { in: 'blur', mode: 'matrix', values: '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 26 -11', result: 'shape' }),
+          h('feFlood', { style: { floodColor: color }, result: 'color' }),
+          h('feComposite', { in: 'color', in2: 'shape', operator: 'in' }),
+        ]);
+        const blob = (circles, area) => [
+          h('g', { filter: 'url(#context-source-line' + area + ')', opacity: '.55' }, circles.map(c => h('circle', { cx: c[0], cy: c[1], r: c[2] + 1.4 }))),
+          h('g', { filter: 'url(#context-source-blob' + area + ')' }, circles.map(c => h('circle', { cx: c[0], cy: c[1], r: c[2] }))),
+        ];
+        const areaLabel = (cluster, area) => localized('text', mapValues(area < 0 ? { zh: '本文段落', en: 'This article' } : map.areas[area].label, () => '')
+          .map(value => cut(value, 36)), { x: cluster.lx, y: cluster.ly, transform: 'rotate(' + (cluster.la || 0) + ' ' + cluster.lx + ' ' + cluster.ly + ')',
+          'text-anchor': 'middle', class: 'context-source-area-label', style: { fill: colorOf(area) } });
+        const curve = link => {
+          const s = map.sections[link[0]], d = map.docs[link[1]];
+          return 'M' + s.x + ',' + s.y + 'Q' + (s.x + d.x) / 2 + ',' + ((s.y + d.y) / 2 - (d.x - s.x) * .08) + ' ' + d.x + ',' + d.y;
+        };
+        const tip = () => {
+          if (!focus) return null;
+          const [x, y, width] = focus.at;
+          const style = { left: Math.max(8, Math.min(x + 14, width - 300)) + 'px', top: Math.max(8, y - 10) + 'px' };
+          if (focus.kind === 's') {
+            const section = map.sections[focus.index];
+            const docs = links.filter(link => link[0] === focus.index).map(link => map.docs[link[1]].title);
+            return h('div', { class: 'context-source-tip', style }, [h('b', null, localized('span', sectionValues(section))),
+              docs.length ? [both('依据 ' + docs.length + ' 份材料：', 'Based on ' + docs.length + (docs.length === 1 ? ' document: ' : ' documents: ')), h('br'), docs.join(isChinese(locale.value) ? '、' : ', ')]
+                : both('没有记录来源', 'No recorded sources')]);
+          }
+          const doc = map.docs[focus.index];
+          const others = map.others.filter(other => other.docs.includes(focus.index)).length;
+          return h('div', { class: 'context-source-tip', style }, [h('b', null, doc.title),
+            h('span', { class: 'context-source-tip-area' }, localized('span', mapValues(map.areas[doc.area].label, () => ''))), h('br'),
+            regions(doc).map(region => region[0]).join(', '), h('br'),
+            both('用于：', 'Used in: '), ...sectionsOf(doc).flatMap((s, index) => [index ? ', ' : '', ...localized('span', sectionValues(map.sections[s]))]),
+            others ? [h('br'), h('span', { class: 'context-source-tip-area' }, both('另有 ' + others + ' 篇文章也引用它', others + (others === 1 ? ' other article cites it' : ' other articles cite it')))] : null]);
+        };
+        const graph = h('div', { class: 'context-source-graph' }, [
+          h('svg', { viewBox: '0 0 ' + map.w + ' ' + map.h, role: 'img', 'aria-label': chinese.value ? '来源图示' : 'Source map' }, [
+            h('defs', null, clusters.flatMap(area => [goo('context-source-line' + area, colorOf(area)),
+              goo('context-source-blob' + area, 'color-mix(in srgb, ' + colorOf(area) + ' 12%, var(--vp-c-bg))')])),
+            h('g', { class: 'context-source-blobs' }, [...blob(map.sectionArea.blobs, -1), ...map.areas.flatMap((area, index) => blob(area.blobs, index))]),
+            h('g', null, links.map(link => h('path', { class: 'context-source-edge' + (focus ? touches(link) ? ' is-active' : ' is-dim' : ''),
+              d: curve(link) }))),
+            h('g', null, [
+              ...map.sections.map((section, index) => h('a', { href: sectionHref(section), class: 'context-source-node' + dim('s' + index),
+                transform: 'translate(' + section.x + ',' + section.y + ')', ...track('s', index) }, [
+                h('circle', { r: 7.5, style: { fill: colorOf(-1) } }),
+                ...svgLabel(sectionValues(section), section, 12, { y: 21.5, 'text-anchor': 'middle', class: 'context-source-label is-section' }),
+              ])),
+              ...map.docs.map((doc, index) => h(docHref(doc) ? 'a' : 'g', { ...(docHref(doc) ? { href: docHref(doc), ...external } : {}),
+                class: 'context-source-node' + dim('d' + index), transform: 'translate(' + doc.x + ',' + doc.y + ')', ...track('d', index) }, [
+                h('circle', { r: doc.r, style: { fill: colorOf(doc.area) } }),
+                ...svgLabel([doc.title], doc, 18, { y: doc.r + 14, 'text-anchor': 'middle', class: 'context-source-label' }),
+              ])),
+            ]),
+            h('g', null, [...areaLabel(map.sectionArea, -1), ...map.areas.flatMap((area, index) => areaLabel(area, index))]),
+          ]),
+          tip(),
+          h('div', { class: 'context-source-hint' }, both('悬停查看对应关系，点击来源打开引用的原文位置', 'Hover to trace sections and sources; click a source to open the cited lines')),
+        ]);
+        const list = h('div', { class: 'context-source-list' }, map.areas.map((area, a) => {
+          const docs = map.docs.map((doc, d) => [doc, d]).filter(([doc]) => doc.area === a);
+          return h('div', { class: 'context-source-group' }, [
+            h('div', { class: 'context-source-group-title' }, [h('i', { style: { background: area.color } }), ...localized('span', mapValues(area.label, () => '')),
+              h('small', null, both(docs.length + ' 份材料', docs.length + (docs.length === 1 ? ' document' : ' documents')))]),
+            ...docs.map(([doc]) => {
+              const lines = regions(doc);
+              return h('div', { class: 'context-source-item' }, [
+                // Title and path share the first line, cited regions sit at its end, sections below.
+                h('div', { class: 'context-source-item-head' }, [
+                  docHref(doc) ? h('a', { class: 'context-source-item-title', href: docHref(doc), ...external }, doc.title) : h('span', { class: 'context-source-item-title' }, doc.title),
+                  h('span', { class: 'context-source-path', title: doc.path }, doc.path),
+                ]),
+                h('div', { class: 'context-source-regions' }, [...lines.slice(0, 3).map(([label, href]) => href ? h('a', { href, ...external }, label) : h('span', null, label)),
+                  lines.length > 3 ? h('em', { title: lines.slice(3).map(line => line[0]).join(', ') }, '+' + (lines.length - 3)) : null]),
+                h('div', { class: 'context-source-uses' }, sectionsOf(doc).map(s => h('a', { href: sectionHref(map.sections[s]) }, localized('span', sectionValues(map.sections[s]))))),
+              ]);
+            }),
+          ]);
+        }));
+        const others = map.others.length;
+        return h('section', { class: 'context-sources context-source-map' }, [
+          h('div', { class: 'context-sources-header' }, [
+            h('div', null, [h('div', { class: 'context-sources-title' }, both('来源与溯源', 'Sources')),
+              h('div', { class: 'context-source-meta' }, both(map.sections.length + ' 个段落 · 引用 ' + map.docs.length + ' 份材料 · 来自 ' + map.areas.length + ' 处来源 · ' + refCount + ' 处引用',
+                map.sections.length + ' sections · ' + map.docs.length + ' documents · ' + map.areas.length + ' sources · ' + refCount + ' citations'))]),
+            h('div', { class: 'context-source-switch', role: 'tablist' }, [['graph', '图示', 'Map'], ['list', '列表', 'List']].map(([view, zh, en]) =>
+              h('button', { type: 'button', role: 'tab', 'aria-selected': String(sourceView.value === view), class: sourceView.value === view ? 'is-active' : '',
+                onClick: () => setSourceView(view) }, both(zh, en)))),
+          ]),
+          h('div', { class: 'context-source-card' + (sourceView.value === 'list' ? ' is-list' : '') }, [graph, list]),
+          others ? h('div', { class: 'context-source-others' }, [
+            h('span', null, both('另有 ' + others + ' 篇文章引用了相同的材料：', others + (others === 1 ? ' other article cites the same material:' : ' other articles cite the same material:'))),
+            ...(allOthers.value ? map.others : map.others.slice(0, 6)).map(other => h('a', { href: data.site.value.base + other.href.slice(1) },
+              localized('span', mapValues(other.titles, () => '')))),
+            others > 6 && !allOthers.value ? h('button', { type: 'button', onClick: () => { allOthers.value = true; } }, both('查看全部', 'Show all')) : null,
+          ]) : null,
+        ]);
+      };
       const sitePath = () => {
         const base = data.site.value.base;
         return route.path.startsWith(base) ? '/' + route.path.slice(base.length) : route.path;
       };
       watch(() => route.path, () => {
         allSources.value = false;
+        allOthers.value = false;
+        sourceFocus.value = null;
         const path = sitePath();
         const direct = sections.value.find(section => section.href === path);
         const current = sections.value.find(section => section.key === selected.value);
@@ -445,8 +635,9 @@ export default {
         ]),
         'doc-footer-before': () => {
           const sources = data.frontmatter.value.contextSources || [];
+          const sourceMap = data.frontmatter.value.contextSourceMap;
           return h('div', { class: 'context-provenance' }, [
-            sources.length ? h('section', { class: 'context-sources' }, [
+            sourceMap ? sourceMapSection(sourceMap) : sources.length ? h('section', { class: 'context-sources' }, [
               h('div', { class: 'context-sources-header' }, [
                 h('div', { class: 'context-sources-title' }, both('来源与溯源', 'Sources')),
               ]),
@@ -753,6 +944,57 @@ ${readerContentStyles(".vp-doc")}
 .context-sources li + li { margin-top: 6px; }
 .context-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .context-sources a:hover { color: var(--vp-c-brand-1); border-color: currentColor; }
+/* Map links are chips and labels; hover changes their colour only. */
+.context-source-map a:hover { border-color: transparent; }
+.context-source-map { padding: 18px 20px 16px; }
+.context-source-map .context-sources-header { align-items: center; margin-bottom: 12px; }
+.context-source-map .context-sources-title { color: var(--vp-c-text-1); font-size: 14px; }
+.context-source-meta { margin-top: 2px; color: var(--vp-c-text-2); font-size: 12px; }
+.context-source-switch { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--vp-c-default-soft); }
+.context-source-switch button { padding: 2px 13px; border-radius: 7px; color: var(--vp-c-text-2); font-size: 12.5px; line-height: 1.8; cursor: pointer; }
+.context-source-switch button.is-active { background: var(--vp-c-bg); color: var(--vp-c-text-1); box-shadow: 0 0 0 1px var(--vp-c-divider); }
+.context-source-card { overflow: hidden; border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg); }
+.context-source-graph { position: relative; }
+.context-source-graph svg { display: block; width: 100%; height: auto; }
+.context-source-card.is-list .context-source-graph, .context-source-card:not(.is-list) .context-source-list { display: none; }
+.context-source-blobs { pointer-events: none; }
+/* Neutral lines and labels; colour belongs to the blobs and nodes. */
+.context-source-edge { fill: none; stroke: color-mix(in srgb, var(--vp-c-text-1) 17%, var(--vp-c-bg)); stroke-width: 1; transition: opacity .12s; }
+.context-source-edge.is-active { stroke: color-mix(in srgb, #7c5cff 60%, var(--vp-c-bg)); stroke-width: 1.6; }
+.context-source-node { cursor: pointer; transition: opacity .12s; }
+.context-source-node circle { stroke: var(--vp-c-bg); stroke-width: 1.5; }
+.context-source-map a.context-source-node, .context-source-map a.context-source-node:hover { border: 0; }
+.context-source-edge.is-dim, .context-source-node.is-dim { opacity: .14; }
+.context-source-label { fill: color-mix(in srgb, var(--vp-c-text-1) 62%, var(--vp-c-bg)); font-size: 11.5px; pointer-events: none; }
+.context-source-area-label { font-size: 12px; font-weight: 600; pointer-events: none; }
+.context-source-hint { margin-top: -4px; padding: 0 14px 10px; color: var(--vp-c-text-3); font-size: 11.5px; }
+.context-source-tip { position: absolute; z-index: 2; min-width: 200px; max-width: 300px; padding: 8px 12px; border: 1px solid var(--vp-c-divider); border-radius: 10px;
+  background: var(--vp-c-bg); color: var(--vp-c-text-1); font-size: 12px; line-height: 1.6; pointer-events: none; }
+.context-source-tip b { display: block; margin-bottom: 2px; font-size: 12.5px; }
+.context-source-tip-area { color: var(--vp-c-text-2); }
+.context-source-list { padding: 4px 18px 14px; }
+.context-source-group { padding: 12px 0 4px; border-bottom: 1px solid var(--vp-c-divider); }
+.context-source-group:last-child { border-bottom: 0; }
+.context-source-group-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: var(--vp-c-text-1); font-size: 13px; font-weight: 600; }
+.context-source-group-title i { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.context-source-group-title small { color: var(--vp-c-text-3); font-size: 12px; font-weight: 400; }
+.context-source-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 14px; padding: 6px 0 6px 17px; }
+.context-source-item-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.context-source-map .context-source-item-title { flex: none; max-width: 60%; overflow: hidden; color: var(--vp-c-text-1); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.context-source-regions { display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 4px; grid-row: 1; grid-column: 2; white-space: nowrap; }
+.context-source-map .context-source-regions a, .context-source-regions span { padding: 0 7px; border: 0; border-radius: 6px; background: var(--vp-c-default-soft);
+  color: var(--vp-c-text-2); font-family: var(--vp-font-family-mono); font-size: 11px; }
+.context-source-regions em { padding: 0 4px; color: var(--vp-c-text-3); font-style: normal; font-size: 11px; }
+.context-source-path { min-width: 0; overflow: hidden; color: var(--vp-c-text-3); font-family: var(--vp-font-family-mono); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.context-source-uses { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / 3; }
+.context-source-map .context-source-uses a { padding: 0 6px; border: 0; border-radius: 6px; background: color-mix(in srgb, #7c5cff 10%, var(--vp-c-bg)); color: color-mix(in srgb, #7c5cff 85%, var(--vp-c-text-1)); font-size: 11.5px; }
+.context-source-others { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 12px; font-size: 12px; }
+.context-source-map .context-source-others a { padding: 0 9px; border: 1px solid var(--vp-c-divider); border-radius: 999px; }
+.context-source-others button { color: var(--vp-c-brand-1); font-size: 12px; cursor: pointer; }
+@media (max-width: 640px) {
+  .context-source-switch, .context-source-card .context-source-graph { display: none !important; }
+  .context-source-card .context-source-list { display: block !important; }
+}
 .vp-doc a.context-source-link { font-weight: inherit; border-bottom: 0; }
 .vp-doc a.context-source-link::before { content: ""; display: inline-block; width: .85em; height: .85em; margin-right: .25em; vertical-align: -.1em; background: currentColor; opacity: .55; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat; transition: opacity .15s; }
 .vp-doc a.context-source-link > code { border-bottom: 1px dotted color-mix(in srgb, var(--vp-c-text-1) 55%, transparent); transition: color .15s, border-color .15s; }
