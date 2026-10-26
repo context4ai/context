@@ -1,4 +1,4 @@
-import { parseRepoContentRef, type ArticleStructureEntry, type SourcesRegistry } from "@c4a/context";
+import { parseRepoContentRef, type ArticleSourceReference, type ArticleStructureEntry, type SourcesRegistry } from "@c4a/context";
 import { repoContentWebUrl } from "./repoContentPages.js";
 
 export interface SiteSource { label: string; href?: string }
@@ -24,40 +24,47 @@ function repoUrl(remote: string): string | undefined {
 }
 const encodedPath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
+/** Where one recorded reference points: its list label, its link, and the registered source it belongs to. */
+export interface SiteReferenceSource extends SiteSource {
+  kind: "repo" | "lark" | "note" | "other";
+  /** Repository module, local repository id, Lark title, note id or the raw reference. */
+  owner: string;
+}
+export function siteReferenceSource(reference: ArticleSourceReference, registry: SourcesRegistry, repositoryRemote?: string): SiteReferenceSource {
+  const ref = reference.source_ref;
+  const locator = reference.locator;
+  const region = `L${locator.start_line}–L${locator.end_line}`;
+  const local = parseRepoContentRef(ref);
+  if (local) {
+    const url = !local.worktree ? repoContentWebUrl(repositoryRemote, local.commit, locator.path) : undefined;
+    return { label: `${local.id} · ${locator.path} ${region} · ${local.commit?.slice(0, 7) ?? "unknown revision"}${local.worktree ? " + worktree" : ""}`,
+      ...(url ? { href: `${url}#L${locator.start_line}-L${locator.end_line}` } : {}), kind: "repo", owner: local.id };
+  }
+  const repo = registry.repos.find(entry => ref === `repo:${entry.id}` || ref === `repo:${entry.name}`);
+  if (repo) {
+    const base = repoUrl(repo.remote);
+    const path = [repo.subpath ?? "", locator.path].filter(Boolean).join("/");
+    const safe = !path.startsWith("/") && !path.split("/").some(part => part === ".." || part === ".");
+    const href = base && safe
+      ? `${base}/blob/${encodeURIComponent(repo.ref)}/${encodedPath(path)}#L${locator.start_line}-L${locator.end_line}`
+      : undefined;
+    const revision = /^[a-f0-9]{7,64}$/iu.test(repo.ref) ? repo.ref.slice(0, 7) : repo.ref;
+    return { label: `${repo.module}/${locator.path} ${region} · ${revision}`, ...(href ? { href } : {}), kind: "repo", owner: repo.module };
+  }
+  const doc = registry.larks.find(entry => ref === `lark:${entry.id}` || ref === `lark:${entry.name}`);
+  if (doc) {
+    const href = webUrl(doc.url);
+    return { label: `${doc.title ?? doc.name} · ${locator.path} ${region}`, ...(href ? { href } : {}), kind: "lark", owner: doc.title ?? doc.name };
+  }
+  return { label: `${ref} · ${locator.path} ${region}`, kind: ref.startsWith("note:") ? "note" : "other", owner: ref };
+}
+
 /** Project recorded provenance only; do not infer source files from prose or titles. */
 export function siteArticleSources(article: ArticleStructureEntry | undefined, registry: SourcesRegistry, repositoryRemote?: string): SiteSource[] {
-  const sources: SiteSource[] = [];
-  for (const reference of article?.sections.flatMap(section => section.references) ?? []) {
-    const ref = reference.source_ref;
-    const locator = reference.locator;
-    const region = `L${locator.start_line}–L${locator.end_line}`;
-    const local = parseRepoContentRef(ref);
-    if (local) {
-      const url = !local.worktree ? repoContentWebUrl(repositoryRemote, local.commit, locator.path) : undefined;
-      sources.push({ label: `${local.id} · ${locator.path} ${region} · ${local.commit?.slice(0, 7) ?? "unknown revision"}${local.worktree ? " + worktree" : ""}`,
-        ...(url ? { href: `${url}#L${locator.start_line}-L${locator.end_line}` } : {}) });
-      continue;
-    }
-    const repo = registry.repos.find(entry => ref === `repo:${entry.id}` || ref === `repo:${entry.name}`);
-    if (repo) {
-      const base = repoUrl(repo.remote);
-      const path = [repo.subpath ?? "", locator.path].filter(Boolean).join("/");
-      const safe = !path.startsWith("/") && !path.split("/").some(part => part === ".." || part === ".");
-      const href = base && safe
-        ? `${base}/blob/${encodeURIComponent(repo.ref)}/${encodedPath(path)}#L${locator.start_line}-L${locator.end_line}`
-        : undefined;
-      const revision = /^[a-f0-9]{7,64}$/iu.test(repo.ref) ? repo.ref.slice(0, 7) : repo.ref;
-      sources.push({ label: `${repo.module}/${locator.path} ${region} · ${revision}`, ...(href ? { href } : {}) });
-      continue;
-    }
-    const doc = registry.larks.find(entry => ref === `lark:${entry.id}` || ref === `lark:${entry.name}`);
-    if (doc) {
-      const href = webUrl(doc.url);
-      sources.push({ label: `${doc.title ?? doc.name} · ${locator.path} ${region}`, ...(href ? { href } : {}) });
-      continue;
-    }
-    sources.push({ label: `${ref} · ${locator.path} ${region}` });
-  }
+  const sources = (article?.sections.flatMap(section => section.references) ?? []).map(reference => {
+    const { label, href } = siteReferenceSource(reference, registry, repositoryRemote);
+    return { label, ...(href ? { href } : {}) };
+  });
   return [...new Map(sources.map(source => [JSON.stringify(source), source])).values()];
 }
 
