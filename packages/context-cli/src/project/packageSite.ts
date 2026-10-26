@@ -18,7 +18,7 @@ import { knowledgeMapSectionAnchor } from "./packageKnowledgeMap.js";
 import { markdownReaderLinks } from "./markdownLinks.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { articleProvenanceMarkdown, siteArticleSources, siteSourceLinks } from "./packageSiteSources.js";
-import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
+import { siteMarkdownConfig, siteMarkdownImports, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
 import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
@@ -31,7 +31,7 @@ import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, res
 // knowledge and configuration are unchanged, because page and navigation
 // rendering live in the CLI itself.
 export const PACKAGE_SITE_VERSION = `vitepress-site-v50-light-shared-preferences:${createHash("sha256")
-  .update(JSON.stringify([readPackageVersion(), siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript,
+  .update(JSON.stringify([readPackageVersion(), siteThemeVariables.toString(), siteMarkdownImports(), siteMarkdownConfig, siteThemeCss, siteThemeScript,
     siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -230,7 +230,8 @@ export async function writePackageSite(input: {
     const vueRequire = createRequire(join(vitepressRoot, "package.json"));
     for (const [name, path] of [["vitepress", vitepressRoot], ["vue", dirname(vueRequire.resolve("vue/package.json"))],
       ["@mermaid-js/layout-elk", dirname(require.resolve("@mermaid-js/layout-elk/package.json"))],
-      ["mermaid", dirname(require.resolve("mermaid/package.json"))]]) {
+      ["mermaid", dirname(require.resolve("mermaid/package.json"))],
+      ["markdown-it-cjk-friendly", dirname(require.resolve("markdown-it-cjk-friendly/package.json"))]]) {
       await mkdir(dirname(join(temporary, "node_modules", name!)), { recursive: true });
       await symlink(path!, join(temporary, "node_modules", name!), "dir");
     }
@@ -312,7 +313,7 @@ export async function writePackageSite(input: {
         ...(options.extensions?.slots?.brand ? { siteTitle: false } : {}),
         contextLocales: { primary: readers.primary, tags: readers.tags, labels: readers.labels, titles: readers.titles, preferenceKey: readers.preferenceKey },
       } };
-    await writeFile(join(configRoot, "config.mjs"), `const contextLocaleMarker = ${JSON.stringify(readers.translated ? marker : null)};\n` +
+    await writeFile(join(configRoot, "config.mjs"), `${siteMarkdownImports()}const contextLocaleMarker = ${JSON.stringify(readers.translated ? marker : null)};\n` +
       `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} },\n` +
       `  transformHtml: html => html.replace(/<script id="check-dark-mode">[\\s\\S]*?<\\/script>/u, "") };\n`);
     const menu = (lines: string[], entries: ProjectedKnowledgeMapEntry[], level: number, tag: string) => entries.forEach(entry => {

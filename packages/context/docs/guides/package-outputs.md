@@ -272,7 +272,9 @@ records establish what the package actually says. Package authors edit the sourc
 template when project-specific terminology, entry points or task workflows are
 needed: put terms, synonyms, common questions and preferred entry pages in
 `others/context/search-guide.md`, which the Skill reads first, and keep the
-shared Skill unchanged. Editing the Skill makes it package-specific; rename its
+shared Skill unchanged. Context manages the shared Skill: `context build`
+replaces a template copy that differs from the shipped one, so edits to it do
+not survive. A package that needs its own query Skill adds it under a different
 directory and `name` so it installs separately. When a page's text does not
 settle a question, the Skill follows the page's `Sources` entries: repository
 links are read at their recorded commit through authorized host tools, document
@@ -284,7 +286,11 @@ Workspaces created before the rename keep `skills/knowledge-query/` in their
 template. `context build` replaces it with `context-knowledge-query` in the old
 Skill's language, adds `others/context/search-guide.md` when it is missing, and
 reports the replacement as an agent hint. Move any package-specific wording the
-old Skill carried into the search guide.
+old Skill carried into the search guide. Every build also compares
+`skills/context-knowledge-query/` with the shipped Skill in the same language
+and replaces an older or edited copy, reporting a `package-query-skill-refreshed`
+agent hint, so a package never declares one Context version while carrying
+another version's Skill.
 
 When approved pages reference materialized resources, Context keeps their
 production copies in content-addressed `knowledge/assets/` paths and bundles

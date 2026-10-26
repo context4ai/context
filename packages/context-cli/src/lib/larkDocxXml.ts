@@ -116,8 +116,39 @@ function safeFence(value: string, language = ""): string {
   return `${fence}${language}\n${value.trim()}\n${fence}`;
 }
 
+const INLINE_STYLES = new Set(["b", "strong", "i", "em", "s", "del", "strike"]);
+
+/**
+ * Lark splits one styled phrase into adjacent runs, for example
+ * `<b>oncall</b><b> </b><b>问题数</b>`. Rendering each run separately yields
+ * `**oncall**** ****问题数**`, which no Markdown renderer reads as one bold
+ * phrase, so adjacent runs of the same style without attributes are merged.
+ */
+function mergeAdjacentStyles(nodes: readonly OrderedXmlNode[], ctx: RenderContext): OrderedXmlNode[] {
+  const merged: OrderedXmlNode[] = [];
+  for (const node of nodes) {
+    const name = elementName(node);
+    const previous = merged.at(-1);
+    if (name !== undefined && INLINE_STYLES.has(name) && previous !== undefined && elementName(previous) === name &&
+      Object.keys(attributes(node)).length === 0 && Object.keys(attributes(previous)).length === 0) {
+      ctx.tracker.discover(name);
+      ctx.tracker.convert(name);
+      merged[merged.length - 1] = { [name]: [...elementChildren(previous, name), ...elementChildren(node, name)] } as OrderedXmlNode;
+      continue;
+    }
+    merged.push(node);
+  }
+  return merged;
+}
+
+/** Keep whitespace outside emphasis markers; CommonMark does not open `** x` or close `x **`. */
+function wrapInline(body: string, marker: string): string {
+  const match = /^(\s*)([\s\S]*?)(\s*)$/u.exec(body)!;
+  return match[2] === "" ? body : `${match[1]}${marker}${match[2]}${marker}${match[3]}`;
+}
+
 function renderChildren(nodes: readonly OrderedXmlNode[], ctx: RenderContext): string {
-  return nodes.map((node) => renderNode(node, ctx)).join("");
+  return mergeAdjacentStyles(nodes, ctx).map((node) => renderNode(node, ctx)).join("");
 }
 
 function renderList(nodes: readonly OrderedXmlNode[], ctx: RenderContext, ordered: boolean): string {
@@ -352,7 +383,9 @@ function renderNode(node: OrderedXmlNode, ctx: RenderContext): string {
   if (["p", "paragraph", "div", "section"].includes(name)) {
     ctx.tracker.convert(name);
     const body = renderChildren(nodes, { ...ctx, mode: "inline" });
-    return ctx.mode === "inline" ? body : `\n\n${body}\n\n`;
+    // Paragraphs inside table cells and list items stay on separate lines;
+    // table cells turn the line break into <br>.
+    return ctx.mode === "inline" ? `${body}\n` : `\n\n${body}\n\n`;
   }
   if (["span", "mark", "u", "sub", "sup", "label"].includes(name)) {
     ctx.tracker.convert(name);
@@ -360,15 +393,15 @@ function renderNode(node: OrderedXmlNode, ctx: RenderContext): string {
   }
   if (name === "b" || name === "strong") {
     ctx.tracker.convert(name);
-    return `**${renderChildren(nodes, { ...ctx, mode: "inline" })}**`;
+    return wrapInline(renderChildren(nodes, { ...ctx, mode: "inline" }), "**");
   }
   if (name === "i" || name === "em") {
     ctx.tracker.convert(name);
-    return `*${renderChildren(nodes, { ...ctx, mode: "inline" })}*`;
+    return wrapInline(renderChildren(nodes, { ...ctx, mode: "inline" }), "*");
   }
   if (name === "s" || name === "del" || name === "strike") {
     ctx.tracker.convert(name);
-    return `~~${renderChildren(nodes, { ...ctx, mode: "inline" })}~~`;
+    return wrapInline(renderChildren(nodes, { ...ctx, mode: "inline" }), "~~");
   }
   if (name === "a") {
     ctx.tracker.convert(name);

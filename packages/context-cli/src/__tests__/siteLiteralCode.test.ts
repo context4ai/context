@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { siteMarkdownConfig } from "../project/packageSiteTheme.js";
+import { siteMarkdownConfig, siteMarkdownImports } from "../project/packageSiteTheme.js";
 
 test("site prose and code preserve braces without compiling them as Vue expressions", async () => {
   // Isolate Vite from Jiti's process-wide Error hooks used by other integration
   // fixtures, and exercise the same Node runtime as installed builds.
   const script = `
+  ${siteMarkdownImports(import.meta.resolve("markdown-it-cjk-friendly")).trimEnd()}
   import assert from 'node:assert/strict';
   import {createRequire} from 'node:module';
   import {createMarkdownRenderer} from ${JSON.stringify(import.meta.resolve("vitepress"))};

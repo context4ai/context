@@ -2,6 +2,12 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.86 - 2026-10-26
+
+- Website emphasis now follows the CJK-friendly amendment to CommonMark through `markdown-it-cjk-friendly`, replacing 0.7.85's built-in rule. Any East Asian wide or full-width character beside a `*` run, including full-width punctuation, counts like whitespace when deciding whether the run opens or closes emphasis; `_` and runs with no CJK character beside them keep the CommonMark result. Clean content renders as in 0.7.85.
+- `context build` keeps the shared `context-knowledge-query` Skill current. When a kb template's copy differs from the shipped Skill in the same language, the build replaces it and reports a `package-query-skill-refreshed` agent hint, so a package no longer declares one Context version while carrying an older version's Skill. Package-specific search hints stay in `others/context/search-guide.md`; a package that needs its own query Skill adds it under a different name.
+- Lark capture merges adjacent runs of the same inline style and keeps whitespace outside emphasis markers, so `<b>A</b><b> </b><b>B</b>` becomes `**A B**` instead of `**A**** ****B**`. Paragraphs inside table cells and list items stay on separate lines (`<br>` in tables) instead of running together. Existing snapshots change only when they are captured again.
+
 ## 0.7.85 - 2026-10-25
 
 - Website bold and italic text now closes after CJK punctuation. CommonMark only ends `**…**` after punctuation such as `？`, `）` or `、` when whitespace or more punctuation follows, so Chinese like `**用 MCP 还是知识包？**不在…` showed the asterisks literally. The site renderer now treats a Chinese, Japanese or Korean letter on the outer side of the markers like whitespace. Delimiters with no CJK letter beside them render exactly as before, and sites built with an earlier CLI re-render on the next build.
