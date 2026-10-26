@@ -46,6 +46,25 @@ describe("Lark Docx XML readable projection", () => {
     expectClosedCounts(projection.fidelity);
   });
 
+  test("merges split style runs and keeps paragraphs inside table cells apart", () => {
+    const projection = projectLarkDocxXml({
+      sourceUrl: "https://example.larkoffice.com/wiki/source-token",
+      xml: [
+        "<title>Quarterly review</title>",
+        "<p><b>整体总结：oncall</b><b> </b><b>问题数维持在低位</b>，完成了<b>API</b><b> </b><b>封装</b>。</p>",
+        "<p>Plain <i>split</i><i> italic</i> and<b> padded </b>text.</p>",
+        "<table><tr><td>Area</td><td>Result</td></tr>",
+        "<tr><td>质量</td><td><p><b>评分</b>: 0.7</p><p><b>总结</b>:</p><ul><li>details</li></ul></td></tr></table>",
+      ].join("\n"),
+    });
+
+    expect(projection.markdown).toContain("**整体总结：oncall 问题数维持在低位**，完成了**API 封装**。");
+    expect(projection.markdown).toContain("Plain *split italic* and **padded** text.");
+    expect(projection.markdown).toContain("| 质量 | **评分**: 0.7<br>**总结**:<br>");
+    expect(projection.markdown).not.toContain("****");
+    expectClosedCounts(projection.fidelity);
+  });
+
   test("distinguishes inline and token-backed diagrams without guessing from prose", () => {
     const projection = projectLarkDocxXml({
       sourceUrl: "https://example.larkoffice.com/docx/source-token",

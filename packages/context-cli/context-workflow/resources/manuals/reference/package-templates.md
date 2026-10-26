@@ -247,7 +247,8 @@ The default kb template includes:
   attribution, follows repository sources at their recorded commit when the page
   text is not enough, and reports gaps instead of inventing unsupported answers.
   It uses no package-specific template values, so every package renders the same
-  file. The
+  file, and `context build` replaces a template copy that differs from the
+  shipped Skill in its language. The
   default entry OKF root is `wikis/`; packages that select additional internal
   collections expose
   `guides/`, `rules/`, or `feats/` indexes when those roots are selected.

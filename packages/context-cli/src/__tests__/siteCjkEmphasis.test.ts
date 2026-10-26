@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { siteMarkdownConfig } from "../project/packageSiteTheme.js";
+import { siteMarkdownConfig, siteMarkdownImports } from "../project/packageSiteTheme.js";
 
-test("site emphasis closes after CJK punctuation and leaves other text as CommonMark renders it", async () => {
+test("site * emphasis closes beside CJK characters; _ and non-CJK text keep the CommonMark result", async () => {
   const script = `
+  ${siteMarkdownImports(import.meta.resolve("markdown-it-cjk-friendly")).trimEnd()}
   import assert from 'node:assert/strict';
   import {createMarkdownRenderer} from ${JSON.stringify(import.meta.resolve("vitepress"))};
   const site = await createMarkdownRenderer(process.cwd(), ({${siteMarkdownConfig}}));
@@ -16,11 +17,13 @@ test("site emphasis closes after CJK punctuation and leaves other text as Common
     ["*注意：*これは", "<em>注意：</em>これは"],
     ["**확인？**다음", "<strong>확인？</strong>다음"],
     ["**𠀀？**在", "<strong>𠀀？</strong>在"],
+    ["**评分**：0.7**总结**：", "<strong>评分</strong>：0.7<strong>总结</strong>："],
   ])};
   for (const [markdown, html] of fixed) assert.equal(site.renderInline(markdown), html, markdown);
   const unchanged = ${JSON.stringify([
     "**Use MCP?**Then", "snake_case_name and 变量_名称_中", "a * b * c", "**bold** and *em*", "中文**加粗**中文",
     "**粗体** 后", "2*3*4", "价格 * 数量", "**未闭合？", "__init__ 方法", "a**b**c", "**中**", "* 列表",
+    "_注意？_这是", "说明_（见下）_继续",
   ])};
   for (const markdown of unchanged) assert.equal(site.renderInline(markdown), stock.renderInline(markdown), markdown);
   console.log('cjk emphasis verified');`;

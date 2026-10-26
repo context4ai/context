@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { siteMarkdownConfig } from "../project/packageSiteTheme.js";
+import { siteMarkdownConfig, siteMarkdownImports } from "../project/packageSiteTheme.js";
 
 test("renderer pairs repeated translated headings only when section shapes agree", async () => {
   const block = (locale: string, body: string) => `<!-- context-test ${locale} -->\n\n<a id="section-a"></a>\n\n${body}\n\n<!-- /context-test -->\n`;
   const script = `
+    ${siteMarkdownImports(import.meta.resolve("markdown-it-cjk-friendly")).trimEnd()}
     import assert from 'node:assert/strict';
     import {createMarkdownRenderer} from ${JSON.stringify(import.meta.resolve("vitepress"))};
     const contextLocaleMarker = 'context-test';

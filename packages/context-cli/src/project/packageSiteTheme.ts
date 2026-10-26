@@ -2,6 +2,11 @@ import { siteHeadingPairingRule } from "./siteHeadingPairs.js";
 import { readerContentStyles } from "./readerContentStyles.js";
 import { DIAGRAM_VIEWER_SCRIPT } from "./diagramViewer.js";
 import { DIAGRAM_STYLES } from "./diagramStyles.js";
+/** Module imports that `siteMarkdownConfig` expects in scope. */
+export function siteMarkdownImports(cjkFriendly = "markdown-it-cjk-friendly"): string {
+  return `import contextCjkFriendly from ${JSON.stringify(cjkFriendly)};\n`;
+}
+
 /** Compiler-owned presentation only. Knowledge Markdown never becomes Vue code. */
 export const siteMarkdownConfig = String.raw`
   html: false,
@@ -13,28 +18,10 @@ export const siteMarkdownConfig = String.raw`
     md.block.ruler.disable('snippet');
     // CommonMark only closes **bold** after punctuation when whitespace or
     // punctuation follows, so Chinese such as **用 MCP？**在 stays literal.
-    // A CJK letter on the outer side counts like whitespace; other runs keep
-    // the standard result.
-    const cjkLetter = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]/u;
-    const InlineState = md.inline.State;
-    md.inline.State = class extends InlineState {
-      scanDelims(start, canSplitWord) {
-        const scanned = super.scanDelims(start, canSplitWord);
-        const end = start + scanned.length;
-        // Whole code points, so extension-plane Han counts too.
-        const before = Array.from(this.src.slice(Math.max(0, start - 2), start)).pop() ?? ' ';
-        const after = Array.from(this.src.slice(end, Math.min(end + 2, this.posMax)))[0] ?? ' ';
-        const lastCjk = cjkLetter.test(before), nextCjk = cjkLetter.test(after);
-        if (!lastCjk && !nextCjk) return scanned;
-        const { isMdAsciiPunct, isPunctChar, isWhiteSpace } = md.utils;
-        const lastCode = before.codePointAt(0), nextCode = after.codePointAt(0);
-        const lastPunct = isMdAsciiPunct(lastCode) || isPunctChar(before), nextPunct = isMdAsciiPunct(nextCode) || isPunctChar(after);
-        const lastSpace = isWhiteSpace(lastCode), nextSpace = isWhiteSpace(nextCode);
-        const left = !nextSpace && (!nextPunct || lastSpace || lastPunct || lastCjk);
-        const right = !lastSpace && (!lastPunct || nextSpace || nextPunct || nextCjk);
-        return { ...scanned, can_open: left && (canSplitWord || !right || lastPunct), can_close: right && (canSplitWord || !left || nextPunct) };
-      }
-    };
+    // Apply the CJK-friendly amendment (markdown-it-cjk-friendly): a CJK
+    // character beside a * run counts like whitespace; _ and runs with no CJK
+    // character beside them keep the CommonMark result.
+    md.use(contextCjkFriendly);
     const linkOpen = md.renderer.rules.link_open;
     md.renderer.rules.link_open = (tokens, index, options, env, self) => {
       // Let VitePress normalize the base and .md URL before adding a target;

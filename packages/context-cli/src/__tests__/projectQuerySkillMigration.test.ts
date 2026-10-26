@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
-import { migrateLegacyQuerySkills } from "../project/packageQuerySkillMigration.js";
+import { migrateLegacyQuerySkills, refreshSharedQuerySkills } from "../project/packageQuerySkillMigration.js";
 import { inspectPackageTemplateReview, writeStarterTemplateReviewMarker } from "../project/packageTemplateReview.js";
+import { resolveContextPackageTemplatesRoot } from "../project/workspace.js";
 
 const TEMPLATE_PATH = "src/package-templates/kb";
 const pkg = { kind: "package.kb", name: "sample-kb", template: { path: TEMPLATE_PATH } } as unknown as PackageDefinition;
@@ -71,6 +72,59 @@ describe("knowledge-query to context-knowledge-query migration", () => {
     try {
       const llms = { kind: "package.llms", name: "docs", template: { path: "src/package-templates/llms" } } as unknown as PackageDefinition;
       expect(await migrateLegacyQuerySkills(root, [pkg, llms])).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("shared context-knowledge-query refresh", () => {
+  const shippedSkill = (language: "en" | "zh-CN") => {
+    const root = resolveContextPackageTemplatesRoot();
+    return join(language === "zh-CN" ? join(dirname(root), "package-templates.zh-CN") : root, "kb", "skills", "context-knowledge-query");
+  };
+
+  async function workspaceWithSkill(language: "en" | "zh-CN", edit: (skillRoot: string) => Promise<void>) {
+    const root = await mkdtemp(join(tmpdir(), "context-query-skill-refresh-"));
+    const templateRoot = join(root, ...TEMPLATE_PATH.split("/"));
+    const skillRoot = join(templateRoot, "skills", "context-knowledge-query");
+    await mkdir(join(templateRoot, "skills"), { recursive: true });
+    await cp(shippedSkill(language), skillRoot, { recursive: true });
+    await writeFile(join(templateRoot, "AGENTS.md"), "# Package\n");
+    await writeStarterTemplateReviewMarker(templateRoot);
+    await edit(skillRoot);
+    return { root, templateRoot, skillRoot };
+  }
+
+  for (const language of ["en", "zh-CN"] as const) {
+    test(`replaces an older ${language} copy with the shipped Skill in the same language`, async () => {
+      const { root, skillRoot } = await workspaceWithSkill(language, async (skill) => {
+        await writeFile(join(skill, "SKILL.md"), (await readFile(join(skill, "SKILL.md"), "utf8")).replace(/\n## [^\n]+\n/u, "\n"));
+        await writeFile(join(skill, "scripts", "stale.mjs"), "// removed by the refresh\n");
+      });
+      try {
+        expect(await refreshSharedQuerySkills(root, [pkg])).toEqual([{ packageName: "sample-kb", templatePath: TEMPLATE_PATH, language }]);
+        expect(await readFile(join(skillRoot, "SKILL.md"), "utf8")).toBe(await readFile(join(shippedSkill(language), "SKILL.md"), "utf8"));
+        expect(existsSync(join(skillRoot, "scripts", "stale.mjs"))).toBe(false);
+        expect((await inspectPackageTemplateReview(root, pkg)).state).toBe("review-required");
+        expect(await refreshSharedQuerySkills(root, [pkg])).toEqual([]);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("leaves a current copy, the search guide and templates without the Skill alone", async () => {
+    const { root, templateRoot } = await workspaceWithSkill("en", async () => {});
+    try {
+      await mkdir(join(templateRoot, "others", "context"), { recursive: true });
+      await writeFile(join(templateRoot, "others", "context", "search-guide.md"), "# Our terms\n");
+      expect(await refreshSharedQuerySkills(root, [pkg])).toEqual([]);
+      expect(await readFile(join(templateRoot, "others", "context", "search-guide.md"), "utf8")).toBe("# Our terms\n");
+      await rm(join(templateRoot, "skills"), { recursive: true, force: true });
+      const llms = { kind: "package.llms", name: "docs", template: { path: "src/package-templates/llms" } } as unknown as PackageDefinition;
+      expect(await refreshSharedQuerySkills(root, [pkg, llms])).toEqual([]);
+      expect(existsSync(join(templateRoot, "skills"))).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
