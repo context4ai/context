@@ -87,6 +87,23 @@ test("command reads share bytes but detect additions, replacement, deletion and 
   } finally { spy.mockRestore(); }
 });
 
+test("command reads see additions made within the same file system timestamp tick", async () => {
+  const parent = resolve(".tmp/approved-read-tests");
+  await fs.mkdir(parent, { recursive: true });
+  const root = await fs.mkdtemp(join(parent, "case-")); roots.push(root);
+  await fs.mkdir(join(root, "knowledge/architecture"), { recursive: true });
+  await fs.writeFile(join(root, "knowledge/architecture/a.md"), "first");
+  await withCommandReadCache(async () => {
+    // Coarse timestamps (ext4 advances by kernel tick) usually leave the
+    // directory stamp unchanged across these additions; each must still appear.
+    for (let index = 0; index < 50; index++) {
+      expect(await readApprovedMarkdownFiles(root)).toHaveLength(index + 1);
+      await fs.writeFile(join(root, `knowledge/architecture/added-${index}.md`), "added");
+    }
+    expect(await readApprovedMarkdownFiles(root)).toHaveLength(51);
+  });
+});
+
 test("new investigation keeps its actual route without re-auditing previously delivered prose", async () => {
   const root = await initialRevisionKnowledge(roots);
   await resumeWorkspaceTask(root);
