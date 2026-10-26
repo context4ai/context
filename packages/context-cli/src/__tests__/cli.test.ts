@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,6 +8,28 @@ import { pathToFileURL } from "node:url";
 import { cli_main, createCliProgram, handleCliFailure, isDirectCliInvocation } from "../cli.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
+
+let executableTempRoot: string | undefined;
+
+/**
+ * Fixtures that put fake host CLIs on PATH need a directory that allows
+ * execution. Hardened hosts mount the system temp directory noexec, so fall
+ * back to the ignored package-local .tmp/ when a probe script cannot run.
+ */
+function executableTmpdir(): string {
+  if (executableTempRoot !== undefined) return executableTempRoot;
+  const probeDir = mkdtempSync(join(tmpdir(), "ctx-cli-exec-probe-"));
+  try {
+    const probe = join(probeDir, "probe");
+    writeFileSync(probe, "#!/bin/sh\nexit 0\n", "utf8");
+    chmodSync(probe, 0o755);
+    executableTempRoot = spawnSync(probe).status === 0 ? tmpdir() : resolve(".tmp", "cli-exec-tests");
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true });
+  }
+  mkdirSync(executableTempRoot, { recursive: true });
+  return executableTempRoot;
+}
 
 const CLI_MODULE = resolve(import.meta.dir, "..", "cli.ts");
 
@@ -489,7 +512,7 @@ describe("CLI error handling", () => {
   });
 
   test("plugin install refreshes the manifest-version Codex cache before pruning old versions", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "ctx-cli-plugin-versioned-cache-"));
+    const cwd = mkdtempSync(join(executableTmpdir(), "ctx-cli-plugin-versioned-cache-"));
     const pluginRoot = join(cwd, "plugins");
     const codexHome = join(cwd, "codex-home");
     const binDir = join(cwd, "bin");
@@ -533,7 +556,7 @@ describe("CLI error handling", () => {
   });
 
   test("plugin install continues available agents when codex is missing", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "ctx-cli-plugin-partial-"));
+    const cwd = mkdtempSync(join(executableTmpdir(), "ctx-cli-plugin-partial-"));
     const pluginRoot = join(cwd, "plugins");
     const binDir = join(cwd, "bin");
     try {
@@ -568,7 +591,7 @@ describe("CLI error handling", () => {
   });
 
   test("plugin install replaces an existing Claude plugin and removes superseded caches", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "ctx-cli-plugin-update-"));
+    const cwd = mkdtempSync(join(executableTmpdir(), "ctx-cli-plugin-update-"));
     const pluginRoot = join(cwd, "plugins");
     const binDir = join(cwd, "bin");
     const commandLog = join(cwd, "claude-commands.log");
