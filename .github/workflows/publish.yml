@@ -161,12 +161,30 @@ jobs:
             package_version="$(node --input-type=module -e "import pkg from './${package_dir}/package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
             if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
               echo "${package_name}@${package_version} is already published; skipping"
-            else
-              npm publish "${package_dir}" \
-                --access public \
-                --provenance \
-                --tag "${{ steps.release-metadata.outputs.publish_tag }}"
+              continue
             fi
+            # Provenance signing can fail transiently (for example a Sigstore
+            # transparency-log 409). Retry a bounded number of times, and stop as
+            # soon as the registry shows the version, since a failed attempt may
+            # still have published it.
+            attempt=1
+            until npm publish "${package_dir}" \
+              --access public \
+              --provenance \
+              --tag "${{ steps.release-metadata.outputs.publish_tag }}"
+            do
+              if npm view "${package_name}@${package_version}" version --prefer-online >/dev/null 2>&1; then
+                echo "${package_name}@${package_version} is published despite the failed attempt"
+                break
+              fi
+              if [ "${attempt}" -ge 3 ]; then
+                echo "::error::${package_name}@${package_version} failed to publish after ${attempt} attempts"
+                exit 1
+              fi
+              attempt=$((attempt + 1))
+              echo "::warning::retrying ${package_name}@${package_version} (attempt ${attempt}/3) in 30s"
+              sleep 30
+            done
           done < .tmp/release-package-dirs.txt
 
       - name: Preserve release receipts
