@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.87 - 2026-10-26
+
+- Each website article now ends with its sources as a map. The article's sections sit in the middle and the documents they cite sit around them in flat blobs, grouped by where each document comes from: a repository directory, Lark documents or notes. Sections are purple; repository files are green, Skills magenta, Lark documents blue and notes orange. Hovering a section or document highlights what it is linked to and shows the cited line ranges; clicking a document opens the cited lines and clicking a section scrolls to it. A List view shows the same documents by group, and narrow screens show only the list. Other articles citing the same documents are linked below. The map is computed during `context build` from the recorded references, registered sources and committed snapshots, so it needs no agent step. Set `site.sourceMap: false` to keep the plain source list.
+- The `context` entry Skill includes a source checklist template a team can fill in before a knowledge base is built, and explains how to register sources from a filled checklist; the planning Skill asks once whether a checklist exists before inventorying sources.
+
 ## 0.7.86 - 2026-10-26
 
 - Website emphasis now follows the CJK-friendly amendment to CommonMark through `markdown-it-cjk-friendly`, replacing 0.7.85's built-in rule. Any East Asian wide or full-width character beside a `*` run, including full-width punctuation, counts like whitespace when deciding whether the run opens or closes emphasis; `_` and runs with no CJK character beside them keep the CommonMark result. Clean content renders as in 0.7.85.

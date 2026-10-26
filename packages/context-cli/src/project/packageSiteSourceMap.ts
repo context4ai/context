@@ -265,8 +265,8 @@ function layout(entry: SiteSourceMapArticle, documents: readonly Located[], area
     ...nodes.map(node => node.y! + node.r + 40));
   const shift = 16 - top;
   for (const node of nodes) node.y! += shift;
-  const placed = clusters.map(({ below: _below, ...item }) => ({ ...item, ly: round(item.ly + shift),
-    blobs: item.blobs.map(([x, y, r]) => [x!, round(y! + shift), r!]) }));
+  const placed = clusters.map(item => ({ blobs: item.blobs.map(([x, y, r]) => [x!, round(y! + shift), r!]),
+    lx: item.lx, ly: round(item.ly + shift), la: item.la }));
   return { height: Math.round(bottom - top + 32), nodes, sectionArea: placed[0]!, areas: placed.slice(1) };
 }
 
