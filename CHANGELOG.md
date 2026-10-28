@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.88 - 2026-10-28
+
+- `context update --pending` processes registered repositories whose commit moved past the version approved knowledge was processed at, such as after `context source add repo --ref <sha>`. When every cited region is unchanged or only moved, the new commit settles immediately and moved citations update their locations; otherwise only pages whose cited text changed become update candidates, listed with their sections in `changed_references`. The workspace Route runs it before the idle task gate, `source add repo` returns a `next` hint for it, and `verify` warnings point to it when a cited repository moved.
+- Reading earlier settled commits works in shallow and partial checkouts: each commit is checked once and fetched once when missing, reads run one at a time per checkout, and a commit the remote no longer has fails every read at once instead of retrying per file.
+
 ## 0.7.87 - 2026-10-26
 
 - Each website article now ends with its sources as a map. The article's sections sit in the middle and the documents they cite sit around them in flat blobs, grouped by where each document comes from: a repository directory, Lark documents or notes. Sections are purple; repository files are green, Skills magenta, Lark documents blue and notes orange. Hovering a section or document highlights what it is linked to and shows the cited line ranges; clicking a document opens the cited lines and clicking a section scrolls to it. A List view shows the same documents by group, and narrow screens show only the list. Other articles citing the same documents are linked below. The map is computed during `context build` from the recorded references, registered sources and committed snapshots, so it needs no agent step. Set `site.sourceMap: false` to keep the plain source list.
