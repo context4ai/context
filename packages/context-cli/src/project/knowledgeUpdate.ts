@@ -53,8 +53,9 @@ export async function readKnowledgeUpdate(projectRoot: string): Promise<Knowledg
 }
 
 /** `pending` processes registered repository commits that moved past their
- * processed versions. Pages whose cited text is unchanged settle without a
- * decision; only pages with changed or unconfirmed citations become candidates. */
+ * processed versions. Only pages with changed or unconfirmed citations become
+ * candidates; the scope decision (additions, shared dependencies) is still
+ * required before the new version settles, and moved citations relocate then. */
 export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, options: { pending?: boolean } = {}) {
   return withProjectWriteLock(projectRoot, "begin-knowledge-update", async () => {
     await ensureRepoContentLinks(projectRoot);
@@ -81,14 +82,6 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const cited = articles.filter(article => article.sections.some(section => section.references.some(reference =>
       scopes.some(scope => repoContentScopeMatches(scope.source_ref, reference.source_ref)))));
     const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled);
-    if (options.pending && inspected.unresolved.length === 0) {
-      const before = cited.flatMap(article => article.sections.flatMap(section => section.references));
-      const relocated = inspected.articles.flatMap(article => article.sections.flatMap(section => section.references))
-        .filter((reference, index) => JSON.stringify(reference.locator) !== JSON.stringify(before[index]!.locator)).length;
-      await commitProcessedScopes(projectRoot, scopes);
-      return { outcome: "settled" as const, scopes, relocated_references: relocated,
-        next_action: { command: "context status --format json" } };
-    }
     const changedPaths = new Set(inspected.unresolved.map(item => item.path));
     const candidates = await Promise.all(cited.filter(article => !options.pending || changedPaths.has(article.path))
       .map(async article => {

@@ -421,9 +421,10 @@ explicit conclusion that it needs no knowledge changes.
 
 Moving a repository with `context source add repo --ref <sha>` only changes its
 registration. When approved knowledge was processed at the previous commit, run
-`context update --pending --format json`: pages whose cited text is unchanged
-settle at the new commit, moved citations update their locations, and only pages
-whose cited text changed become candidates, listed in `changed_references`.
+`context update --pending --format json`. Only pages whose cited text changed
+become candidates, listed in `changed_references`; still inspect the change for
+additions and shared dependencies before deciding. Moved citations update their
+locations when the update settles.
 
 Before importing a `note`, read [note source preparation](note.md).
 Before importing `sessions`, read [development summary preparation](sessions.md).

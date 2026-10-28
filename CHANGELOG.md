@@ -4,8 +4,8 @@ All notable changes to Context are documented here.
 
 ## 0.7.88 - 2026-10-28
 
-- `context update --pending` processes registered repositories whose commit moved past the version approved knowledge was processed at, such as after `context source add repo --ref <sha>`. When every cited region is unchanged or only moved, the new commit settles immediately and moved citations update their locations; otherwise only pages whose cited text changed become update candidates, listed with their sections in `changed_references`. The workspace Route runs it before the idle task gate, `source add repo` returns a `next` hint for it, and `verify` warnings point to it when a cited repository moved.
-- Reading earlier settled commits works in shallow and partial checkouts: each commit is checked once and fetched once when missing, reads run one at a time per checkout, and a commit the remote no longer has fails every read at once instead of retrying per file.
+- `context update --pending` processes registered repositories whose commit moved past the version approved knowledge was processed at, such as after `context source add repo --ref <sha>`. Only pages whose cited text changed become update candidates, listed with their sections in `changed_references`; the update still asks for one scope decision covering additions and shared dependencies, and the new commit settles, with moved citations updating their locations, only after that decision. The workspace Route runs it before the idle task gate, `source add repo` returns a `next` hint for it, and `verify` warnings point to it when a cited repository moved.
+- Reading earlier settled commits works in shallow and partial checkouts: each commit is checked once and fetched once when missing, concurrent references share one reader and read one file at a time per checkout, and a commit the remote no longer has fails every read at once instead of retrying per file.
 
 ## 0.7.87 - 2026-10-26
 

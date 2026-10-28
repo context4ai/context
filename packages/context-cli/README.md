@@ -332,8 +332,8 @@ they do not resume an earlier managed task before the new request is understood.
   already acquired versions. The current Route asks which existing pages need
   changes and whether additions need new pages.
 - `context update --pending` processes registered repositories whose commit moved
-  past the processed version: unchanged citations settle at the new commit and
-  only pages whose cited text changed are asked about.
+  past the processed version. Only pages whose cited text changed become
+  candidates; the scope decision still covers additions before the commit settles.
 - `context revise <page> --instruction <text>` starts from the current approved
   body. `--move-to <path>` preserves its identity and updates Markdown navigation
   when the reviewed move is applied.

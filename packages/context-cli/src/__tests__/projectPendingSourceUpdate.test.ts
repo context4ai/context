@@ -41,17 +41,55 @@ async function moveRegistration(root: string, file: string, content: string) {
   return version;
 }
 
-test("a pending update with unchanged cited text settles the new commit without page decisions", async () => {
+async function decide(root: string, decisions: Array<{ path: string }>) {
+  const status = await collectProjectStatus(root, { managed: true });
+  return completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision, managed: true,
+    value: { stage: "source-update", decisions, scope_summary: "The new export needs no page.", new_topics: [] } });
+}
+
+async function moveCitedTextAndAddExport(root: string) {
+  const original = await readFile(join(root, "fixture-source/src/index.ts"), "utf8");
+  return moveRegistration(root, "src/index.ts", `// moved header\n${original}\nexport const newPublicFeature = true;\n`);
+}
+
+test("a pending update with only moved citations still requires the scope decision before settling", async () => {
   const root = await settledKnowledge();
   expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "current" });
-  const version = await moveRegistration(root, "README.md", "Unrelated upstream note.\n");
+  const before = await baseline(root);
+  const version = await moveCitedTextAndAddExport(root);
   expect(await pendingSourceUpdateScopes(root)).toEqual([scope]);
   expect((await collectProjectStatus(root)).workflow.current?.node).toBe("process-source-update");
-  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "settled", relocated_references: 0 });
-  expect(await readKnowledgeUpdate(root)).toBeUndefined();
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.candidates).toEqual([]);
+  expect(update.changed_references).toBeUndefined();
+  expect(await baseline(root)).toEqual(before);
+  expect(await pendingSourceUpdateScopes(root)).toEqual([scope]);
+  await decide(root, []);
   expect((await baseline(root)).map(entry => entry.processed_version)).toEqual([version]);
+  const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
+  expect(structure.articles.map((article: { sections: Array<{ references: Array<{ locator: { start_line: number } }> }> }) =>
+    article.sections[0]!.references[0]!.locator.start_line)).toEqual([2, 2]);
   expect(await pendingSourceUpdateScopes(root)).toEqual([]);
-  expect((await collectProjectStatus(root)).workflow.current?.node).not.toBe("process-source-update");
+});
+
+test("concurrent history reads in a shallow checkout share one fetch and confirm every moved citation", async () => {
+  const root = await settledKnowledge();
+  const source = join(root, "fixture-source");
+  await moveCitedTextAndAddExport(root);
+  const checkout = join(root, "sources/repo/20260903/revision-fixture");
+  await rm(checkout, { recursive: true, force: true });
+  execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
+  await rm(join(root, ".tmp/context-runtime/source-regions"), { recursive: true, force: true });
+  const trace = join(root, ".tmp/git-trace.log");
+  process.env.GIT_TRACE = trace;
+  try { await beginKnowledgeUpdate(root, undefined, { pending: true }); }
+  finally { delete process.env.GIT_TRACE; }
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.changed_references).toBeUndefined();
+  expect(update.candidates).toEqual([]);
+  const fetches = (await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch --quiet"));
+  expect(fetches).toHaveLength(1);
 });
 
 test("a pending update asks only about pages whose cited text changed and keeps the old baseline until decided", async () => {

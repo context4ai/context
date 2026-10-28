@@ -33,14 +33,15 @@ const settledBy = (scopes: readonly string[], sourceRef: string) => !sourceRef.s
  * can stand in for it, but only when the old region still matches its digest. */
 async function settledRegionHistory(root: string, previous: readonly ProcessedScope[]): Promise<RegionHistory | undefined> {
   if (!previous.some(scope => scope.source_ref.startsWith("repo:"))) return undefined;
-  let readAt: Awaited<ReturnType<typeof registeredRepoHistoryReader>> | undefined;
+  // One reader per inspection: concurrent references share its cache, fetches and queue.
+  let reader: ReturnType<typeof registeredRepoHistoryReader> | undefined;
   return async reference => {
     if (!reference.source_ref.startsWith("repo:")) return undefined;
     const versions = new Set(previous.filter(scope => settledBy([scope.source_ref], reference.source_ref)).map(scope => scope.processed_version));
     for (const version of versions) {
       try {
-        readAt ??= await registeredRepoHistoryReader(root);
-        const text = await readAt(reference.source_ref, reference.locator.path, version);
+        reader ??= registeredRepoHistoryReader(root);
+        const text = await (await reader)(reference.source_ref, reference.locator.path, version);
         if (articleSourceRegionDigest(text, reference.locator) === reference.content_digest) return articleSourceRegion(text, reference.locator);
       } catch { /* Unreadable history leaves the reference unconfirmed. */ }
     }
