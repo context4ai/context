@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.90 - 2026-10-28
+
+- A `context update --pending` decision can now revise existing pages whose citations did not change. The update lists them in `scope_pages`; they need no decision, but when an addition or a shared change affects one, include it with an `instruction`. Previously only pages with changed citations could be submitted, so such a page was rejected as not a candidate.
+
 ## 0.7.88 - 2026-10-28
 
 - `context update --pending` processes registered repositories whose commit moved past the version approved knowledge was processed at, such as after `context source add repo --ref <sha>`. Only pages whose cited text changed become update candidates, listed with their sections in `changed_references`; the update still asks for one scope decision covering additions and shared dependencies, and the new commit settles, with moved citations updating their locations, only after that decision. The workspace Route runs it before the idle task gate, `source add repo` returns a `next` hint for it, and `verify` warnings point to it when a cited repository moved.

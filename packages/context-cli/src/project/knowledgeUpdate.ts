@@ -36,6 +36,7 @@ const updateSchema = z.object({
   structure_proposal: indexerCurrentActionInputDefinitions.sourceUpdate.omit({ stage: true }).optional(),
   previous_versions: z.array(z.string().nullable()), changes: z.string().optional(),
   repo_content: z.unknown().optional(),
+  scope_pages: z.array(z.string()).optional(),
   changed_references: z.array(z.object({ path: z.string(), section_id: z.string(), state: z.enum(["changed", "unavailable"]),
     source_ref: z.string(), locator: z.unknown() }).strict()).optional(),
 }).strict();
@@ -90,6 +91,9 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
           view_ref: article.article_id,
           source_refs: [...new Set(article.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
       }));
+    // Pending updates ask only about changed citations, but the scope review may
+    // still revise any existing page that cites these sources.
+    const scopePages = options.pending ? cited.map(article => article.path).filter(path => !changedPaths.has(path)) : [];
     const registry = await readProductionRequirements(projectRoot);
     const repoReferences = articles.flatMap(article =>
       article.sections.flatMap(section => section.references.filter(ref => ref.source_ref.startsWith("repo-content:") &&
@@ -104,6 +108,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const requirements = registry.requirements.filter((requirement) => requirementIds.has(requirement.id));
     const payload = { protocol: "context.source-update/v1" as const, scopes, requirements, candidates,
       ...(repoContent === undefined ? {} : { repo_content: repoContent }),
+      ...(scopePages.length === 0 ? {} : { scope_pages: scopePages }),
       ...(inspected.unresolved.length === 0 ? {} : { changed_references: inspected.unresolved.map(item => ({ path: item.path,
         section_id: item.section_id, state: item.state, source_ref: item.reference.source_ref, locator: item.reference.locator })) }),
       previous_versions: scopes.map((scope) => processedVersionForScope(settled, scope) ?? null),
@@ -178,12 +183,13 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
     if (repeated.length) throw new SubmissionInputError(`Update page paths must be unique; repeated: ${repeated.join(", ")}`, ["decisions"]);
     const candidates = new Set(request.candidates.map((candidate) => candidate.path));
     const missing = [...candidates].filter((path) => !input.decisions.some((decision) => decision.path === path));
-    const unknown = input.decisions.map((decision) => decision.path).filter((path) => !candidates.has(path));
+    const scopePages = new Set(request.scope_pages ?? []);
+    const unknown = input.decisions.map((decision) => decision.path).filter((path) => !candidates.has(path) && !scopePages.has(path));
     if (missing.length || unknown.length) {
       throw new SubmissionInputError([
         "Decide each source-bound candidate once; an omitted page is not a no-change decision. List a candidate with only its path to keep it unchanged.",
         ...(missing.length ? [`Missing: ${missing.join(", ")}.`] : []),
-        ...(unknown.length ? [`Not candidates (use new_topics for new pages): ${unknown.join(", ")}.`] : []),
+        ...(unknown.length ? [`Not candidates or scope pages (use new_topics for new pages): ${unknown.join(", ")}.`] : []),
       ].join(" "), ["decisions"]);
     }
     await captureProcessedScopes(input.projectRoot, request.scopes);

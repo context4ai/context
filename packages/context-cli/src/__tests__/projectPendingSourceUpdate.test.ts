@@ -11,6 +11,7 @@ import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeU
 import { pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
 import { registeredRepoHistoryReader } from "../project/articleSourceReader.js";
 import { collectProjectStatus } from "../project/status.js";
+import { readApprovedRevision } from "../project/approvedRevision.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -71,6 +72,22 @@ test("a pending update with only moved citations still requires the scope decisi
   expect(structure.articles.map((article: { sections: Array<{ references: Array<{ locator: { start_line: number } }> }> }) =>
     article.sections[0]!.references[0]!.locator.start_line)).toEqual([2, 2]);
   expect(await pendingSourceUpdateScopes(root)).toEqual([]);
+});
+
+test("the scope decision can revise an existing page whose citations are unchanged", async () => {
+  const root = await settledKnowledge();
+  const before = await baseline(root);
+  await moveCitedTextAndAddExport(root);
+  await beginKnowledgeUpdate(root, undefined, { pending: true });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.candidates).toEqual([]);
+  expect(update.scope_pages).toEqual(["architecture/overview.md", "architecture/usage.md"]);
+  const status = await collectProjectStatus(root, { managed: true });
+  expect(await completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision, managed: true,
+    value: { stage: "source-update", decisions: [{ path: "architecture/overview.md", instruction: "Mention newPublicFeature." }],
+      scope_summary: "The overview introduces the new export.", new_topics: [] } })).toMatchObject({ outcome: "revisions-prepared" });
+  expect((await readApprovedRevision(root))?.target.path).toBe("architecture/overview.md");
+  expect(await baseline(root)).toEqual(before);
 });
 
 test("concurrent history reads in a shallow checkout share one fetch and confirm every moved citation", async () => {

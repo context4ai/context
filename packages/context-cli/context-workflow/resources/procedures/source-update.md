@@ -22,6 +22,8 @@ cited text changed (`changed`) or could not be read (`unavailable`, such as a
 renamed or deleted file). For `context update --pending`, pages whose citations
 are unchanged or only moved are not candidates, so an empty list is possible;
 still check the change for additions before submitting the scope decision.
+Those pages are listed in `scope_pages`: they need no decision, but include one
+with an `instruction` when an addition or shared change affects it.
 
 Also inspect additions and shared dependencies in the source change. Existing
 page references cannot discover every new topic. List necessary new pages in `new_topics`, each with a readable `path` in an existing
