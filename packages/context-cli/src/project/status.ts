@@ -223,6 +223,9 @@ async function collectProjectStatusSnapshotInternal(
       ? await inspectSiteTranslations(projectRoot, packages).then(result => result.route_satisfied, () => false) : true,
     taskPreparation,
     localRevisionActive: !!localRevision || !!localUpdate,
+    sourceUpdatePending: !maintenance && !localRevision && !localUpdate && !localRollback && !production && draftStatus.count === 0 &&
+      await import("./pendingSourceUpdates.js").then(({ pendingSourceUpdateScopes }) => pendingSourceUpdateScopes(projectRoot))
+        .then(scopes => scopes.length > 0, () => false),
     unfinishedIndexerTasks: false,
     ...(production ? { productionState: await productionRequirementsAreCurrent(projectRoot, production)
       ? dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state : "active" as const,

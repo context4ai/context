@@ -22,6 +22,37 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
   const roots = new Map<string, Promise<string>>();
+  const fetched = new Map<string, Promise<boolean>>();
+  const reads = new Map<string, Promise<string>>();
+  // Partial or shallow checkouts fetch missing objects on read; one read at a
+  // time per checkout keeps a large settlement from flooding the remote.
+  const queues = new Map<string, Promise<unknown>>();
+  const serial = <T>(directory: string, task: () => Promise<T>): Promise<T> => {
+    const run = (queues.get(directory) ?? Promise.resolve()).then(task, task);
+    queues.set(directory, run.catch(() => undefined));
+    return run;
+  };
+  // Recovered checkouts are shallow; fetch a missing settled commit once. A commit
+  // the remote no longer has fails every path at once instead of per read.
+  const available = (directory: string, commit: string) => {
+    const key = `${directory}\0${commit}`;
+    let result = fetched.get(key);
+    if (!result) {
+      result = execute("git", ["-C", directory, "cat-file", "-e", `${commit}^{commit}`],
+        { timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).then(() => true, () =>
+        execute("git", ["-C", directory, "fetch", "--quiet", "--depth=1", "origin", commit], { timeout: 120_000 })
+          .then(() => true, () => false));
+      fetched.set(key, result);
+    }
+    return result;
+  };
+  async function readAt(directory: string, path: string, commit: string): Promise<string> {
+    if (!await available(directory, commit)) throw new TypeError(`Commit ${commit} is not available in the registered checkout`);
+    const blob = await execute("git", ["-C", directory, "show", `${commit}:./${path}`], {
+      encoding: "buffer", timeout: 60_000, maxBuffer: 16 * 1024 * 1024,
+    });
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(blob.stdout);
+  }
   return async (sourceRef: string, path: string, commit: string): Promise<string> => {
     if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(commit)) throw new TypeError("History reads require a fixed commit");
     let root = roots.get(sourceRef);
@@ -32,10 +63,11 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
       root = realpath(resolve(workspace, entry.materializedAt)).then(actual => { inside(workspace, actual); return actual; });
       roots.set(sourceRef, root);
     }
-    const blob = await execute("git", ["-C", await root, "show", `${commit}:./${path}`], {
-      encoding: "buffer", timeout: 5000, maxBuffer: 16 * 1024 * 1024,
-    });
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(blob.stdout);
+    const directory = await root;
+    const key = JSON.stringify([directory, commit, path]);
+    let read = reads.get(key);
+    if (!read) { read = serial(directory, () => readAt(directory, path, commit)); reads.set(key, read); }
+    return read;
   };
 }
 

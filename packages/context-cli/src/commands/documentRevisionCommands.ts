@@ -188,14 +188,22 @@ export function registerDocumentRevisionCommand(program: Command): void {
     });
   program.command("update")
     .description("Inspect acquired source changes against approved knowledge in confirmed requirement scopes")
-    .requiredOption("--input <file>", "YAML/JSON scopes and optional change summary; - for stdin")
+    .option("--input <file>", "YAML/JSON scopes and optional change summary; - for stdin")
+    .option("--pending", "process registered repository commits that moved past their processed versions")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { input: string; format: string }) => {
+    .action(async (options: { input?: string; pending?: boolean; format: string }) => {
       if (options.format !== "json") throw new ContextError(ExitCode.UserError, "--format must be json", {
         category: ErrorCategory.UserInputInvalid,
       });
-      assertActionInputWorkspace(process.cwd(), options.input);
-      const value = await readYamlOrJsonInput({ path: options.input, label: "update",
+      if (!options.pending === !options.input) throw new ContextError(ExitCode.UserError, "Pass exactly one of --input or --pending", {
+        category: ErrorCategory.UserInputInvalid,
+      });
+      if (options.pending) {
+        process.stdout.write(`${JSON.stringify(await beginKnowledgeUpdate(requireProjectRoot(), undefined, { pending: true }), null, 2)}\n`);
+        return;
+      }
+      assertActionInputWorkspace(process.cwd(), options.input!);
+      const value = await readYamlOrJsonInput({ path: options.input!, label: "update",
         missingNext: "Pass scopes with requirement_ref, source_ref and optional module_refs.",
         readFailureNext: "Fix the input path within the current workspace.",
         parseFailureNext: "Provide valid JSON or YAML scopes and an optional changes summary." });

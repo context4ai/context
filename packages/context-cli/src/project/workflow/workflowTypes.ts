@@ -60,6 +60,7 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   sources: {
     registered: boolean;
     repositories_ready: boolean;
+    update_pending: boolean;
   };
   capture: {
     declarations_complete: boolean;
@@ -89,6 +90,7 @@ export interface ContextWorkflowObservation {
   productionState?: "active" | "waiting-user" | "blocked" | "ended";
   productionDelivery?: boolean;
   localRevisionActive?: boolean;
+  sourceUpdatePending?: boolean;
   versionCurrent?: boolean;
   translationRouteSatisfied?: boolean;
   unfinishedIndexerTasks?: boolean;

@@ -147,6 +147,17 @@ nodes:
         - resources/procedures/source-capture-detailed.md
         - resources/manuals/guides/lark-resources.md
 
+  - id: process-source-update
+    kind: action
+    reasonCode: route.source.update-pending
+    action: actions/process-source-update.yaml
+    satisfiedBy:
+      - path: sources.update_pending
+        equals: false
+    resources:
+      recommended:
+        - resources/procedures/knowledge-updates.md
+
   - id: reopen-cleared-task
     kind: gate
     reasonCode: route.workspace.task-cleared
@@ -355,7 +366,8 @@ edges:
   - { from: choose-source-boundary, to: configure-document-capture, kind: gatedBy }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
-  - { from: capture-next, to: reopen-cleared-task }
+  - { from: capture-next, to: process-source-update }
+  - { from: process-source-update, to: reopen-cleared-task }
   - { from: reopen-cleared-task, to: run-indexer-lifecycle, kind: gatedBy }
   - { from: run-indexer-lifecycle, to: review-current-batch }
   - { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }

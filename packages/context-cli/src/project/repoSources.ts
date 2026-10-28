@@ -66,6 +66,7 @@ export interface AddRepoSourceResult {
   registryPath: string;
   source: RepoSourceRecord;
   status: RepoSourceStatus;
+  next?: string;
 }
 
 function nonEmpty(value: string | null | undefined): string | null {
@@ -671,10 +672,14 @@ export async function addRepoSourceUnlocked(input: AddRepoSourceInput): Promise<
   else registry.repos[index] = source;
   await writeRepoRegistry(input.projectRoot, registry);
   const status = await ensureRepoSource({ projectRoot: input.projectRoot, source });
+  const { pendingSourceUpdateScopes } = await import("./pendingSourceUpdates.js");
+  const pending = existing && existing.git.ref !== next.git.ref && (await pendingSourceUpdateScopes(input.projectRoot))
+    .some((scope) => scope.source_ref === `repo:${source.name}`);
   return {
     registryPath: DEFAULT_REPO_SOURCES_REGISTRY_PATH,
     source,
     status,
+    ...(pending ? { next: "Approved knowledge was processed at the previous commit. Run context update --pending --format json to process this commit." } : {}),
   };
 }
 
