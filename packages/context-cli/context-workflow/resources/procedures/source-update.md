@@ -17,6 +17,10 @@ of them. Read their current approved Markdown. Submit one decision per path:
 omit `instruction` if no correction is needed, or describe the concrete change
 to make. Preserve unrelated content and the reader's existing improvements.
 Include a short `scope_summary` explaining the scope-level conclusion.
+When the action lists `changed_references`, start from those sections: the
+cited text changed (`changed`) or could not be read (`unavailable`, such as a
+renamed or deleted file). For `context update --pending`, pages whose citations
+are unchanged or only moved are not candidates; they settle with the update.
 
 Also inspect additions and shared dependencies in the source change. Existing
 page references cannot discover every new topic. List necessary new pages in `new_topics`, each with a readable `path` in an existing

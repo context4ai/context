@@ -419,6 +419,12 @@ also checking additions that have no old page reference. The scope is complete
 only after every required change is reviewed, closed and built, or after an
 explicit conclusion that it needs no knowledge changes.
 
+Moving a repository with `context source add repo --ref <sha>` only changes its
+registration. When approved knowledge was processed at the previous commit, run
+`context update --pending --format json`: pages whose cited text is unchanged
+settle at the new commit, moved citations update their locations, and only pages
+whose cited text changed become candidates, listed in `changed_references`.
+
 Before importing a `note`, read [note source preparation](note.md).
 Before importing `sessions`, read [development summary preparation](sessions.md).
 Choose the reference for the actual input; do not read both by default.

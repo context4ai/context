@@ -172,6 +172,7 @@ export function createContextWorkflowFacts(
       registered: observation.sourceCount > 0,
       repositories_ready:
         observation.readyRepoSources === observation.repoSources.length,
+      update_pending: observation.sourceUpdatePending === true,
     },
     capture: {
       declarations_complete:
