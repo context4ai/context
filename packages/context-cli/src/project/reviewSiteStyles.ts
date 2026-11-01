@@ -31,6 +31,9 @@ header nav { scrollbar-width: none; }
 header nav::-webkit-scrollbar { display: none; }
 header nav button { padding: 0 11px; }
 .tools { flex-shrink: 0; gap: 16px; }
+.pager { display: flex; flex-shrink: 0; gap: 4px; margin-left: 16px; }
+.pager .btn { min-width: 30px; padding: 5px 8px; font-weight: 600; }
+.pager + #theme { margin-left: 8px; }
 .reading-progress { min-width: 225px; }
 #counts { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--muted); }
 #counts b { font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
@@ -88,6 +91,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
   header .tools { order: 2; width: 100%; margin-left: 0; justify-content: space-between; flex-wrap: nowrap; padding: 4px 0; }
   header .reading-progress { flex: 1; min-width: 0; max-width: 260px; }
   header #theme, header #language { margin-left: 6px; }
+  header .pager { margin-left: 6px; }
   header nav { order: 3; margin-top: 2px; }
   aside { top: 0; position: relative; height: 180px; }
   main, .home main { width: 100%; max-width: 100%; margin: 0; padding: 24px 20px 150px; }

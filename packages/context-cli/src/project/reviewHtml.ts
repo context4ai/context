@@ -47,6 +47,7 @@ function renderReviewHtml(model: ReviewSiteModel, diagramScript: string): string
       </div>
       <button class="btn primary" id="copy-notes">复制修订意见</button>
     </div>
+    <div class="pager" role="group" aria-label="文章翻页"><button class="btn" id="previous-page" aria-label="上一篇（-）" title="上一篇（-）" disabled>−</button><button class="btn" id="next-page" aria-label="下一篇（+）" title="下一篇（+）">+</button></div>
     <button class="btn" id="theme" aria-label="切换深色主题" title="切换深色主题">◐</button>
     <button class="btn" id="language" aria-label="Switch language">EN</button>
   </header>

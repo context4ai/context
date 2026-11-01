@@ -134,3 +134,37 @@ test("approved pages in changed navigation remain readable without review contro
     expect(await reviewSiteBaselineHash(root, [])).not.toBe(baseline);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 45000);
+
+test("pager steps through articles in reading order with buttons and +/- keys", async () => {
+  const root = await prepareRevisionKnowledge([]);
+  try {
+    const report = await writeReviewHtml({ projectRoot: root, all: true });
+    const browser = openReport(await readFile(report.path, "utf8"));
+    const evaluate = (code: string) => runInContext(code, browser.runtime);
+    const order = evaluate("readingOrder().map(page => page.id)") as string[];
+    expect(order.length).toBe(evaluate("candidates.length"));
+    expect(new Set(order).size).toBe(order.length);
+    expect(browser.get("previous-page").disabled).toBe(true);
+    expect(browser.get("next-page").disabled).toBe(false);
+    expect(evaluate("pagerKey({ key: '+', target: { tagName: 'BODY' } })")).toBe(true);
+    expect(evaluate("selected")).toBe(order[0]);
+    expect(browser.get("previous-page").disabled).toBe(false);
+    for (const id of order.slice(1)) {
+      evaluate("stepPage(1)");
+      expect(evaluate("selected")).toBe(id);
+    }
+    expect(browser.get("next-page").disabled).toBe(true);
+    expect(evaluate("pagerKey({ key: '+', ctrlKey: true, target: { tagName: 'BODY' } })")).toBe(false);
+    expect(evaluate("pagerKey({ key: '-', target: { tagName: 'TEXTAREA' } })")).toBe(false);
+    for (const id of order.slice(0, -1).reverse()) {
+      evaluate("pagerKey({ key: '-', target: { tagName: 'BODY' } })");
+      expect(evaluate("selected")).toBe(id);
+    }
+    evaluate("stepPage(-1)");
+    expect(evaluate("view")).toBe("home");
+    expect(browser.get("previous-page").disabled).toBe(true);
+    evaluate("view = 'revisions'; render()");
+    expect(browser.get("previous-page").disabled).toBe(true);
+    expect(browser.get("next-page").disabled).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 45000);
