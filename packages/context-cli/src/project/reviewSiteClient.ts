@@ -18,6 +18,8 @@ const words = {
   previous: ['查看旧文本', 'Previous text'], removed: ['移除或替换的旧内容', 'Removed or replaced content'],
   removedNav: ['移除的目录条目', 'Removed navigation entries'], unplaced: ['待落位文章', 'Unplaced articles'],
   sources: ['来源引用', 'Sources'], feedbackTag: ['修订', 'Notes'],
+  previousPage: ['上一页 −', 'Previous −'], nextPage: ['下一页 +', 'Next +'],
+  previousHint: ['上一页（快捷键 -）', 'Previous article (key -)'], nextHint: ['下一页（快捷键 +）', 'Next article (key +)'],
 };
 let language = 'zh';
 const t = key => words[key]?.[language === 'zh' ? 0 : 1] || key;
@@ -99,6 +101,58 @@ function rootFor(pageId) {
   const seen = new Set();
   while (node?.parent && !seen.has(node.key)) { seen.add(node.key); node = DATA.nodes.find(item => item.key === node.parent); }
   return node?.key || null;
+}
+
+/** Candidate articles in navigation order, then any the navigation does not place. */
+function readingOrder() {
+  const ordered = [];
+  const seen = new Set();
+  function walk(parent, visited = new Set()) {
+    for (const node of DATA.nodes.filter(item => (item.parent || null) === parent).sort((a, b) => a.order - b.order)) {
+      if (visited.has(node.key)) continue;
+      visited.add(node.key);
+      const page = pagesById.get(node.page);
+      if (page?.candidate_id && !seen.has(page.id)) { seen.add(page.id); ordered.push(page); }
+      walk(node.key, visited);
+    }
+  }
+  walk(null);
+  return [...ordered, ...candidates.filter(page => !seen.has(page.id))];
+}
+
+/** Home and the revision list come before the first article; previous from the first article returns home. */
+function pagerTargets() {
+  const order = readingOrder();
+  const index = view === 'article' ? order.findIndex(page => page.id === selected) : -1;
+  return { previous: index >= 0 ? (index > 0 ? order[index - 1].id : 'home') : null, next: order[index + 1]?.id || null };
+}
+
+function stepPage(direction) {
+  const target = pagerTargets()[direction < 0 ? 'previous' : 'next'];
+  if (target === 'home') showHome();
+  else if (target) showPage(target);
+}
+
+function updatePager() {
+  const targets = pagerTargets();
+  $('previous-page').disabled = !targets.previous;
+  $('next-page').disabled = !targets.next;
+  for (const [id, label, hint] of [['previous-page', 'previousPage', 'previousHint'], ['next-page', 'nextPage', 'nextHint']]) {
+    $(id).textContent = t(label);
+    $(id).title = t(hint);
+  }
+}
+
+function pagerKey(event) {
+  if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return false;
+  const target = event.target;
+  if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)) return false;
+  if ($('copy-dialog').open) return false;
+  const direction = ['+', '='].includes(event.key) || event.code === 'NumpadAdd' ? 1 : ['-', '_'].includes(event.key) || event.code === 'NumpadSubtract' ? -1 : 0;
+  if (!direction) return false;
+  event.preventDefault?.();
+  stepPage(direction);
+  return true;
 }
 
 function updateCounts() {
@@ -190,6 +244,7 @@ function render() {
   $('article').classList.toggle('review-new-page', view === 'article' && page?.change === 'new');
   renderNav();
   updateCounts();
+  updatePager();
   if (view === 'home') renderHome();
   else if (view === 'revisions') renderRevisions();
   else if (page) {
@@ -318,7 +373,11 @@ $('clear-note').onclick = () => {
   $('revision-note').dispatchEvent(new Event('input', { bubbles: true }));
   $('revision-note').focus();
 };
-$('home').onclick = () => { selected = null; active = null; view = 'home'; history.replaceState(null, '', location.pathname + location.search); render(); window.scrollTo(0, 0); };
+function showHome() { selected = null; active = null; view = 'home'; history.replaceState(null, '', location.pathname + location.search); render(); window.scrollTo(0, 0); }
+$('home').onclick = showHome;
+$('previous-page').onclick = () => stepPage(-1);
+$('next-page').onclick = () => stepPage(1);
+document.addEventListener('keydown', pagerKey);
 $('theme').onclick = () => { document.body.classList.toggle('dark'); persist(); render(); };
 $('language').onclick = () => { language = language === 'zh' ? 'en' : 'zh'; persist(); render(); };
 $('copy-notes').onclick = copyNotes;

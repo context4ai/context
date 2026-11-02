@@ -31,6 +31,7 @@ header nav { scrollbar-width: none; }
 header nav::-webkit-scrollbar { display: none; }
 header nav button { padding: 0 11px; }
 .tools { flex-shrink: 0; gap: 16px; }
+.pager { display: flex; flex-shrink: 0; gap: 6px; }
 .reading-progress { min-width: 225px; }
 #counts { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--muted); }
 #counts b { font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
