@@ -144,6 +144,7 @@ test("pager steps through articles in reading order with buttons and +/- keys", 
     const order = evaluate("readingOrder().map(page => page.id)") as string[];
     expect(order.length).toBe(evaluate("candidates.length"));
     expect(new Set(order).size).toBe(order.length);
+    expect(browser.get("next-page").textContent).toBe("Next +");
     expect(browser.get("previous-page").disabled).toBe(true);
     expect(browser.get("next-page").disabled).toBe(false);
     expect(evaluate("pagerKey({ key: '+', target: { tagName: 'BODY' } })")).toBe(true);

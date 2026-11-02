@@ -4,7 +4,7 @@ All notable changes to Context are documented here.
 
 ## 0.7.91 - 2026-11-02
 
-- The HTML review report has previous and next buttons (− and +) at the top right, next to the theme and language buttons, and the same `-` and `+` keys. They step through the articles under review in navigation order. From the home page, `+` opens the first article and `−` is disabled; `−` on the first article returns home, and `+` is disabled on the last article. The keys are ignored while typing revision notes or when combined with Ctrl, Cmd or Alt, so browser zoom keeps working.
+- The HTML review report has labelled previous and next buttons (“Previous −” and “Next +”, 上一页 − and 下一页 + in Chinese) at the top right, left of “Copy revision notes”, and the same `-` and `+` keys. They step through the articles under review in navigation order. From the home page, `+` opens the first article and `−` is disabled; `−` on the first article returns home, and `+` is disabled on the last article. The keys are ignored while typing revision notes or when combined with Ctrl, Cmd or Alt, so browser zoom keeps working.
 
 ## 0.7.90 - 2026-10-28
 

@@ -18,7 +18,8 @@ const words = {
   previous: ['查看旧文本', 'Previous text'], removed: ['移除或替换的旧内容', 'Removed or replaced content'],
   removedNav: ['移除的目录条目', 'Removed navigation entries'], unplaced: ['待落位文章', 'Unplaced articles'],
   sources: ['来源引用', 'Sources'], feedbackTag: ['修订', 'Notes'],
-  previousPage: ['上一篇（-）', 'Previous article (-)'], nextPage: ['下一篇（+）', 'Next article (+)'],
+  previousPage: ['上一页 −', 'Previous −'], nextPage: ['下一页 +', 'Next +'],
+  previousHint: ['上一页（快捷键 -）', 'Previous article (key -)'], nextHint: ['下一页（快捷键 +）', 'Next article (key +)'],
 };
 let language = 'zh';
 const t = key => words[key]?.[language === 'zh' ? 0 : 1] || key;
@@ -136,9 +137,9 @@ function updatePager() {
   const targets = pagerTargets();
   $('previous-page').disabled = !targets.previous;
   $('next-page').disabled = !targets.next;
-  for (const [id, label] of [['previous-page', 'previousPage'], ['next-page', 'nextPage']]) {
-    $(id).title = t(label);
-    $(id).setAttribute('aria-label', t(label));
+  for (const [id, label, hint] of [['previous-page', 'previousPage', 'previousHint'], ['next-page', 'nextPage', 'nextHint']]) {
+    $(id).textContent = t(label);
+    $(id).title = t(hint);
   }
 }
 
