@@ -5,7 +5,7 @@ import type { ContextResolvedWorkflowRoute, ContextWorkflowAuthority } from "./w
 
 export async function knowledgeMaintenanceRoute(input: { projectRoot: string; authorities: readonly ContextWorkflowAuthority[]; managed: boolean; route?: ContextResolvedWorkflowRoute | undefined }): Promise<ContextResolvedWorkflowRoute | undefined> {
   // Workspace validation and real human gates retain priority over maintenance.
-  if (input.route && !["run-indexer-lifecycle", "build-next", "close-approved-knowledge", "current-scope-complete"].includes(input.route.node)) return undefined;
+  if (input.route && !["run-indexer-lifecycle", "build-next", "close-approved-knowledge", "current-scope-complete", "reopen-cleared-task"].includes(input.route.node)) return undefined;
   const observed = await maintenanceRevision(input.projectRoot);
   if (!observed.action) return undefined;
   const provider = await loadContextWorkflowProvider();

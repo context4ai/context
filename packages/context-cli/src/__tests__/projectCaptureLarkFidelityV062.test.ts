@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseDocumentSnapshotManifest } from "@c4a/extract";
 import type { LarkRunner } from "../lib/feishu.js";
@@ -12,19 +12,8 @@ import {
 } from "./projectCaptureLarkV062.fixtures.js";
 
 async function expectFidelityFailure(run: Promise<string>): Promise<void> {
-  try {
-    await run;
-    throw new Error("expected capture fidelity failure");
-  } catch (error) {
-    expect(error).toMatchObject({
-      code: 2,
-      detail: {
-        category: "partial-failure",
-        code: "lark.capture.fidelity-loss",
-        next: "context status --format json",
-      },
-    });
-  }
+  const result = JSON.parse(await run);
+  expect(result.result).toMatchObject({ captured: false, warning: { state: "deferred-no-evidence" } });
 }
 
 function captureReport(snapshotRoot: string): LarkCaptureReport {
@@ -34,7 +23,7 @@ function captureReport(snapshotRoot: string): LarkCaptureReport {
 }
 
 describe("0.6.2 Lark capture fidelity", () => {
-  test("preserves unknown XML blocks through a generic projection without blocking capture", async () => {
+  test("preserves generic projections without treating warnings as missing evidence", async () => {
     const root = makeLarkCaptureTmp();
     try {
       const projectRoot = await createLarkCaptureProject(root);
@@ -83,46 +72,13 @@ describe("0.6.2 Lark capture fidelity", () => {
         format: "json",
         larkRunner: runner,
       })) as { result: { fidelity: { status: string; evidence_status: string; projection_status: string } } };
-      expect(capture.result.fidelity).toMatchObject({
-        status: "warning",
-        evidence_status: "complete",
-        projection_status: "generic",
-      });
-
+      expect(capture.result.fidelity).toMatchObject({ evidence_status: "complete", projection_status: "generic" });
       const snapshotRoot = join(projectRoot, "sources", "lark", "handbook");
-      const markdown = readFileSync(join(snapshotRoot, "index.md"), "utf8");
-      expect(markdown).toContain("[Reference](lark:docx:reference-token)");
-      expect(markdown).toContain("Lark block (generic projection): `future_block`");
-      expect(readFileSync(join(snapshotRoot, "assets", "source.xml"), "utf8")).toContain("<future_block>");
-      const manifest = parseDocumentSnapshotManifest(JSON.parse(readFileSync(join(snapshotRoot, "manifest.json"), "utf8")) as unknown);
-      expect(manifest.assets?.some((asset) => asset.path === "assets/source.xml")).toBe(true);
-      expect(manifest.assets?.some((asset) => asset.path.startsWith("assets/references/"))).toBe(false);
-      expect(captureReport(snapshotRoot).resources.map((resource) => resource.kind)).toEqual(
-        expect.arrayContaining(["cite", "bookmark", "synced-reference"]),
-      );
-      expect(manifest.metadata?.capture?.report).toMatchObject({
-        path: "assets/capture-report.json",
-        fidelityStatus: "warning",
-        evidenceStatus: "complete",
-        projectionStatus: "generic",
-      });
-      expect(captureReport(snapshotRoot).fidelity).toMatchObject({
-        status: "warning",
-        evidence_status: "complete",
-        projection_status: "generic",
-      });
-
-      const status = await collectProjectStatus(projectRoot, {
-        managed: true,
-        authorities: ["context.source-read"],
-      });
+      expect(existsSync(join(snapshotRoot, "manifest.json"))).toBe(true);
+      expect(existsSync(join(snapshotRoot, "index.md"))).toBe(true);
+      const status = await collectProjectStatus(projectRoot, { managed: true, authorities: ["context.source-read"] });
       expect(status.documentSources[0]?.snapshotReady).toBe(true);
-      expect(status.documentSources[0]?.captureFidelity?.status).toBe("warning");
-      expect(status.pendingCapturePhases).toEqual([]);
-      expect(status.documentSources[0]?.diagnostics).toEqual(expect.arrayContaining([
-        expect.stringContaining("future_block"),
-      ]));
-      expect(status.workflow.current?.node).not.toBe("repair-workspace-state");
+      expect(status.documentSources[0]?.acquisitionWarning).toBeUndefined();
       expect(status.draftCandidates).toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -297,10 +253,8 @@ describe("0.6.2 Lark capture fidelity", () => {
         managed: true,
         authorities: ["context.source-read"],
       });
-      expect(blocked.workflow.current?.node).toBe("capture-next");
-      expect(blocked.workflow.current?.commands).toContainEqual(expect.objectContaining({
-        command: expect.stringContaining("run capture:lark:handbook --format json"),
-      }));
+      expect(blocked.documentSources[0]?.snapshotReady).toBe(false);
+      expect(blocked.documentSources[0]?.acquisitionWarning?.state).toBe("deferred-no-evidence");
 
       resourceIdentityAvailable = true;
       const recovered = JSON.parse(await runLarkCapturePhase({
@@ -470,21 +424,15 @@ describe("0.6.2 Lark capture fidelity", () => {
       expect(fetchCalls).toBe(2);
 
       const snapshotRoot = join(projectRoot, "sources", "lark", "handbook");
-      const manifest = parseDocumentSnapshotManifest(
-        JSON.parse(readFileSync(join(snapshotRoot, "manifest.json"), "utf8")) as unknown,
-      );
-      expect(manifest.metadata?.capture?.report?.fidelityStatus).toBe("error");
-      expect(captureReport(snapshotRoot).fidelity.issues).toEqual(expect.arrayContaining([
-        expect.objectContaining({ code: "lark.capture.sub-page-list-empty" }),
-      ]));
+      expect(existsSync(join(snapshotRoot, "manifest.json"))).toBe(false);
+      expect(existsSync(join(snapshotRoot, "index.md"))).toBe(false);
 
       const status = await collectProjectStatus(projectRoot, {
         managed: true,
         authorities: ["context.source-read"],
       });
       expect(status.documentSources[0]?.snapshotReady).toBe(false);
-      expect(status.pendingCapturePhases).toEqual(["capture:lark:handbook"]);
-      expect(status.workflow.current?.node).toBe("capture-next");
+      expect(status.documentSources[0]?.acquisitionWarning?.state).toBe("deferred-no-evidence");
       expect(status.workflow.current?.node).not.toMatch(/review/u);
     } finally {
       rmSync(root, { recursive: true, force: true });

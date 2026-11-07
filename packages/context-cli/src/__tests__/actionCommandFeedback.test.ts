@@ -54,8 +54,21 @@ test("maintenance schema and preview errors retain a recovery path", async () =>
     detail: { reason_code: "production-maintenance-action-failed", file: ".tmp/result.yaml",
       issues: expect.any(Array), next_action: { command: "context status --format json" } },
   });
+  await expect(completeCurrentIndexerAction({ ...input, managed: true, value: { stage: "source-update" } })).rejects.toMatchObject({
+    detail: { reason_code: "production-maintenance-action-failed", file: ".tmp/result.yaml", submission_state: "not-committed",
+      issues: expect.any(Array), next_action: { command: "context status --managed --format json" } },
+  });
   await expect(completeCurrentIndexerAction({ ...input, preview: true,
     value: { stage: "source-update", decisions: [], scope_summary: "No new articles", new_topics: [] } })).rejects.toMatchObject({
     detail: { reason_code: "production-maintenance-action-failed", next_action: { command: "context status --format json" } },
+  });
+});
+
+test("managed command rejection preserves specific help but replaces generic status", async () => {
+  await expect(invoke(["complete-current", "--managed", "--revision", "current", "--input", " "])).rejects.toMatchObject({
+    detail: { next_action: { command: "context status --managed --format json" } },
+  });
+  await expect(invoke(["complete-current", "--managed", "--revision", "current", "--input", "unused", "--format", "xml"])).rejects.toMatchObject({
+    detail: { next_action: { command: "context action complete-current --help" } },
   });
 });

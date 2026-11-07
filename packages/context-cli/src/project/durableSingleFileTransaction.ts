@@ -7,6 +7,7 @@ import {
   rm,
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { markSubmissionState } from "./submissionState.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
 
 const TRANSACTION_ROOT = join(".tmp", "context-runtime", "transactions");
@@ -136,11 +137,13 @@ async function persistJournal(input: {
 }
 
 async function removeJournal(input: {
+  report_submission?: boolean;
   path: string;
   inject_failure?: DurableTransactionFailureInjector;
 }): Promise<void> {
   const { path } = input;
   await rm(path, { force: true });
+  if (input.report_submission) markSubmissionState("committed");
   await input.inject_failure?.("after-journal-remove");
   await syncDirectory(dirname(path));
   await input.inject_failure?.("after-journal-remove-dir-fsync");
@@ -172,6 +175,7 @@ function parseJournal(value: string, kind: string): DurableSingleFileJournal {
 }
 
 async function commitJournalTarget(input: {
+  report_submission?: boolean;
   projectRoot: string;
   journalPath: string;
   journal: DurableSingleFileJournal;
@@ -193,6 +197,7 @@ async function commitJournalTarget(input: {
   await syncDirectory(dirname(targetPath));
   await input.inject_failure?.("after-target-dir-fsync");
   await removeJournal({
+    report_submission: input.report_submission === true,
     path: input.journalPath,
     ...(input.inject_failure === undefined
       ? {}
@@ -200,7 +205,7 @@ async function commitJournalTarget(input: {
   });
 }
 
-export async function recoverDurableSingleFileTransaction(input: {
+async function recoverSingleFileTransaction(input: {
   projectRoot: string;
   kind: string;
   expected_target_path?: string;
@@ -239,6 +244,14 @@ export async function recoverDurableSingleFileTransaction(input: {
   };
 }
 
+export async function recoverDurableSingleFileTransaction(input: {
+  projectRoot: string; kind: string; expected_target_path?: string;
+}): Promise<DurableSingleFileTransactionReceipt | undefined> {
+  journalPath(input.projectRoot, input.kind);
+  try { return await recoverSingleFileTransaction(input); }
+  catch (error) { markSubmissionState("uncertain"); throw error; }
+}
+
 async function runDurableSingleFileTransactionInternal(input: {
   projectRoot: string;
   kind: string;
@@ -267,6 +280,7 @@ async function runDurableSingleFileTransactionInternal(input: {
     target_digest: durableContentDigest(input.target_content),
     target_content: input.target_content,
   };
+  markSubmissionState("uncertain");
   await persistJournal({
     path,
     journal,
@@ -275,6 +289,7 @@ async function runDurableSingleFileTransactionInternal(input: {
       : { inject_failure: input.inject_failure }),
   });
   await commitJournalTarget({
+    report_submission: true,
     projectRoot: input.projectRoot,
     journalPath: path,
     journal,

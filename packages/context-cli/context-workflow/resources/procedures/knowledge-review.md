@@ -48,8 +48,10 @@ bounded batch; keep the decisions in the current Agent context and do not write
 a Review ledger. Use the current scope template in that index with the Route's
 atomic apply command. Add explicit decisions only for reviewed pages; leave
 repair or undecided pages out of decisions and do not set a default. For a fully
-reviewed acceptable set, default approval remains available. Do not generate,
-open, or parse the ordinary HTML report. Reopen repair pages through their
+reviewed acceptable set, default approval remains available. The apply command preserves the standard HTML report before applying decisions
+and returns its path. Use that report when the user requests a report or diff;
+the managed reading surface remains the Markdown Resource, so do not parse the
+HTML to make automated decisions. Reopen repair pages through their
 current repair command; unrelated approvals remain valid. The
 authority exists only in the current conversation. It does not bypass source
 permission, validation, close, or verify, and it is not proof that the files

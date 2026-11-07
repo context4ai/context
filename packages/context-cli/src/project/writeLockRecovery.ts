@@ -2,6 +2,7 @@ import { lstat, mkdir, readFile, readdir, rename, rmdir } from "node:fs/promises
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { safeProjectTarget } from "./durableMultiFileTransaction.js";
+import { withProjectWriteLock } from "./writeLock.js";
 
 const lockRelative = ".tmp/context-runtime/locks/project-write.lock";
 const command = "context task recover --operation writer-lock --format json";
@@ -31,14 +32,18 @@ export async function inspectWriterLock(root: string) {
 /** Explicit maintenance only: callers must quiesce all workspace writers first.
  * The guard is inside the old lock; it is archived with that lock so a competing
  * recovery cannot release a replacement lock. No source or journal is removed. */
-export async function recoverWriterLock(input: { projectRoot: string; apply?: boolean; plan_digest?: string }) {
+export async function recoverWriterLock(input: { projectRoot: string; managed?: boolean; apply?: boolean; plan_digest?: string }) {
   const before = await inspectWriterLock(input.projectRoot);
-  if (!before) return { action: "writer-lock-absent", next: "context task recover --format json" };
+  if (!before) return { action: "writer-lock-absent", next: `context task recover${input.managed ? " --managed" : ""} --format json` };
   if (before.process_state !== "not-running") throw new Error("Writer is running or cannot be identified as stopped; keep the lock.");
-  if (!input.apply) return { action: "preview", operation: "writer-lock", revision: before.digest, owner: before,
-    effect: "Archive only this orphan lock. Before applying, stop new workspace commands and confirm no surviving child writer or other host/container uses this workspace. This does not complete interrupted captures or transactions.",
-    next: `${command} --apply --plan-digest '${before.digest}'` };
-  if (input.plan_digest !== before.digest) throw new Error("Writer lock changed; preview recovery again.");
+  const { recoveryJournals } = await import("./taskRecovery.js");
+  const journals = await recoveryJournals(input.projectRoot);
+  const revision = journals.length ? `sha256:${createHash("sha256").update(JSON.stringify({ lock: before.digest, journals })).digest("hex")}` : before.digest;
+  if (!input.apply) return { action: "preview", operation: "writer-lock", revision, owner: before,
+    journal_files: journals.map(journal => journal.path),
+    effect: "Archive this orphan lock, finish already journaled writes and observe the next Route. Before applying, stop new workspace commands and confirm no surviving child writer or other host/container uses this workspace.",
+    next: `${command}${input.managed ? " --managed" : ""} --apply --plan-digest '${revision}'` };
+  if (input.plan_digest !== revision) throw new Error("Writer lock or transactions changed; preview recovery again.");
   const path = join(input.projectRoot, lockRelative);
   const guard = join(path, ".recovery");
   await mkdir(guard); // EEXIST deliberately blocks competing or interrupted repair.
@@ -51,7 +56,14 @@ export async function recoverWriterLock(input: { projectRoot: string; apply?: bo
     const archive = `.tmp/context-runtime/locks/recovered-write-${randomUUID()}.lock`;
     await rename(path, join(input.projectRoot, archive));
     archived = true;
-    return { action: "writer-lock-recovered", archived_lock: archive, next: "context task recover --format json" };
+    const receipts = await withProjectWriteLock(input.projectRoot, "recover-writer-transactions", async () => {
+      if (JSON.stringify(await recoveryJournals(input.projectRoot)) !== JSON.stringify(journals)) {
+        throw new Error("Transaction inventory changed after lock recovery; preview context task recover --operation transactions --format json.");
+      }
+      const { recoverTaskTransactionJournals } = await import("./taskRecovery.js");
+      return recoverTaskTransactionJournals(input.projectRoot);
+    });
+    return { action: "writer-lock-recovered", archived_lock: archive, receipts, next: `context status${input.managed ? " --managed" : ""} --format json` };
   } finally {
     if (!archived) await rmdir(guard);
   }

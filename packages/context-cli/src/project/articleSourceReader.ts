@@ -6,13 +6,14 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 import { loadSourcesRegistry, type SourcesRegistry } from "@c4a/context";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
 import { repoContentReferenceReader } from "./repoContentEvidence.js";
+import { commandGitObjectReader, SourceReadError, SourceUnavailableError } from "./gitObjectReader.js";
 
 const execute = promisify(execFile);
 
 function inside(root: string, path: string): void {
   const value = relative(root, path);
   if (!value || value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value)) {
-    throw new TypeError("Article source path escapes its captured scope");
+    throw new SourceUnavailableError("Article source path escapes its captured scope", "source-path-outside-scope");
   }
 }
 
@@ -24,14 +25,7 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
   const roots = new Map<string, Promise<string>>();
   const fetched = new Map<string, Promise<boolean>>();
   const reads = new Map<string, Promise<string>>();
-  // Partial or shallow checkouts fetch missing objects on read; one read at a
-  // time per checkout keeps a large settlement from flooding the remote.
-  const queues = new Map<string, Promise<unknown>>();
-  const serial = <T>(directory: string, task: () => Promise<T>): Promise<T> => {
-    const run = (queues.get(directory) ?? Promise.resolve()).then(task, task);
-    queues.set(directory, run.catch(() => undefined));
-    return run;
-  };
+  const objects = commandGitObjectReader();
   // Recovered checkouts are shallow; fetch a missing settled commit once. A commit
   // the remote no longer has fails every path at once instead of per read.
   const available = (directory: string, commit: string) => {
@@ -47,11 +41,8 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
     return result;
   };
   async function readAt(directory: string, path: string, commit: string): Promise<string> {
-    if (!await available(directory, commit)) throw new TypeError(`Commit ${commit} is not available in the registered checkout`);
-    const blob = await execute("git", ["-C", directory, "show", `${commit}:./${path}`], {
-      encoding: "buffer", timeout: 60_000, maxBuffer: 16 * 1024 * 1024,
-    });
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(blob.stdout);
+    if (!await available(directory, commit)) throw new SourceUnavailableError(`Commit ${commit} is not available in the registered checkout`, "source-history-missing");
+    return decodeSource(await objects.read(directory, commit, path));
   }
   return async (sourceRef: string, path: string, commit: string): Promise<string> => {
     if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(commit)) throw new TypeError("History reads require a fixed commit");
@@ -66,18 +57,26 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
     const directory = await root;
     const key = JSON.stringify([directory, commit, path]);
     let read = reads.get(key);
-    if (!read) { read = serial(directory, () => readAt(directory, path, commit)); reads.set(key, read); }
+    if (!read) { read = readAt(directory, path, commit); reads.set(key, read); }
     return read;
   };
 }
 
-/** One submission/check, one read per cited file. Registration identifies the
- * source; a document manifest identifies its files even in a shared date folder.
- * This never prepares parsers or loads uncited document bodies. */
+function decodeSource(bytes: Uint8Array): string {
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+    if (text.includes("\0")) throw new TypeError("Binary source");
+    return text;
+  } catch { throw new SourceUnavailableError("The cited source is not UTF-8 text", "source-not-text"); }
+}
+
+/** An observation shares reads, manifest parsing and one object pipe per repo.
+ * Repository citations always read the registered commit, never mutable files. */
 export async function registeredArticleSourceReader(projectRoot: string) {
   let repoContentRead: ReturnType<typeof repoContentReferenceReader> | undefined;
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+  const objects = commandGitObjectReader();
   const sources = new Map<string, { kind: string; entry: SourcesRegistry["repos"][number]
     | SourcesRegistry["files"][number] | SourcesRegistry["larks"][number] | SourcesRegistry["notes"][number] }>();
   for (const [kind, entries] of [["repo", registry.repos], ["file", registry.files],
@@ -87,20 +86,24 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       sources.set(`${kind}:${entry.name}`, { kind, entry });
     }
   }
-  const descriptors = new Map<string, Promise<{ root: string; files?: Map<string, string>; commit?: string }>>();
-  const texts = new Map<string, Promise<{ text: string; contentDigest: string; expected: string | undefined; root: string; commit?: string }>>();
-  const captured = new Map<string, Promise<string>>();
-  async function descriptor(sourceRef: string) {
+  type Descriptor = { root: string; files?: Map<string, string>; commit?: string; incomplete?: boolean };
+  const descriptors = new Map<string, Promise<Descriptor>>();
+  const manifests = new Map<string, Promise<unknown>>();
+  const texts = new Map<string, Promise<{ text: string; digest: string; expected: string | undefined }>>();
+  async function descriptor(sourceRef: string): Promise<Descriptor> {
     const source = sources.get(sourceRef);
-    if (!source) throw new TypeError(`Source is no longer registered: ${sourceRef}`);
+    if (!source) throw new SourceUnavailableError(`Source is no longer registered: ${sourceRef}`, "source-unregistered");
     const { kind, entry } = source;
     const managed = kind === "note" || kind === "sessions";
-    const root = await realpath(resolve(workspace, managed ? dirname(entry.materializedAt) : entry.materializedAt));
+    const root = await realpath(resolve(workspace, managed ? dirname(entry.materializedAt) : entry.materializedAt)).catch(error => {
+      if (kind === "repo") throw new SourceReadError("The registered source checkout is not accessible. Restore the source before checking citations.", "context source recovery-plan --format json");
+      throw error;
+    });
     inside(workspace, root);
     if (managed) return { root, files: new Map([[basename(entry.materializedAt), ""]]) };
     if (kind === "repo") {
       if (!("ref" in entry) || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(entry.ref)) {
-        throw new TypeError("Article source requires a captured fixed commit, not a moving ref");
+        throw new SourceUnavailableError("Article source requires a captured fixed commit, not a moving ref", "source-ref-unpinned");
       }
       return { root, commit: entry.ref };
     }
@@ -109,11 +112,21 @@ export async function registeredArticleSourceReader(projectRoot: string) {
     inside(workspace, manifestPath);
     const actual = await realpath(manifestPath);
     inside(workspace, actual);
-    const manifest = parseDocumentSnapshotForSource(JSON.parse(await readFile(actual, "utf8")), entry.name);
-    if (manifest.source_type !== kind) throw new TypeError("Captured document manifest has a different source type");
-    return { root, files: new Map(manifest.files.map(file => [file.path, file.content_hash])) };
+    let manifestRead = manifests.get(actual);
+    if (!manifestRead) { manifestRead = readFile(actual, "utf8").then(JSON.parse); manifests.set(actual, manifestRead); }
+    const manifest = parseDocumentSnapshotForSource(await manifestRead, entry.name);
+    if (manifest.source_type !== kind) throw new SourceUnavailableError("Captured document manifest has a different source type", "source-manifest-invalid");
+    const report = manifest.metadata?.capture?.report;
+    const incomplete = report !== undefined && (report.fidelityStatus === "error" || report.projectionStatus === "error" ||
+      report.resourceStatus !== "complete");
+    return { root, files: new Map(manifest.files.map(file => [file.path, file.content_hash])), incomplete };
   }
-  return async (sourceRef: string, path: string, requireCapturedVersion = false): Promise<string> => {
+  function scope(sourceRef: string) {
+    let result = descriptors.get(sourceRef);
+    if (!result) { result = descriptor(sourceRef); descriptors.set(sourceRef, result); }
+    return result;
+  }
+  async function read(sourceRef: string, path: string, requireCapturedVersion = false): Promise<string> {
     if (sourceRef.startsWith("repo-content:")) {
       repoContentRead ??= repoContentReferenceReader(projectRoot);
       return (await repoContentRead)(sourceRef, path, requireCapturedVersion);
@@ -122,45 +135,38 @@ export async function registeredArticleSourceReader(projectRoot: string) {
     let pending = texts.get(key);
     if (!pending) {
       pending = (async () => {
-        let scope = descriptors.get(sourceRef);
-        if (!scope) { scope = descriptor(sourceRef); descriptors.set(sourceRef, scope); }
-        const { root, files, commit } = await scope;
-        if (files && !files.has(path)) throw new TypeError("Source path is not owned by the registered document");
-        const lexical = resolve(root, path);
-        inside(root, lexical);
-        const actual = await realpath(lexical);
-        inside(root, actual);
-        if (!(await stat(actual)).isFile()) throw new TypeError("Article source must be a regular file");
-        const bytes = await readFile(actual);
-        const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-        if (text.includes("\0")) throw new TypeError("Article source is not text");
-        return { text, contentDigest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
-          expected: files?.get(path), root, ...(commit ? { commit } : {}) };
+        try {
+          const { root, files, commit } = await scope(sourceRef);
+          if (files && !files.has(path)) throw new SourceUnavailableError("Source path is not owned by the registered document", "source-path-unregistered");
+          const lexical = resolve(root, path);
+          inside(root, lexical);
+          let bytes: Uint8Array;
+          if (commit) bytes = await objects.read(root, commit, path);
+          else {
+            const actual = await realpath(lexical);
+            inside(root, actual);
+            if (!(await stat(actual)).isFile()) throw new SourceUnavailableError("Article source must be a regular file", "source-file-type");
+            bytes = await readFile(actual);
+          }
+          return { text: decodeSource(bytes), digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+            expected: files?.get(path) };
+        } catch (error) {
+          if (error instanceof SourceReadError || error instanceof SourceUnavailableError) throw error;
+          if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) {
+            throw new SourceUnavailableError("The captured source file is missing; restore the source before checking it", "source-file-missing");
+          }
+          throw new SourceReadError("Cannot complete the source read; check access and retry the current command.");
+        }
       })();
       texts.set(key, pending);
     }
     const result = await pending;
-    let expected = result.expected;
-    if (requireCapturedVersion && result.commit) {
-      let version = captured.get(key);
-      if (!version) {
-        version = (async () => {
-          try {
-            const blob = await execute("git", ["-C", result.root, "show", `${result.commit}:./${path}`], {
-              encoding: "buffer", timeout: 5000, maxBuffer: 16 * 1024 * 1024,
-            });
-            return `sha256:${createHash("sha256").update(blob.stdout).digest("hex")}`;
-          } catch {
-            throw new TypeError(`Cannot read the cited file from the captured commit: ${path}. Use a tracked file within the captured source or refresh the source before citing it.`);
-          }
-        })();
-        captured.set(key, version);
-      }
-      expected = await version;
-    }
-    if (requireCapturedVersion && expected && expected !== result.contentDigest) {
-      throw new TypeError("Captured source changed; refresh the source before submitting a revision");
+    if (requireCapturedVersion && result.expected && result.expected !== result.digest) {
+      throw new SourceUnavailableError("Captured source changed; refresh the source before submitting a revision", "source-snapshot-changed");
     }
     return result.text;
-  };
+  }
+  return Object.assign(read, {
+    incomplete: async (sourceRef: string) => (await scope(sourceRef)).incomplete ?? false,
+  });
 }

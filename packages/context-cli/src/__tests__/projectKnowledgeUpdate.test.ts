@@ -11,13 +11,15 @@ import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
-import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
+import { beginKnowledgeUpdate, readKnowledgeUpdate, type KnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { completeApprovedRevision, readApprovedRevision, type ApprovedRevision } from "../project/approvedRevision.js";
 import { collectProjectStatus } from "../project/status.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 const scope = { requirement_ref: "workspace-knowledge", source_ref: DOCUMENT_REVISION_SOURCE_REF, module_refs: ["module:app"] };
+const selectedUpdatePages = (update: KnowledgeUpdate) => [...update.candidates.map(({ path }) => ({ path })),
+  ...(update.scope_pages ?? []).map(path => ({ path }))].sort((a, b) => a.path.localeCompare(b.path));
 const baseline = async (root: string) => readProcessedScopes(YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")));
 
 async function approveOne(root: string, path: string) {
@@ -65,9 +67,10 @@ test("source update preserves old baseline until every revised page is built and
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const first = (await readKnowledgeUpdate(root))!;
-  expect(first.candidates).toHaveLength(2);
+  expect(first.candidates).toEqual([]);
+  expect(first.scope_pages).toHaveLength(2);
   await expect(beginKnowledgeUpdate(root, { scopes: [scope] })).rejects.toThrow("active task");
-  await complete(root, { stage: "source-update", decisions: first.candidates.map(({ path }) => ({ path })),
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(first).map(({ path }) => ({ path })),
     scope_summary: "Both published constants match the current source.", new_topics: [] });
   const before = await baseline(root);
   expect(before).toHaveLength(1);
@@ -75,7 +78,7 @@ test("source update preserves old baseline until every revised page is built and
   await beginKnowledgeUpdate(root, { scopes: [scope], changes: "The answer changed; explain the relationship on both pages." });
   const update = (await readKnowledgeUpdate(root))!;
   expect(update.previous_versions).toEqual([before[0]!.processed_version]);
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Explain the changed answer." })),
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Explain the changed answer." })),
     scope_summary: "Both pages explain the changed relationship.", new_topics: [] });
   const request = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "updated public entry point") });
@@ -95,7 +98,7 @@ test("source update preserves old baseline until every revised page is built and
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const recovered = (await readKnowledgeUpdate(root))!;
   expect(recovered.previous_versions).toEqual(update.previous_versions);
-  await complete(root, { stage: "source-update", decisions: recovered.candidates.map(({ path }) =>
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(recovered).map(({ path }) =>
     path === completedPath ? { path } : { path, instruction: "Explain the changed answer." }),
     scope_summary: "The first page already incorporates this change; finish the other page.", new_topics: [] });
   const last = (await readApprovedRevision(root))!;
@@ -113,9 +116,9 @@ test("a newly discovered topic uses the existing review writer and does not over
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope], changes: "A new reader task needs a separate guide." });
   const update = (await readKnowledgeUpdate(root))!;
-  const oldPages = new Map(await Promise.all(update.candidates.map(async (candidate) =>
+  const oldPages = new Map(await Promise.all(selectedUpdatePages(update).map(async (candidate) =>
     [candidate.path, await readFile(join(root, "knowledge", candidate.path), "utf8")] as const)));
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path })),
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path })),
     scope_summary: "Existing reference pages remain correct; add a guide for the combined task.",
     new_topics: [{ path: "architecture/combined-task.md", title: "Combined task", source_refs: [scope.source_ref],
       instruction: "Explain how the two existing constants are used together." }] });
@@ -149,8 +152,8 @@ test("late development context updates one code page without moving its code ver
   await writeFile(registryPath, YAML.stringify(registry));
   await beginKnowledgeUpdate(root, { scopes: [scope, { requirement_ref: scope.requirement_ref, source_ref: note.source_ref }] });
   const update = (await readKnowledgeUpdate(root))!;
-  const target = update.candidates[0]!;
-  const peer = update.candidates[1]!;
+  const target = selectedUpdatePages(update)[0]!;
+  const peer = selectedUpdatePages(update)[1]!;
   const peerBody = await readFile(join(root, "knowledge", peer.path), "utf8");
   await complete(root, { stage: "source-update", scope_summary: "Code is unchanged; the new rationale clarifies only the first page.",
     decisions: [{ path: target.path, instruction: "Add the confirmed development rationale as intent, not behavior.", supporting_sources: [note.source_ref] }, { path: peer.path }], new_topics: [] });
@@ -248,7 +251,7 @@ test("same-task input adjustment keeps the approved body and queued pages and re
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Explain the source change." })),
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Explain the source change." })),
     scope_summary: "Inspect both related pages.", new_topics: [] });
   const old = (await readApprovedRevision(root))!;
   const { adjustCurrentTaskSources } = await import("../project/taskSourceAdjustment.js");
@@ -287,7 +290,7 @@ test("a newer same-task source revisits already delivered pages before advancing
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Refresh this explanation." })), scope_summary: "Both pages are affected.", new_topics: [] });
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Refresh this explanation." })), scope_summary: "Both pages are affected.", new_topics: [] });
   const first = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: first.target.markdown.replace("public entry point", "updated public entry point") });
   const second = (await readApprovedRevision(root))!;
@@ -344,7 +347,7 @@ test("multiple revised pages share one Review close and build, including a rejec
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this explanation." })), scope_summary: "Both pages need clarification.", new_topics: [] });
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Clarify this explanation." })), scope_summary: "Both pages need clarification.", new_topics: [] });
   const first = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: first.target.markdown.replace("public entry point", "updated public entry point") });
   const second = (await readApprovedRevision(root))!;
@@ -378,7 +381,7 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
   const version = await commitSource(root);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }, index) =>
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }, index) =>
     newPage && index ? { path } : { path, instruction: `Explain change for page ${index}.` }),
     scope_summary: "Update the affected explanations.", new_topics: newPage ? [{ path: "architecture/new-task.md", title: "New task",
       source_refs: [scope.source_ref], instruction: "Explain the new task." }] : [] });
@@ -461,7 +464,7 @@ test("ordinary source revision exposes current requirements without restoring Pr
   await commitSource(root, "export interface Options { label: string; count?: number }\nexport const answer = 43;\n");
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }, index) => index ? { path } : { path, instruction: "Document the current Options fields." }), scope_summary: "Only the API explanation changes.", new_topics: [] });
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }, index) => index ? { path } : { path, instruction: "Document the current Options fields." }), scope_summary: "Only the API explanation changes.", new_topics: [] });
   const request = (await readApprovedRevision(root))!;
   const status = await collectProjectStatus(root, { managed: true });
   const action = status.workflow.current?.action?.input as { writing_context: { requirements: Array<{ id: string }>; indexer_usage: unknown[]; providers?: unknown } };
@@ -480,7 +483,7 @@ test("partial revision delivery returns to remaining Review and never advances t
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Improve this explanation." })), scope_summary: "Both pages.", new_topics: [] });
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Improve this explanation." })), scope_summary: "Both pages.", new_topics: [] });
   const first = (await readApprovedRevision(root))!;
   const { completeApprovedRevision } = await import("../project/approvedRevision.js");
   const { approvedContextSectionsInMarkdown } = await import("../project/verifyContextSections.js");
@@ -519,9 +522,9 @@ test("partial delivery preserves pending linked pages and survives a failed buil
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this page." })), scope_summary: "Both pages.", new_topics: [] });
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Clarify this page." })), scope_summary: "Both pages.", new_topics: [] });
   const first = (await readApprovedRevision(root))!;
-  const peer = update.candidates.find(item => item.path !== first.target.path)!;
+  const peer = selectedUpdatePages(update).find(item => item.path !== first.target.path)!;
   const { posix } = await import("node:path");
   const link = posix.relative(posix.dirname(first.target.path), peer.path);
   const linked = first.target.markdown.replace("public entry point", `public entry point; see [related page](${link})`);

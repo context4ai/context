@@ -268,6 +268,7 @@ export async function runProjectPhaseCommand(input: {
   verbose?: boolean;
   format?: ProjectRunFormat;
   larkRunner?: LarkRunner;
+  refreshSources?: readonly string[];
 }): Promise<void> {
   const found = findContextProjectRoot(input.cwd);
   if (found === null) {
@@ -378,6 +379,7 @@ export async function runProjectPhaseCommand(input: {
         projectRoot: found.projectRoot,
         phase,
         ...(input.larkRunner !== undefined ? { larkRunner: input.larkRunner } : {}),
+        ...(input.refreshSources === undefined ? {} : { refreshSources: input.refreshSources }),
       }));
     }
 

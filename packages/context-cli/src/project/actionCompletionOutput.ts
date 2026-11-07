@@ -44,7 +44,7 @@ export async function prepareActionCompletionOutput(input: {
   await atomicWriteFile(resultFile, full);
   if (production) return { stage_state: result.stage_state,
     accepted_count: Array.isArray(result.accepted) ? result.accepted.length : 0, failed_count: Array.isArray(result.failed) ? result.failed.length : 0,
-    details: resultFile, ...pick(result, ["next", "next_preparation"]) };
+    details: resultFile, ...pick(result, ["submission_state", "next", "next_preparation"]) };
   const next = record(result.next) ?? record(record(result.workflow)?.current) ??
     record(record(result.continuation)?.next);
   const outcomes = (Array.isArray(result.outcomes) ? result.outcomes : [])
@@ -55,11 +55,14 @@ export async function prepareActionCompletionOutput(input: {
     counts[key] = (counts[key] ?? 0) + 1;
   }
   const progress = record(result.progress);
-  const failure = record(result.next_preparation);
+  const failure = record(result.next_preparation) ?? (result.next_preparation_error ? {
+    outcome: "failed", message: result.next_preparation_error,
+    command: record(result.next_action)?.command ?? "context status --format json",
+  } : undefined);
   const summary = {
     protocol: "context.action.completion-summary/v1",
     completion_protocol: result.protocol,
-    ...pick(result, ["stage", "outcome", "current_revision", "revision_before", "revision_after", "revision_advanced"]),
+    ...pick(result, ["submission_state", "stage", "outcome", "current_revision", "revision_before", "revision_after", "revision_advanced"]),
     result_file: resultFile,
     result_bytes: Buffer.byteLength(full),
     outcome_counts: counts,
@@ -100,7 +103,7 @@ export async function prepareActionCompletionOutput(input: {
   }
   summary.details_required = summary.outcomes_omitted > 0 || failure?.outcome === "failed" ||
     (Array.isArray(result.reference_warnings) && result.reference_warnings.length > 0) ||
-    outcomes.some(item => !["accepted", "material-expanded"].includes(String(item.outcome))) ||
+    outcomes.some(item => !["accepted", "material-expanded", "candidate-prepared", "unchanged"].includes(String(item.outcome))) ||
     (outcomes.length === 0 && result.outcome === undefined && result.workflow_summary === undefined) ||
     (next === undefined && result.workflow_summary === undefined);
   return summary;

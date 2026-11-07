@@ -2,17 +2,17 @@ import { formatFeedback } from "../lib/cliFeedback.js";
 import type { ProjectStatus } from "./statusTypes.js";
 import { repoContentLinksNeedRepair } from "./repoContentLinks.js";
 
-export function formatProjectStatus(status: ProjectStatus): string {
-  const repoSourceLines = status.sources.map((source) =>
+export function formatProjectStatus(status: ProjectStatus, options: { full?: boolean } = {}): string {
+  const repoSourceLines = status.sources.filter(source => options.full || !source.ready || source.diagnostics.length > 0).map((source) =>
       `source ${source.name}: ${source.ready ? "ready" : "not-ready"} ` +
       `(local=${source.local ?? "-"}, ref=${source.ref}, materialized=${source.materialized ? "yes" : "no"})`
     );
-  const documentSourceLines = status.documentSources.map((source) =>
+  const documentSourceLines = status.documentSources.filter(source => options.full || !source.snapshotReady || source.diagnostics.length > 0 || source.missing_resources).map((source) =>
     `source ${source.name}: ${source.snapshotReady ? "captured" : "needs-capture"} ` +
     `(type=${source.type}, materialized=${source.materializedAt}, manifest=${source.manifest})`
   );
   const sourceLines = repoSourceLines.length + documentSourceLines.length === 0
-    ? ["sources: none"]
+    ? [status.sourceCount ? "All sources are ready." : "sources: none"]
     : [...repoSourceLines, ...documentSourceLines];
   const diagnostics = status.sources.flatMap((source) =>
     source.diagnostics.map((diagnostic) => `diagnostic ${source.name}: ${diagnostic}`)
@@ -25,7 +25,8 @@ export function formatProjectStatus(status: ProjectStatus): string {
     source.agent_hints.map((hint) => `agent hint ${source.name}: ${hint}`)
   );
   const documentHints = status.documentSources.flatMap((source) =>
-    source.agent_hints.map((hint) => `agent hint ${source.name}: ${hint}`)
+    [...source.agent_hints.map((hint) => `agent hint ${source.name}: ${hint}`),
+      ...(source.missing_resources ? [`retry missing resources ${source.name}: ${source.missing_resources.retry_action.command}; input=${JSON.stringify(source.missing_resources.retry_action.input)}`] : [])]
   );
   const packageLines = status.packages.length === 0
     ? ["packages: none"]
@@ -55,11 +56,12 @@ export function formatProjectStatus(status: ProjectStatus): string {
         ? [`- execution mode: ${status.executionMode.mode} (${status.executionMode.scope})`]
         : []),
       `- sources: ${status.readySources}/${status.sourceCount} ready`,
+      ...(status.sourceUpdate?.issues.length ? [`- source updates: ${status.sourceUpdate.state} (${status.sourceUpdate.issues.map(issue => `${issue.source_ref ?? "workspace"}: ${issue.reason_code}`).join("; ")}); select scope with \`context update --schema --format json\``] : []),
       `- draft candidates: ${status.draftCandidates}`,
       `- approved pages: ${status.approvedPages}`,
       `- packages: ${status.packageCount}`,
       `- dist files: ${status.distFiles}`,
-      `- phases: ${status.phases.length > 0 ? status.phases.join(", ") : "none"}`,
+      `- phases: ${options.full ? status.phases.join(", ") || "none" : status.phases.length}`,
       `- pending capture phases: ${status.pendingCapturePhases.length}`,
       `- indexer registry: ${status.indexerRegistry.state}`,
       `- indexer candidate compile: ${status.indexerCandidateCompile.state}`,
@@ -71,6 +73,7 @@ export function formatProjectStatus(status: ProjectStatus): string {
       "",
       "**Sources**:",
       ...sourceLines.map((line) => `- ${line}`),
+      ...(options.full ? [] : ["- expand phases and sources → `context status --view full`"]),
       "",
       "**Packages**:",
       ...packageLines.map((line) => `- ${line}`),

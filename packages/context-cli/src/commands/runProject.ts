@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { Command, Option } from "commander";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -22,6 +23,11 @@ import { recordWorkflowStop } from "../project/debugTrace.js";
 import { WorkspaceExecutionRuntime } from "../project/workflow/workflowExecutionRuntime.js";
 import { createWorkflowInProcessExecutor } from "../project/workflow/workflowInProcessActions.js";
 import { workflowRouteOutput, workflowRunResultFile } from "../project/workflow/workflowRouteOutput.js";
+import { readYamlOrJsonInput } from "../project/payloadInput.js";
+import { z } from "zod";
+import { assertActionInputWorkspace } from "../project/actionInputWorkspace.js";
+
+const captureRequest = z.object({ refresh_sources: z.array(z.string().regex(/^lark:.+/u)).min(1) }).strict();
 
 type ProjectRunInput = Parameters<typeof runProjectPhaseCommand>[0];
 
@@ -205,6 +211,7 @@ export function registerProjectRunCommand(
     .option("--deliver", "pause writing to review and deliver completed articles")
     .option("--resume-writing", "cancel a delivery pause without discarding approved articles or unfinished tasks")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
+    .option("--input <file>", "capture request with refresh_sources, or - for stdin")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
       new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
@@ -235,6 +242,22 @@ export function registerProjectRunCommand(
         ? rootOptions.workflowResourceReceipts
         : undefined;
       const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
+      let refreshSources: string[] | undefined;
+      if (typeof options.input === "string") {
+        if (!phaseId?.startsWith("capture:lark:") || options.until !== undefined || options.list === true) {
+          throw new ContextError(ExitCode.UserError, "--input is only available for a selected Lark capture phase.", { category: ErrorCategory.UserInputInvalid });
+        }
+        assertActionInputWorkspace(cwd, options.input);
+        const request = captureRequest.safeParse(await readYamlOrJsonInput({ path: options.input === "-" ? "-" : resolve(cwd, options.input),
+          label: "Lark capture request", missingNext: "Provide refresh_sources for the selected Lark source.",
+          readFailureNext: "Check the capture request path.", parseFailureNext: "Provide a YAML or JSON capture request." }));
+        if (!request.success || request.data.refresh_sources.some(source => `capture:${source}` !== phaseId)) {
+          throw new ContextError(ExitCode.UserError, "refresh_sources must contain only the selected Lark source.", {
+            category: ErrorCategory.UserInputInvalid, expected_shape: { refresh_sources: [phaseId.slice("capture:".length)] },
+          });
+        }
+        refreshSources = request.data.refresh_sources;
+      }
       if (options.until !== undefined) {
         await runProjectUntil({
           cwd,
@@ -251,7 +274,7 @@ export function registerProjectRunCommand(
         });
         return;
       }
-      await runProjectPhaseCommand(projectPhaseRunInput({
+      await runProjectPhaseCommand({ ...projectPhaseRunInput({
         cwd,
         ...(phaseId === undefined ? {} : { phaseId }),
         options,
@@ -262,6 +285,6 @@ export function registerProjectRunCommand(
           ? { workflowRevision: rootOptions.workflowRevision }
           : {}),
         ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
-      }));
+      }), ...(refreshSources === undefined ? {} : { refreshSources }) });
     });
 }

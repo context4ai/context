@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { inspectWriterLock, recoverWriterLock } from "../project/writeLockRecovery.js";
 import { inspectTaskRecovery } from "../project/taskRecovery.js";
 import { withProjectWriteLock } from "../project/writeLock.js";
+import { runDurableMultiFileTransaction } from "../project/durableMultiFileTransaction.js";
+import { durableContentDigest } from "../project/durableSingleFileTransaction.js";
 
 async function fixture(run: (root: string, path: string) => Promise<void>) {
   const parent = resolve(".tmp/write-lock-recovery-tests");
@@ -79,5 +81,25 @@ test("changed orphan identity and unexpected lock files block apply", async () =
     await writeFile(join(path, "unexpected"), "preserve");
     await expect(recoverWriterLock({ projectRoot: root, apply: true, plan_digest: current!.digest })).rejects.toThrow("Unexpected");
     expect(await readFile(join(path, "unexpected"), "utf8")).toBe("preserve");
+  });
+});
+
+test("orphan recovery finishes the previewed transaction before returning the next action", async () => {
+  await fixture(async (root) => {
+    await writeFile(join(root, "knowledge.md"), "old");
+    await expect(runDurableMultiFileTransaction({ projectRoot: root, kind: "lock-recovery-test",
+      proposal_digest: durableContentDigest("proposal"),
+      targets: [{ path: "knowledge.md", operation: "write", content: "new",
+        base_digest: durableContentDigest("old"), target_digest: durableContentDigest("new") }],
+      inject_failure: point => { if (point === "after-initial-journal-dir-fsync") throw new Error("interrupt"); },
+    })).rejects.toThrow("interrupt");
+    const preview = await recoverWriterLock({ projectRoot: root });
+    expect(preview.journal_files?.length).toBeGreaterThan(0);
+    expect(await readFile(join(root, "knowledge.md"), "utf8")).toBe("old");
+    const recovered = await recoverWriterLock({ projectRoot: root, apply: true, plan_digest: preview.revision! });
+    expect(recovered).toMatchObject({ action: "writer-lock-recovered", next: "context status --format json" });
+    expect(recovered.receipts).toHaveLength(1);
+    expect(await readFile(join(root, "knowledge.md"), "utf8")).toBe("new");
+    expect((await inspectTaskRecovery(root)).transactions).toEqual([]);
   });
 });

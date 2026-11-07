@@ -10,6 +10,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
+import { markSubmissionState } from "./submissionState.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
 
 const TRANSACTION_ROOT = join(".tmp", "context-runtime", "transactions");
@@ -242,6 +243,7 @@ async function assertRecoverableStates(input: {
 }
 
 async function commitJournal(input: {
+  report_submission?: boolean;
   projectRoot: string;
   directory: string;
   journal: DurableMultiFileJournal;
@@ -260,6 +262,7 @@ async function commitJournal(input: {
     }
   }
   await rm(input.directory, { recursive: true, force: true });
+  if (input.report_submission) markSubmissionState("committed");
   await input.inject_failure?.("after-transaction-remove");
   await syncDirectory(dirname(input.directory));
   await input.inject_failure?.("after-transaction-remove-dir-fsync");
@@ -294,9 +297,14 @@ export async function recoverDurableMultiFileTransactions(
       await rm(directory, { recursive: true, force: true });
       continue;
     }
-    const journal = parseJournal(raw, entry.name);
-    await commitJournal({ projectRoot, directory, journal });
-    receipts.push(receipt(journal, true));
+    try {
+      const journal = parseJournal(raw, entry.name);
+      await commitJournal({ projectRoot, directory, journal });
+      receipts.push(receipt(journal, true));
+    } catch (error) {
+      markSubmissionState("uncertain");
+      throw error;
+    }
   }
   return receipts;
 }
@@ -326,6 +334,7 @@ async function runDurableMultiFileTransactionInternal(input: {
     targets: [...input.targets],
     completed_targets: [],
   };
+  markSubmissionState("uncertain");
   await persistJournal({
     directory,
     journal,
@@ -333,11 +342,13 @@ async function runDurableMultiFileTransactionInternal(input: {
     ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
   });
   await commitJournal({
+    report_submission: true,
     projectRoot: input.projectRoot,
     directory,
     journal,
     ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
   });
+  markSubmissionState("committed");
   return receipt(journal, false);
 }
 

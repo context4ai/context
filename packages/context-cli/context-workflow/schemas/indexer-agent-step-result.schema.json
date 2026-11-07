@@ -21,6 +21,27 @@
           "type": "string",
           "const": "source-update"
         },
+        "format_only": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "source_ref",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
         "decisions": {
           "type": "array",
           "items": {

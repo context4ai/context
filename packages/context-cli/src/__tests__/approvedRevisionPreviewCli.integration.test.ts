@@ -49,7 +49,8 @@ test.each(["direct", "source-update", "regenerate"] as const)("Node CLI %s previ
       await beginKnowledgeUpdate(root, { scopes: [{ requirement_ref: requirement.id,
         source_ref: DOCUMENT_REVISION_SOURCE_REF, ...(target.module_refs?.length ? { module_refs: target.module_refs } : {}) }] });
       const update = (await readKnowledgeUpdate(root))!;
-      expect(update.candidates.map(candidate => candidate.path)).toEqual([path]);
+      expect(update.candidates).toEqual([]);
+      expect(update.scope_pages).toEqual([path]);
       await completeKnowledgeUpdate({ projectRoot: root, revision: update.revision,
         decisions: [{ path, instruction: "Clarify usage against the captured code." }],
         scope_summary: "Reassess the selected code explanation.", new_topics: [] });

@@ -39,6 +39,16 @@ export async function registerKnowledgeMaintenance(root: string, value: unknown,
     const existing = [...state.pending, ...(state.active ? [state.active] : [])].find(item => item.input.id === input.id);
     const completed = state.completed.find(item => item.id === input.id);
     if (existing || completed) {
+      const pendingIndex = state.pending.findIndex(item => item.input.id === input.id);
+      if (existing && pendingIndex >= 0 && existing.input.timing !== input.timing &&
+        indexerProtocolDigest({ ...existing.input, timing: input.timing }) === digest) {
+        existing.input = input;
+        state.pending.splice(pendingIndex, 1);
+        if (input.timing === "priority") state.pending.unshift(existing); else state.pending.push(existing);
+        await saveMaintenance(root, state);
+        return { status: "maintenance-registered" as const, outcome: "priority-updated", id: input.id,
+          timing: input.timing, next_action: { command: "context status --format json" } };
+      }
       if ((existing ? indexerProtocolDigest(existing.input) : completed!.input_digest) !== digest) throw new TypeError("Maintenance id already belongs to different input. Cancel the pending request or use a new id for additional feedback.");
       return { status: "maintenance-registered" as const, outcome: completed ? completed.outcome === "cancelled" ? "already-cancelled" : "already-completed" : "already-registered", id: input.id, next_action: { command: "context status --format json" } };
     }

@@ -28,3 +28,34 @@ Review and conflict-recovery routes; acceptance does not approve publication.
 If the next preparation fails after acceptance, use its recovery command without
 repeating saved content. An unfinished production stage can remain suspended
 while this maintenance action runs; do not replace or clear its tasks.
+
+After a successful submission, follow `next_route.inline`, or read
+`next_route.file` once when no inline Route is present. Do not insert another
+status call. Refresh status only after a failure, a missing next Route, or an
+external workspace change. A driver loop must bind each prepared result to its
+issued task inputs, use the returned Route revision, and stop when the node
+changes or a new reading or human gate is required.
+
+Minimal driver flow (pseudocode):
+
+```text
+route = initial_route
+while route.node == initial_node and no_new_read_or_confirmation_gate(route):
+    result = submit(input_bound_to(route), revision=route.revision)
+    if result_failed(result): follow_returned_recovery(result); break
+    if result.next_route is missing: refresh_status_once(); break
+    route = result.next_route.inline or read_once(result.next_route.file)
+```
+
+Use preview only when someone will read the assembled Markdown before deciding
+to submit; unattended loops submit directly. On failure, follow the returned
+submission state and recovery action: correct uncommitted input, continue after
+committed work, or recover an uncertain transaction before deciding to retry.
+
+For writes expected to exceed a minute, use a recoverable background task when
+the host supports one; otherwise allow sufficient foreground timeout. Prefer a
+bounded wait based on remaining work over repeated model polling. Long loops
+write completed/total progress under `.tmp` and report that progress to the user.
+Do not change knowledge inputs during build, version recording or review apply.
+Use the standard `context review html` report for review and requested diffs;
+generate it before requesting confirmation. Managed approval also produces it.

@@ -186,7 +186,7 @@ async function collectProjectStatusSnapshotInternal(
     : 0;
   const verifyErrors = rawVerifyErrors - projectionRefreshIssues;
   const verifyWarnings = verifyStatus.issues.filter((issue) => issue.severity === "warning").length;
-  const evidenceStatus = deferDeliveryChecks ? "not-checked" as const : evidenceStatusForStatus({ verifyErrors, verifyWarnings });
+  const evidenceStatus = deferDeliveryChecks || verifyStatus.diagnostics.length > 0 ? "not-checked" as const : evidenceStatusForStatus({ verifyErrors, verifyWarnings });
   const evidenceWarnings = evidenceWarningState(verifyStatus.issues);
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
   // There is only one production protocol. Missing current state never
@@ -215,6 +215,9 @@ async function collectProjectStatusSnapshotInternal(
   // ledger must not hide package configuration/Review recovery gates.
   const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
     (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
+  const sourceUpdate = !maintenance && !localRevision && !localUpdate && !localRollback && !production && draftStatus.count === 0 && approvedPages > 0
+    ? await import("./pendingSourceUpdates.js").then(({ inspectPendingSourceUpdates }) => inspectPendingSourceUpdates(projectRoot))
+    : undefined;
   // An explicitly prepared revision/update is a new task, not a request to
   // restore the production that previously cleared its temporary workspace.
   const observation: ContextWorkflowObservation = {
@@ -223,9 +226,7 @@ async function collectProjectStatusSnapshotInternal(
       ? await inspectSiteTranslations(projectRoot, packages).then(result => result.route_satisfied, () => false) : true,
     taskPreparation,
     localRevisionActive: !!localRevision || !!localUpdate,
-    sourceUpdatePending: !maintenance && !localRevision && !localUpdate && !localRollback && !production && draftStatus.count === 0 &&
-      await import("./pendingSourceUpdates.js").then(({ pendingSourceUpdateScopes }) => pendingSourceUpdateScopes(projectRoot))
-        .then(scopes => scopes.length > 0, () => false),
+    sourceUpdatePending: sourceUpdate?.state === "pending",
     unfinishedIndexerTasks: false,
     ...(production ? { productionState: await productionRequirementsAreCurrent(projectRoot, production)
       ? dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state : "active" as const,
@@ -305,6 +306,7 @@ async function collectProjectStatusSnapshotInternal(
     observation: workflowSnapshot.observation,
   });
   const status: ProjectStatus = {
+    ...(sourceUpdate ? { sourceUpdate } : {}),
     repoContent: await inspectRepoContentLinks(projectRoot),
     projectRoot,
     sourceCount: observation.sourceCount,

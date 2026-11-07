@@ -47,6 +47,13 @@ whole-repository `reset --hard` or `clean -fdx` as a workspace shortcut.
 Use the restored source records with the preparation guide to restore pinned
 repository versions, module paths, document snapshots and attachments. New remote
 content cannot stand in for lost old snapshots. Do not reclone usable sources.
+For one registered document, `context source restore --input - --format json`
+accepts `{ "type": "lark", "name": "handbook", "commit": "<sha>" }` (or
+`type: "file"`). It restores that source's body, assets and manifest entry as
+one verified snapshot, preserving other documents in a shared manifest. Omit
+`commit` to select the latest complete, hash-valid capture in Git history.
+Do not assemble a document from different captures or rebuild its capture report
+by hand. Run the returned status action after restoring it.
 On interruption, inspect the actual file diff and remaining source gaps and
 continue those operations; do not assume the previous Git command completed or
 replay old task submissions.

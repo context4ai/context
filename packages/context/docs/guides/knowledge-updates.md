@@ -179,6 +179,12 @@ There are no root-level Context version/build/publication receipts to maintain.
 Build freshness uses the existing local package cache. The CLI does not seal a
 version merely because a preview was built. Before reusing a version, check the
 actual publication target and Git tags; a published version requires an increase.
+Replaying the same latest version and description returns `already-recorded`,
+including after tagging. Resubmitting a different description for the latest
+untagged version updates that description without changing its version or content
+checkpoint. No additional flag is needed. If this session already published the
+version, record a new version instead: the CLI protects tagged records but cannot
+infer whether an untagged version was published by another tool.
 Publication belongs to the installed distribution tool. Record remote receipts
 in its configuration or the existing work summary, separately for each target.
 A successful authorized commit/tag identifies the delivered source; never create

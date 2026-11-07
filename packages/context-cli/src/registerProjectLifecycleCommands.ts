@@ -101,7 +101,7 @@ export function registerProjectStatusCommand(program: Command): void {
     .command("status")
     .description("Print workspace overview and suggested next actions")
     .option("--format <format>", "output format: table | json", "table")
-    .option("--view <view>", "with --format json, output view: summary | full", "summary")
+    .option("--view <view>", "output view: summary | full (full expands phases and sources)", "summary")
     .option("--managed", "use explicit current-conversation managed approval for this status loop")
     .option("--resource-receipts <json-or-@file>", "current-conversation Agent Graph resource read receipts")
     .addOption(

@@ -35,6 +35,10 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
   // The shared serializer either returns the intact Route inline or points to
   // it on disk. Summary fields never become a partial executable contract.
   return {
+    ...(status.sourceUpdate ? { source_update: { ...status.sourceUpdate,
+      ...(status.sourceUpdate.state === "unknown" ? { next_action: { command: "context update --schema --format json" } } : {}) } } : {}),
+    ...(status.documentSources.some(source => source.missing_resources) ? { missing_resources: status.documentSources
+      .filter(source => source.missing_resources).map(source => ({ source_ref: `${source.type}:${source.name}`, ...source.missing_resources })) } : {}),
     workflow: { status: status.workflow.status, revision: status.workflow.revision },
     next_route: await workflowRouteOutput(projectRoot, status.workflow.current),
     ...(maintenance.state.active || maintenance.state.pending.length ? { maintenance: {
@@ -133,7 +137,7 @@ export async function runProjectStatusCommand(input: {
       2,
     )}\n`);
   } else {
-    process.stdout.write(formatProjectStatus(status));
+    process.stdout.write(formatProjectStatus(status, { full: input.view === "full" }));
   }
   input.onSuccess?.(status);
   return true;

@@ -107,6 +107,9 @@ export interface PrefetchedLarkDocument {
 }
 
 export interface FetchFeishuDocInput {
+  /** A validated local snapshot may skip embedded downloads at this revision. */
+  unchangedRevisionId?: string;
+  requireCompleteBody?: boolean;
   /** Explicit standalone reads can lock identity; existing capture defaults remain unchanged. */
   allowIdentityFallback?: boolean;
   prefetched?: PrefetchedLarkDocument;
@@ -139,6 +142,7 @@ export interface FetchFeishuDocAsset {
 }
 
 export interface FetchFeishuDocSnapshotResult {
+  unchanged?: boolean;
   markdown: string;
   title?: string;
   revisionId?: string;
@@ -691,6 +695,19 @@ export async function fetchFeishuDocSnapshot(
         raw_content_hash: projection.rawContentHash,
       },
     });
+  }
+  // Do not download embedded resources for an unchanged, complete document or
+  // for an incomplete body that capture cannot safely promote.
+  if ((revisionId !== undefined && revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error") ||
+      (input.requireCompleteBody === true && (fidelity.evidence_status === "error" || fidelity.projection_status === "error"))) {
+    return {
+      markdown: body,
+      ...(title === undefined ? {} : { title }),
+      ...(revisionId === undefined ? {} : { revisionId }),
+      ...(revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error" ? { unchanged: true } : {}),
+      assets, fidelity, resourceMaterialization, accessIdentity,
+      identityFallback: identityFetch.fallback || session.usedFallback,
+    };
   }
   const resources = [...new Map([...(projection?.resources ?? []), ...larkMarkdownImageResources(body)]
     .map(resource => [resource.locator, resource])).values()];

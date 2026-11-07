@@ -158,6 +158,16 @@ same command: it returns the assembled Markdown and prior text without accepting
 or advancing the revision. Submit without `--preview` after checking it. Preview
 is optional; it does not replace Review or authorize a stale revision.
 
+Preview is useful only when its assembled text will be read before deciding to
+submit. An unattended loop submits directly. Continue from the receipt's
+`next_route.inline`, or read `next_route.file` once; do not routinely run status
+or preview between submissions. Stop a loop when the Route node changes, a new
+required reading appears, or a human gate is reached. Bind prepared content to
+the issued task inputs rather than attaching an old draft to a fresh revision.
+If submission fails, use its returned submission state and recovery action;
+never replay work already committed. Refresh status when the next Route is
+missing or the workspace changes externally.
+
 ## Interpreting generated API output
 
 Check fields, types, requiredness and supported defaults against the selected
@@ -185,3 +195,26 @@ line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
 The per-fragment limits (three source files, eight regions) apply after
 resolving and deduplicating positions.
+
+## Submitting several prewritten pages
+
+Single-page submission remains the default. When several queued pages are already
+written, use the optional `action prepare-current` command from this Route. It
+returns the existing `tasks[]` submission shape, task input files and one temporary
+Agent directory. Compare each draft with its issued instruction, source inputs and
+current sections before submitting it. An `edits` file contains the same
+`stage: approved-revision` payload as a single submission; alternatively, `content`
+is full Markdown and `references` is `{ "sections": [...] }`. All result paths are
+relative to the returned Agent directory.
+
+Submit an ordered completed prefix. The CLI saves one page at a time and stops at
+Review, changed inputs, new reading requirements or a failed page. Follow the
+returned Route. If a page fails, correct it and submit only the unfinished suffix
+with the current Route revision and original input tokens. If inputs changed,
+prepare again and reconcile the drafts. Never resubmit a committed page; uncertain
+transactions must use the returned recovery action first.
+
+For long submission loops, report completed/total progress using temporary files.
+Use the host's recoverable background execution when available, otherwise allow
+sufficient foreground timeout. Wait for the running command rather than repeatedly
+polling through model turns. Do not modify knowledge inputs during a write.

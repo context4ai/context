@@ -25,6 +25,7 @@ import { scopedIndexerSourceBoundaryDigest } from "./indexerSourceBoundary.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
+import { reuseCommandValue } from "./commandReadCache.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +65,10 @@ async function trackedPaths(root: string, ref: string): Promise<string[]> {
 }
 
 export async function assertPinnedSource(root: string, ref: string): Promise<void> {
+  return reuseCommandValue(`pinned-parser-source:${JSON.stringify([root, ref])}`, () => checkPinnedSource(root, ref));
+}
+
+async function checkPinnedSource(root: string, ref: string): Promise<void> {
   const sourceStat = await stat(root).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined;
     throw error;

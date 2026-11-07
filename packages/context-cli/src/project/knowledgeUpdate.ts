@@ -10,7 +10,7 @@ import { validateArticleStructureEntries, indexerCurrentActionInputDefinitions, 
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { prepareApprovedRevision, readApprovedRevision, targetBytes } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
-import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScopes } from "./processedScopeStorage.js";
+import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScopes, migrateUnchangedScopeReferences } from "./processedScopeStorage.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -19,7 +19,13 @@ import { repoContentScopeMatches } from "@c4a/context";
 import { ensureRepoContentLinks } from "./repoContentLinks.js";
 import { inspectRepoContentChanges, repoContentImpactReader } from "./repoContentEvidence.js";
 import { inspectSettledReferences } from "./settledReferenceRelocation.js";
-import { pendingSourceUpdateScopes } from "./pendingSourceUpdates.js";
+import { applyFormatOnlyReferences, proposeFormatOnlyReferences, type FormatOnlyProposal } from "./formatOnlyReferences.js";
+import { recordFormatOnlyRelocations, settleFormatOnlyUpdate } from "./formatOnlyUpdate.js";
+import { inspectPendingSourceUpdates } from "./pendingSourceUpdates.js";
+import { beginFormatOnlyUpdate } from "./formatOnlyUpdate.js";
+import { readMissingLarkResources } from "./larkCaptureFreshness.js";
+import { markSubmissionState } from "./submissionState.js";
+import { collectReferenceEvidence, referenceEvidenceKey, type ReferenceEvidence } from "./articleReferenceObservation.js";
 
 export const knowledgeUpdateInputSchema = z.object({
   scopes: z.array(z.object({ requirement_ref: z.string().min(1), source_ref: z.string().min(1),
@@ -37,8 +43,14 @@ const updateSchema = z.object({
   previous_versions: z.array(z.string().nullable()), changes: z.string().optional(),
   repo_content: z.unknown().optional(),
   scope_pages: z.array(z.string()).optional(),
-  changed_references: z.array(z.object({ path: z.string(), section_id: z.string(), state: z.enum(["changed", "unavailable"]),
-    source_ref: z.string(), locator: z.unknown() }).strict()).optional(),
+  changed_references: z.array(z.object({ path: z.string(), section_id: z.string(), state: z.enum(["changed", "unavailable", "not-found", "ambiguous"]),
+    source_ref: z.string(), locator: z.unknown(), reason: z.string().optional(), evidence_ref: z.string().optional() }).strict()).optional(),
+  reference_evidence: z.array(z.custom<ReferenceEvidence>()).optional(),
+  reference_groups: z.object({ automatic: z.array(z.string()), needs_decision: z.array(z.string()), unavailable: z.array(z.string()) }).strict().optional(),
+  outside_scope: z.array(z.object({ path: z.string(), section_id: z.string(), source_ref: z.string(), state: z.string(), reason: z.string().optional() }).strict()).optional(),
+  expand_scope: z.object({ command: z.string(), source_refs: z.array(z.string()) }).strict().optional(),
+  missing_resources: z.array(z.unknown()).optional(),
+  format_only_proposals: z.array(z.custom<FormatOnlyProposal>()).optional(),
 }).strict();
 export type KnowledgeUpdate = z.infer<typeof updateSchema>;
 
@@ -64,12 +76,18 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     if (await readTaskRollback(projectRoot) || await readApprovedRevision(projectRoot) || await readKnowledgeUpdate(projectRoot) || await readProductionStage(projectRoot) || (await readCandidateRecords(projectRoot)).length > 0) {
       throw new TypeError("Finish or explicitly roll back the active task before starting an independent source update.");
     }
+    let pendingIssues: Awaited<ReturnType<typeof inspectPendingSourceUpdates>>["issues"] = [];
     let input: z.infer<typeof knowledgeUpdateInputSchema>;
     if (options.pending) {
-      const pending = await pendingSourceUpdateScopes(projectRoot);
-      if (pending.length === 0) return { outcome: "current" as const, next_action: { command: "context status --format json" } };
-      input = { scopes: pending };
+      const pending = await inspectPendingSourceUpdates(projectRoot);
+      if (pending.state === "unknown") return { outcome: "unknown" as const, diagnostics: pending.issues,
+        pending_scopes: pending.scopes, next_action: { command: "context update --schema --format json" } };
+      if (pending.scopes.length === 0) return { outcome: "current" as const,
+        missing_resources: await readMissingLarkResources(projectRoot), next_action: { command: "context status --format json" } };
+      pendingIssues = pending.issues;
+      input = { scopes: pending.scopes };
     } else input = knowledgeUpdateInputSchema.parse(value);
+    await beginFormatOnlyUpdate(projectRoot);
     const versions = new Map<string, Promise<string>>();
     const scopes = await captureProcessedScopes(projectRoot, await Promise.all(input.scopes.map(async (scope) => {
       if (scope.processed_version !== undefined) return { ...scope, processed_version: scope.processed_version };
@@ -84,7 +102,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
       scopes.some(scope => repoContentScopeMatches(scope.source_ref, reference.source_ref)))));
     const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled);
     const changedPaths = new Set(inspected.unresolved.map(item => item.path));
-    const candidates = await Promise.all(cited.filter(article => !options.pending || changedPaths.has(article.path))
+    const candidates = await Promise.all(cited.filter(article => changedPaths.has(article.path) || article.sections.some(section => section.references.some(reference => reference.source_ref.startsWith("repo-content:"))))
       .map(async article => {
         const title = parseFrontmatterLoose(await targetBytes(projectRoot, article.path)).title;
         return { path: article.path, title: typeof title === "string" ? title : article.path,
@@ -93,7 +111,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
       }));
     // Pending updates ask only about changed citations, but the scope review may
     // still revise any existing page that cites these sources.
-    const scopePages = options.pending ? cited.map(article => article.path).filter(path => !changedPaths.has(path)) : [];
+    const scopePages = cited.map(article => article.path).filter(path => !candidates.some(candidate => candidate.path === path));
     const registry = await readProductionRequirements(projectRoot);
     const repoReferences = articles.flatMap(article =>
       article.sections.flatMap(section => section.references.filter(ref => ref.source_ref.startsWith("repo-content:") &&
@@ -106,16 +124,34 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     } : undefined;
     const requirementIds = new Set(scopes.map((scope) => scope.requirement_ref));
     const requirements = registry.requirements.filter((requirement) => requirementIds.has(requirement.id));
+    const allScopes = [...new Set(articles.flatMap(article => article.sections.flatMap(section => section.references.map(reference => reference.source_ref))))];
+    const outsideScopes = allScopes.filter(source => !scopes.some(scope => repoContentScopeMatches(scope.source_ref, source)));
+    const outside = outsideScopes.length ? await inspectSettledReferences(projectRoot, articles, outsideScopes, settled, { advisory: true }) : undefined;
+    const outsideReferences = outside?.observations.filter(item => item.state !== "current") ?? [];
+    const missingResources = await readMissingLarkResources(projectRoot);
+    const unavailable = new Set(inspected.unresolved.filter(item => item.state === "unavailable").map(item => item.path));
+    const groups = { automatic: scopePages, needs_decision: candidates.filter(item => !unavailable.has(item.path)).map(item => item.path),
+      unavailable: [...unavailable].sort() };
     const payload = { protocol: "context.source-update/v1" as const, scopes, requirements, candidates,
+      reference_evidence: await collectReferenceEvidence(projectRoot, inspected.unresolved.map(item => item.reference), settled),
+      format_only_proposals: await proposeFormatOnlyReferences(projectRoot, cited, scopes, settled),
+      reference_groups: groups,
+      ...(missingResources.length ? { missing_resources: missingResources } : {}),
+      ...(outsideReferences.length ? { outside_scope: outsideReferences.map(item => ({ path: item.path, section_id: item.section_id,
+        source_ref: item.reference.source_ref, state: item.state, ...(item.reason ? { reason: item.reason } : {}) })),
+        expand_scope: { command: "context update --schema --format json", source_refs: [...new Set(outsideReferences.map(item => item.reference.source_ref))] } } : {}),
       ...(repoContent === undefined ? {} : { repo_content: repoContent }),
       ...(scopePages.length === 0 ? {} : { scope_pages: scopePages }),
       ...(inspected.unresolved.length === 0 ? {} : { changed_references: inspected.unresolved.map(item => ({ path: item.path,
-        section_id: item.section_id, state: item.state, source_ref: item.reference.source_ref, locator: item.reference.locator })) }),
+        section_id: item.section_id, state: item.state, source_ref: item.reference.source_ref, locator: item.reference.locator,
+        evidence_ref: referenceEvidenceKey(item.reference), ...(item.reason ? { reason: item.reason } : {}) })) }),
       previous_versions: scopes.map((scope) => processedVersionForScope(settled, scope) ?? null),
       ...(input.changes === undefined ? {} : { changes: input.changes }) };
     const request = updateSchema.parse({ ...payload, revision: indexerProtocolDigest(payload) });
+    await recordFormatOnlyRelocations(projectRoot, await migrateUnchangedScopeReferences(projectRoot, scopes.map(scope => scope.source_ref)));
     await atomicWriteFile(join(projectRoot, await revisionStoragePath(projectRoot)), `${JSON.stringify(request)}\n`);
-    return { outcome: "update-prepared", revision: request.revision,
+    markSubmissionState("committed");
+    return { outcome: "update-prepared", revision: request.revision, ...(pendingIssues.length ? { diagnostics: pendingIssues } : {}),
       next_action: { command: "context status --format json" } };
   });
 }
@@ -154,7 +190,8 @@ async function keptReferenceWarnings(projectRoot: string,
 }
 
 export async function completeKnowledgeUpdate(input: { projectRoot: string; revision: string;
-  decisions: Array<{ path: string; instruction?: string | undefined; supporting_sources?: string[] | undefined }>; scope_summary: string; new_topics: NewKnowledgePage[]; structure_approved?: boolean }) {
+  decisions: Array<{ path: string; instruction?: string | undefined; supporting_sources?: string[] | undefined }>; scope_summary: string; new_topics: NewKnowledgePage[]; structure_approved?: boolean;
+  format_only?: Array<{ source_ref: string; reason: string }> | undefined }) {
   return withProjectWriteLock(input.projectRoot, "resolve-knowledge-update", async () => {
     const request = await readKnowledgeUpdate(input.projectRoot);
     if (!request || request.revision !== input.revision) throw new TypeError("Source update revision is stale; refresh context status --format json");
@@ -193,29 +230,38 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
       ].join(" "), ["decisions"]);
     }
     await captureProcessedScopes(input.projectRoot, request.scopes);
-    const receipt = await keptReferenceWarnings(input.projectRoot, input.decisions, request.scopes.map((scope) => scope.source_ref));
+    const formatOnly = input.format_only ?? [];
+    const formattedPages = new Set((request.format_only_proposals ?? []).filter(proposal => formatOnly.some(decision => decision.source_ref === proposal.source_ref))
+      .flatMap(proposal => proposal.changes.map(change => change.article)));
+    if (input.decisions.some(decision => formattedPages.has(decision.path) && decision.instruction)) throw new TypeError("A format-only document decision cannot also revise its affected article; choose normal revision for this update.");
     const revisions: Array<{ path: string; instruction: string; create?: NewKnowledgePage; supporting_sources?: string[] | undefined }> = input.decisions.filter((decision): decision is { path: string; instruction: string } =>
       typeof decision.instruction === "string" && decision.instruction.trim().length > 0);
     revisions.push(...input.new_topics.map((page) => ({ path: page.path, instruction: page.instruction, create: page })));
     if (input.new_topics.length && !input.structure_approved) {
       const { revision: _revision, ...rest } = request;
       void _revision;
-      const payload = { ...rest, structure_proposal: { decisions: input.decisions, scope_summary: input.scope_summary, new_topics: input.new_topics } };
+      const payload = { ...rest, structure_proposal: { decisions: input.decisions, scope_summary: input.scope_summary, new_topics: input.new_topics, ...(input.format_only ? { format_only: input.format_only } : {}) } };
       await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify({ ...payload, revision: indexerProtocolDigest(payload) })}\n`);
+      markSubmissionState("committed");
       return { outcome: "structure-review-required" as const };
     }
     const [first, ...remaining] = revisions;
+    await applyFormatOnlyReferences(input.projectRoot, request.format_only_proposals ?? [], formatOnly, request.scopes);
+    const receipt = await keptReferenceWarnings(input.projectRoot, input.decisions, request.scopes.map(scope => scope.source_ref));
     if (!first) {
       await commitProcessedScopes(input.projectRoot, request.scopes);
+      markSubmissionState("committed");
+      const versionExempt = await settleFormatOnlyUpdate(input.projectRoot);
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(input.projectRoot);
-      return { outcome: "unchanged" as const, ...receipt };
+      return { outcome: "unchanged" as const, ...receipt, ...(formatOnly.length ? { format_only: formatOnly, version_exempt: versionExempt } : {}) };
     }
     await prepareApprovedRevision({ projectRoot: input.projectRoot, replace_current: true, selector: first.path,
       instruction: first.instruction, pending_targets: remaining, processed_scopes: request.scopes, requirements: request.requirements,
       ...(first.supporting_sources === undefined ? {} : { supporting_sources: first.supporting_sources }),
       ...(first.create === undefined ? {} : { create: first.create }) });
-    return { outcome: "revisions-prepared" as const, page_count: revisions.length, ...receipt };
+    return { outcome: "revisions-prepared" as const, page_count: revisions.length, ...receipt,
+      ...(formatOnly.length ? { format_only: formatOnly, version_exempt: false } : {}) };
   });
 }
 
@@ -231,6 +277,7 @@ export async function completeUpdateStructureReview(input: { projectRoot: string
     void _revision; void _proposal;
     const payload = { ...rest, changes: `${rest.changes ?? ""}\nStructure feedback: ${input.feedback}` };
     await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify({ ...payload, revision: indexerProtocolDigest(payload) })}\n`);
+    markSubmissionState("committed");
     return { outcome: "structure-adjustment-required" as const };
   });
 }

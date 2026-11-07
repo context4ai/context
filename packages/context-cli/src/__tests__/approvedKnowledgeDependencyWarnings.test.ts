@@ -15,6 +15,13 @@ test("checks actual cited regions without a parser or article dependency graph",
   const structure = { articles: [{ article_id: "guide", path: "faq/guide.md",
     collection: "faq", visibility: "public", sections: [{ id: "behavior", references: [reference] }] }] };
   const path = join(root, "sources/file/guide/guide.md");
+  const capture = async (text: string) => {
+    await writeFile(path, text);
+    await writeFile(join(root, "sources/file/guide/manifest.json"), JSON.stringify(createDocumentSnapshotManifest({
+      sourceType: "file", sourceName: "guide", capturedAt: "2026-09-12T00:00:00.000Z",
+      files: [{ path: "guide.md", bytes: text, title: "Guide" }],
+    })));
+  };
   try {
     await mkdir(join(root, "sources/file/guide"), { recursive: true });
     await writeFile(join(root, "sources/file/index.yaml"), "sources:\n  - name: guide\n");
@@ -25,17 +32,17 @@ test("checks actual cited regions without a parser or article dependency graph",
     })));
     rememberArticleRegion(root, reference, source);
     expect(await approvedKnowledgeDependencyWarnings(root, structure)).toEqual([]);
-    await writeFile(path, `inserted line\n${source}`);
+    await capture(`inserted line\n${source}`);
     expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
       { code: "approved-source-region-moved" },
     ]);
-    await writeFile(path, `inserted line\n${source}important behavior\n`);
+    await capture(`inserted line\n${source}important behavior\n`);
     expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
       { code: "approved-source-region-changed" },
     ]);
-    await writeFile(path, source.replace("other material", "unrelated change"));
+    await capture(source.replace("other material", "unrelated change"));
     expect(await approvedKnowledgeDependencyWarnings(root, structure)).toEqual([]);
-    await writeFile(path, source.replace("important behavior", "changed behavior"));
+    await capture(source.replace("important behavior", "changed behavior"));
     expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
       { severity: "warning", code: "approved-source-region-changed", path: "faq/guide.md" },
     ]);

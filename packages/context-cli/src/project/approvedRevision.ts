@@ -1,3 +1,4 @@
+import { markSubmissionState } from "./submissionState.js";
 import { readProductionRequirements, productionRequirementsSchema, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
@@ -299,7 +300,10 @@ export async function prepareApprovedRevision(input: {
     };
     const request = parseApprovedRevision({ protocol: "context.approved-revision/v1", ...payload,
       revision: requestDigest(payload) })!;
-    if (input.persist !== false) await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(request)}\n`);
+    if (input.persist !== false) {
+      await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(request)}\n`);
+      markSubmissionState("committed");
+    }
     return { status: "author-reopened" as const, path, request, revision: request.revision,
       next_action: { command: "context status --format json" } };
   });
@@ -378,6 +382,7 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
       const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
       if (next || request.batch_candidates?.length || request.build_pending) {
         await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(next ?? { ...request, review_ready: true })}\n`);
+        markSubmissionState("committed");
       } else {
         await advanceApprovedRevision(input.projectRoot, request);
       }
@@ -436,6 +441,7 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
   }
   await assertRevisionRequirements(projectRoot, request);
   await commitProcessedScopes(projectRoot, request.processed_scopes ?? []);
+  markSubmissionState("committed");
   const { finishMaintenanceRevision } = await import("./knowledgeMaintenance.js");
   if (await finishMaintenanceRevision(projectRoot)) return;
   const { readProductionStage } = await import("./productionStageStore.js");

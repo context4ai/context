@@ -12,8 +12,8 @@ export function registerVersionCommands(program: Command) {
   command.command("inspect").option("--base <ref>", "Git commit or tag to compare; defaults to the current version tag or HEAD").option("--format <format>", "json", "json").action(async (options: { base?: string }) => {
     const root = findContextProjectRoot(process.cwd())?.projectRoot;
     if (!root) throw new TypeError("Run inside a Context workspace");
-    const { files: _, content_digest: _digest, ...status } = await inspectWorkspaceVersion(root, options.base);
-    void _; void _digest;
+    const { files: _, content_digest: _digest, snapshot_format: _format, ...status } = await inspectWorkspaceVersion(root, options.base);
+    void _; void _digest; void _format;
     process.stdout.write(JSON.stringify({ ...status, next_action: { command: "context version record --input <file> --format json" },
       input_example: { expected_digest: status.expected_digest, ...(options.base ? { base_ref: options.base } : {}), version: "0.1.0", title: "Summary", changes: ["Reader-visible changes"], triggers: [{ kind: "initial", description: "User requested initial knowledge production" }] } }, null, 2) + "\n");
   });
@@ -37,9 +37,9 @@ export function registerVersionCommands(program: Command) {
         const status = await collectProjectStatus(root, {
           ...execution, ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
         });
-        result = { version: recorded.version, outcome: "recorded", workflow: status.workflow };
+        result = { version: recorded.version, outcome: recorded.outcome ?? "recorded", workflow: status.workflow };
       } catch (error) {
-        result = { ...recorded, next_action: { command: workflowStatusCommand(execution) }, outcome: "recorded", next_preparation: {
+        result = { ...recorded, next_action: { command: workflowStatusCommand(execution) }, outcome: recorded.outcome ?? "recorded", next_preparation: {
           message: error instanceof Error ? error.message : String(error),
           guidance: "Version recording succeeded. Refresh status; do not record this version again.",
         } };

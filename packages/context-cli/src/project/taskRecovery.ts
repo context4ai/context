@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import { indexerProtocolDigest } from "@c4a/context";
 import { readProductionStage } from "./productionStageStore.js";
@@ -7,6 +7,7 @@ import { productionAgentDirectory } from "./productionSubmissionFiles.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { recoverDurableMultiFileTransactions, safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { contextWorkflowProviderPath } from "./workflow/workflowProvider.js";
+import { recoverDurableSingleFileTransaction } from "./durableSingleFileTransaction.js";
 import { inspectWriterLock } from "./writeLockRecovery.js";
 
 export const RECOVERY_COMMAND = "context task recover --format json";
@@ -50,7 +51,7 @@ export function recoveryResources() {
 }
 
 /** Best effort, read-only and independent of normal status/Route evaluation. */
-export async function inspectTaskRecovery(root: string) {
+export async function inspectTaskRecovery(root: string, managed = false) {
   const findings: Array<{ area: string; error: string }> = [];
   async function probe<T>(area: string, read: () => Promise<T>): Promise<T | null> {
     try { return await read(); } catch (error) {
@@ -66,15 +67,41 @@ export async function inspectTaskRecovery(root: string) {
     ...(stage ? { stage: stage.id, directory: productionAgentDirectory(stage.id) } : {}),
     transactions: journals, writer_lock: lock,
     actions: [
-      ...(lock?.process_state === "not-running" ? [{ operation: "writer-lock", command: `${RECOVERY_COMMAND} --operation writer-lock` }] : []),
-      ...(journals?.length ? [{ operation: "transactions", command: `${RECOVERY_COMMAND} --operation transactions` }] : []),
-      ...(stage ? [{ operation: "continue", command: "context status --format json" }] : []),
+      ...(lock?.process_state === "not-running" ? [{ operation: "writer-lock", command: `${RECOVERY_COMMAND}${managed ? " --managed" : ""} --operation writer-lock` }] : []),
+      ...(journals?.length ? [{ operation: "transactions", command: `${RECOVERY_COMMAND}${managed ? " --managed" : ""} --operation transactions` }] : []),
+      ...(stage ? [{ operation: "continue", command: `context status${managed ? " --managed" : ""} --format json` }] : []),
     ],
     guidance: "Read the recovery skill. Preview impact before applying an authorized repair. Do not pass an old --workflow-revision. Do not delete locks/runtime files, replay accepted payloads or repeat an unchanged failed action. If no safe repair works, write a sanitized issue report using issue_template; retain current knowledge and output.",
   };
 }
 
-export async function recoverTaskTransactions(input: { projectRoot: string; apply?: boolean; plan_digest?: string }) {
+/** The existing engines own replay; the inventory only selects known journals. */
+export async function recoverTaskTransactionJournals(root: string) {
+  const journals = await recoveryJournals(root);
+  const single = await singleFileJournals(root, journals);
+  const receipts: unknown[] = await recoverDurableMultiFileTransactions(root);
+  for (const journal of single) {
+    const receipt = await recoverDurableSingleFileTransaction({ projectRoot: root, kind: journal.kind,
+      expected_target_path: journal.path });
+    if (receipt) receipts.push(receipt);
+  }
+  return receipts;
+}
+
+async function singleFileJournals(root: string, journals: Array<{ path: string }>) {
+  const result: Array<{ kind: string; path: string }> = [];
+  for (const journal of journals.filter(entry => dirname(entry.path) === TRANSACTIONS_PATH && entry.path.endsWith(".journal.json"))) {
+    const kind = basename(journal.path, ".journal.json");
+    const value = JSON.parse((await recoveryText(root, journal.path))!) as { protocol?: unknown; kind?: unknown; target_path?: unknown };
+    if (!/^[a-z][a-z0-9-]*$/u.test(kind) || value.kind !== kind || value.protocol !== "context.durable-single-file-transaction/v1" ||
+        typeof value.target_path !== "string") throw new TypeError("Single-file transaction is unreadable; preserve its journal for diagnosis.");
+    await safeProjectTarget(root, value.target_path);
+    result.push({ kind, path: value.target_path });
+  }
+  return result;
+}
+
+export async function recoverTaskTransactions(input: { projectRoot: string; managed?: boolean; apply?: boolean; plan_digest?: string }) {
   return withProjectWriteLock(input.projectRoot, "recover-task-transactions", async () => {
     const journals = await recoveryJournals(input.projectRoot);
     const effects: Array<{ path: string; operation: string }> = [];
@@ -86,13 +113,14 @@ export async function recoverTaskTransactions(input: { projectRoot: string; appl
         effects.push({ path: target.path, operation: String(target.operation) });
       }
     }
+    for (const single of await singleFileJournals(input.projectRoot, journals)) effects.push({ path: single.path, operation: "write" });
     const revision = indexerProtocolDigest(journals);
     if (!input.apply) return { action: "preview", operation: "transactions", revision,
       journal_files: journals.map(entry => entry.path), affected_files: effects,
       effect: "Finish only journaled writes already started; these may include approved knowledge. This is completion of an interrupted transaction, not a rollback.",
-      next: `${RECOVERY_COMMAND} --operation transactions --apply --plan-digest '${revision}'` };
+      next: `${RECOVERY_COMMAND}${input.managed ? " --managed" : ""} --operation transactions --apply --plan-digest '${revision}'` };
     if (input.plan_digest !== revision) throw new TypeError("Transaction inventory changed; preview recovery again before applying.");
-    const receipts = await recoverDurableMultiFileTransactions(input.projectRoot);
-    return { action: "transactions-recovered", receipts, next: "context status --format json" };
+    const receipts = await recoverTaskTransactionJournals(input.projectRoot);
+    return { action: "transactions-recovered", receipts, next: `context status${input.managed ? " --managed" : ""} --format json` };
   });
 }

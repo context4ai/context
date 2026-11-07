@@ -22,9 +22,9 @@ test("Git comparison includes untracked content and recording writes no root rec
     await mkdir(join(root, ".tmp"), { recursive: true });
     await writeFile(join(root, ".tmp/progress"), "temporary");
     expect((await inspectWorkspaceVersion(root)).changed).toBe(false);
-    await expect(recordWorkspaceVersion(root, { ...fields, expected_digest: (await inspectWorkspaceVersion(root)).expected_digest })).rejects.toThrow("No formal content");
+    expect((await recordWorkspaceVersion(root, { ...fields, expected_digest: (await inspectWorkspaceVersion(root)).expected_digest })).outcome).toBe("already-recorded");
     expect((await readdir(root)).filter(name => name.startsWith(".context-"))).toEqual([]);
-    await expect(recordWorkspaceVersion(root, { ...fields, expected_digest: before.expected_digest })).rejects.toThrow("diff changed");
+    expect((await recordWorkspaceVersion(root, { ...fields, expected_digest: before.expected_digest })).outcome).toBe("already-recorded");
     await rm(join(root, ".tmp"), { recursive: true, force: true });
     expect((await inspectWorkspaceVersion(root)).current).toBe(false);
     expect((await readWorkspaceChangelog(root))[0]?.version).toBe("0.1.0");

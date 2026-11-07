@@ -70,7 +70,7 @@ test.each([
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60000);
 
-test("Go regeneration renders only cited declarations and rejects modified captured sources", async () => {
+test("Go regeneration renders only cited declarations from the fixed commit despite local edits", async () => {
   const root = await createDocumentRevisionWorkspace();
   try {
     const repo = join(root, "fixture-source");
@@ -101,9 +101,9 @@ func Lookup(name string, limit int) (string, error) { return name, nil }
     expect(markdown).not.toContain("Unrelated");
     expect(markdown).not.toContain("Secret");
     await writeFile(join(repo, "src/service.go"), "package service\ntype Changed struct {}\n");
-    await expect(prepareRevisionProgramBlocks(root, [DOCUMENT_REVISION_SOURCE_REF], [{
+    expect(await prepareRevisionProgramBlocks(root, [DOCUMENT_REVISION_SOURCE_REF], [{
       source_ref: DOCUMENT_REVISION_SOURCE_REF, requirement_ref: "workspace-knowledge", module_refs: ["module:app"], processed_version: version,
-    }], [{ source_ref: DOCUMENT_REVISION_SOURCE_REF, locator: { path: "src/service.go" } }])).rejects.toThrow();
+    }], [{ source_ref: DOCUMENT_REVISION_SOURCE_REF, locator: { path: "src/service.go" } }])).toEqual(blocks);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60000);
 

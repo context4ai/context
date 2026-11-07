@@ -126,7 +126,8 @@ test("explicit supporting-note update selects existing articles without skill ow
     requirement_ref: requirement.id, source_ref })) });
   const request = (await readKnowledgeUpdate(root))!;
   expect(request.scopes.map(scope => scope.source_ref)).toEqual([source, saved.source_ref]);
-  expect(request.candidates.map(candidate => candidate.path)).toEqual(["architecture/service.md"]);
+  expect(request.candidates).toEqual([]);
+  expect(request.scope_pages).toEqual(["architecture/service.md"]);
   expect((await collectProjectStatus(root)).workflow.current?.node).toBe("inspect-source-update");
   expect(await readProductionStage(root)).toBeUndefined();
   const result = await completeKnowledgeUpdate({ projectRoot: root, revision: request.revision,

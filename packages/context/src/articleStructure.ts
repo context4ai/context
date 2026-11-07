@@ -29,12 +29,12 @@ export const ARTICLE_FRAGMENT_REGION_LIMIT = 8;
 
 export function articleFragmentReferenceListSchema<T extends z.ZodType<{ source_ref: string; locator: { path: string } }>>(item: T) {
   return z.array(item).max(ARTICLE_FRAGMENT_REGION_LIMIT, {
-    message: `A fragment can cite at most ${ARTICLE_FRAGMENT_REGION_LIMIT} source regions`,
+    message: `A fragment can cite at most ${ARTICLE_FRAGMENT_REGION_LIMIT} source regions; split by topic or retain the most relevant supporting regions`,
   }).superRefine((references, context) => {
     const files = new Set(references.map(reference => JSON.stringify([reference.source_ref, reference.locator.path])));
     if (files.size > ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT) context.addIssue({
       code: z.ZodIssueCode.custom,
-      message: `A fragment can cite at most ${ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT} distinct source files (got ${files.size}); split the fragment or drop a supporting file`,
+      message: `A fragment can cite at most ${ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT} distinct source files (got ${files.size}); split by topic or retain the most relevant supporting files`,
     });
   });
 }

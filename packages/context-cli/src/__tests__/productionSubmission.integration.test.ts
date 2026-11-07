@@ -81,6 +81,7 @@ test("wrong explicit article type is rejected before entering Review", async () 
   const file = join(f.directory, "one/article.md");
   await writeFile(file, (await readFile(file, "utf8")).replace("title: one", "type: Wiki\ntitle: one"));
   const result = await completeProductionSubmission(f.input);
+  expect(result.submission_state).toBe("committed");
   expect(result.failed).toHaveLength(1);
   expect(result.failed[0]!.reason).toContain("type must be Guide");
   expect(result.accepted).toHaveLength(1);
@@ -509,6 +510,7 @@ test("the CLI rejects a named pipe before any generic input reader can block", a
 test("a saved result survives next preparation failure but rejects a different successful payload", async () => {
   const f = await fixture();
   const result = await completeProductionSubmission({ ...f.input, prepareNext: async () => { throw new Error("next preparation unavailable"); } });
+  expect(result.submission_state).toBe("committed");
   expect(result.failed).toEqual([]);
   expect(result.accepted).toHaveLength(2);
   expect(result.next_preparation?.outcome).toBe("failed");

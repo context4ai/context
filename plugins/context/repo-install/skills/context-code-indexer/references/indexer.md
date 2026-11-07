@@ -130,7 +130,9 @@ and confirmed contributions. New explanatory context does not require
 repartitioning unchanged code.
 
 Each fragment uses actual source regions from at most three source files (up
-to eight regions in total); the CLI computes content digests. Do not use fallback evidence from an unrelated
+to eight regions in total); the CLI computes content digests. Organize fragments
+by topic and cite only sources that support that fragment. If either limit is
+exceeded, split by topic or keep the primary supporting files. Do not use fallback evidence from an unrelated
 member, fabricate a continuous span for unrelated locations, or include
 process identities, full source bodies or credentials in reader output.
 
