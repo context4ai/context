@@ -439,10 +439,15 @@ export async function finishApprovedRevision(projectRoot: string, options: { pen
     if ((await readCandidateRecords(projectRoot)).some(item => item.status === "draft")) return;
     if (request.refresh_sources) throw new TypeError("Finish the pending source adjustment before advancing this update queue.");
     const { approvedRevisionCandidateDelivered } = await import("./approvedRevisionBatch.js");
+    const edited: string[] = [];
     for (const candidate of [...(request.batch_candidates ?? []), ...(request.candidate ? [request.candidate] : [])]) {
-      if (!await approvedRevisionCandidateDelivered(projectRoot, request, candidate, await targetBytes(projectRoot, candidate.path), true)) {
-        throw new TypeError("Every page in the revision batch must be applied and closed before final cleanup");
-      }
+      if (!await approvedRevisionCandidateDelivered(projectRoot, request, candidate, await targetBytes(projectRoot, candidate.path), true)) edited.push(candidate.path);
+    }
+    if (edited.length) {
+      throw new ContextError(ExitCode.WorkspaceStateError, "Approved pages in this batch differ from what Review approved; final cleanup stopped.", {
+        category: ErrorCategory.WorkspaceStateInvalid, reason_code: "revision-batch-page-changed-after-approval", pages: edited,
+        next_action: { command: "context task record-fix --input <{path, reason}> --format json",
+          instruction: "For a mechanical correction (links, anchors, labels, formatting), record it with this command. For a content change, restore the approved text and register it with context task maintain for the next batch." } });
     }
     await advanceApprovedRevision(projectRoot, request, options.pendingOnly);
   });

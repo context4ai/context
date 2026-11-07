@@ -57,6 +57,7 @@ export function registerTranslateCommands(program: Command) {
   command.command("prepare").description("Write the pending translation task").option("--format <format>", "json", "json").action(async () => {
     const root = projectRoot();
     const task = await prepareSiteTranslation(root, await projectPackages(root));
+    if ("outcome" in task) { write(await withWorkflow(root, task)); return; }
     write({ ...task, next_action: { command: "context translate submit --input <file> --format json" },
       input_example: { expected_digest: task.expected_digest,
         articles: task.items.filter(item => item.kind === "article").slice(0, 1).map(item => ({ locale: item.locale,

@@ -87,7 +87,7 @@ export async function prepareApprovedRevisionSubmission(input: {
       path: requests[index]!.target.path, task_input: join(directory, `${task.task}.input.json`) })),
       submission: { stage, tasks: issued.tasks.map(task => ({ task: task.task, input: task.input, edits: `${task.task}.edits.json` })) },
       next_action: { command: route.commands[0]!.command,
-        instruction: "Write each edits file as the existing approved-revision semantic payload (stage plus markdown/sections), or use content plus a references file containing sections. Submit an ordered completed prefix, using paths relative to agent_directory. Follow each task input and current reading resources. Never resubmit committed tasks; submit the remaining suffix with the returned Route revision." } };
+        instruction: "Write each edits file as the existing approved-revision semantic payload (stage plus markdown/sections), or use content plus a references file containing sections. Submit an ordered completed prefix, using paths relative to agent_directory. Follow each task input and current reading resources. Never resubmit committed tasks; submit the remaining suffix with the returned Route revision. Before the first submission, run the same submit command once with --preview: it checks every page and saves nothing." } };
   });
 }
 
@@ -241,7 +241,11 @@ async function previewApprovedRevisionSubmission(input: { projectRoot: string; r
       pages.push({ task: task.task, ok: false, issues: [issue(error)] });
     }
   }
+  const reissue = pages.some(page => page.issues.some(issue => issue.reason_code === "task-input-stale"));
   return { protocol: "context.approved-revision-batch-preview/v1", stage: manifest.stage, written: false,
     ok_count: pages.filter(page => page.ok).length, issue_count: pages.filter(page => !page.ok).length, pages,
-    next: pages.every(page => page.ok) ? "Submit the same batch without --preview." : "Correct the listed pages, then preview or submit the batch again." };
+    next: pages.every(page => page.ok) ? "Submit the same batch without --preview." : reissue
+      ? "Some task inputs changed after preparation. Prepare the batch again with next_action, move finished drafts to the new task files, then preview again."
+      : "Correct the listed pages, then preview or submit the batch again.",
+    ...(reissue ? { next_action: { command: current.route.commands.find(item => item.command.includes(" action prepare-current "))?.command ?? "context status --format json" } } : {}) };
 }

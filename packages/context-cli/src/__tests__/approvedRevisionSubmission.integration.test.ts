@@ -16,6 +16,7 @@ async function fixture() {
     pending_targets: [{ path: "architecture/usage.md", instruction: "Clarify usage" }] });
   const batch = await prepareApprovedRevisionSubmission({ projectRoot: root, revision: prepared.revision, managed: true });
   expect(batch.next_action.command).toContain("--managed");
+  expect(batch.next_action.instruction).toContain("--preview");
   for (const [index, task] of batch.tasks.entries()) {
     const request = JSON.parse(await readFile(join(root, task.task_input), "utf8"));
     await writeFile(join(root, batch.agent_directory, batch.submission.tasks[index]!.edits), JSON.stringify({ stage: "approved-revision",
@@ -164,6 +165,7 @@ test("batch preview rejects inputs that no longer match the current Route", asyn
   const afterJoin = await completeCurrentIndexerAction({ cwd: joined.root, revision: joined.revision, value: joined.batch.submission, managed: true, preview: true }) as unknown as BatchPreview & { ok_count: number };
   expect(afterJoin.ok_count).toBe(1);
   expect(afterJoin.pages[1]!.issues[0]).toMatchObject({ reason_code: "task-input-stale" });
+  expect((afterJoin as unknown as { next_action: { command: string } }).next_action.command).toContain("action prepare-current");
 
   const changed = await fixture();
   await writeFile(join(changed.root, "src/index.ts"), (await readFile(join(changed.root, "src/index.ts"), "utf8")) + "\n// Input changed\n");

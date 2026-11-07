@@ -288,7 +288,8 @@ async function retirementFollowUps(root: string, value: RetirementInput, plan: A
       if (await text(root, path) !== undefined) translations.push(path);
     }
   }
-  return { pages, navigation, translations };
+  return { pages, navigation, translations,
+    ...(navigation.length ? { navigation_command: "context task adjust --inspect --format json" } : {}) };
 }
 
 async function scheduleBatchRetirement(root: string, value: RetirementInput, request: ApprovedRevision,

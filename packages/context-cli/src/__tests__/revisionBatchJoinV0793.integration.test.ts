@@ -98,6 +98,7 @@ test("retirement inside a batch: linking pages join, the report shows the plan, 
   const preview = await retireArticles({ projectRoot: root, value }) as unknown as { revision: string; follow_up: { navigation: unknown[] } };
   expect(preview).toMatchObject({ action: "batch-preview", follow_up: { pages: ["architecture/overview.md"], translations: [] } });
   expect(preview.follow_up.navigation).toEqual([expect.objectContaining({ retired: "architecture/legacy.md", result: expect.stringContaining("keeps this label") })]);
+  expect((preview.follow_up as unknown as { navigation_command: string }).navigation_command).toBe("context task adjust --inspect --format json");
   expect(existsSync(join(root, "knowledge/architecture/legacy.md"))).toBe(true);
   const scheduled = await retireArticles({ projectRoot: root, value, apply: true, plan_digest: preview.revision }) as unknown as Record<string, unknown>;
   expect(scheduled).toMatchObject({ action: "scheduled", joined: [{ path: "architecture/overview.md", placement: "added-page" }] });
@@ -113,6 +114,7 @@ test("retirement inside a batch: linking pages join, the report shows the plan, 
   const report = await writeReviewHtml({ projectRoot: root, all: true });
   expect(report.retirement?.retired).toEqual([expect.objectContaining({ path: "architecture/legacy.md", replacement: "architecture/usage.md" })]);
   expect(report.retirement?.blockers.map(item => item.path)).toEqual(["knowledge/architecture/overview.md"]);
+  expect(report.next_action?.command).toContain("context revise 'architecture/overview.md'");
   expect(report.navigation.changes.some(change => change.changes.includes("retargeted"))).toBe(true);
   await expect(approveCandidates(root, await readCandidateRecords(root))).rejects.toThrow("links to a page retired");
   expect(existsSync(join(root, "knowledge/architecture/legacy.md"))).toBe(true);
@@ -138,6 +140,10 @@ test("retirement inside a batch: linking pages join, the report shows the plan, 
   const { recordMechanicalFix } = await import("../project/mechanicalFixes.js");
   const overviewPath = join(root, "knowledge/architecture/overview.md");
   await writeFile(overviewPath, (await readFile(overviewPath, "utf8")).replace("[usage page](usage.md)", "[usage guide](usage.md)"));
+  // Without a record, final cleanup names the changed page and both ways forward.
+  const { finishApprovedRevision } = await import("../project/approvedRevision.js");
+  await expect(finishApprovedRevision(root)).rejects.toMatchObject({ detail: {
+    reason_code: "revision-batch-page-changed-after-approval", pages: ["architecture/overview.md"] } });
   expect(await recordMechanicalFix(root, { path: "architecture/overview.md", reason: "Link text matches the replacement page title." }))
     .toMatchObject({ outcome: "recorded" });
   // Status sees the recorded fix as delivered, not as a concurrent edit to merge.

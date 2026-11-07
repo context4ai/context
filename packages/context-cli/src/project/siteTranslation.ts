@@ -240,6 +240,15 @@ async function sourceDiffSince(projectRoot: string, relPath: string, digest: str
 export async function prepareSiteTranslation(projectRoot: string, packages: readonly PackageDefinition[]) {
   return withProjectWriteLock(projectRoot, "translate-prepare", async () => {
     const inspection = await inspectSiteTranslations(projectRoot, packages);
+    // Nothing to translate, only translations whose source page is gone:
+    // removing them needs no judgement, so do it here instead of an empty submit.
+    if (inspection.pending === 0 && inspection.orphans.length > 0) {
+      for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
+      const after = await inspectSiteTranslations(projectRoot, packages);
+      if (after.source_set_digest !== null) await writeReceipt(projectRoot, after.source_set_digest, "submitted");
+      return { outcome: "orphans-removed" as const, removed: inspection.orphans, expected_digest: after.source_set_digest,
+        locales: inspection.locales, items: [], orphans: [], next_action: { command: "context status --format json" } };
+    }
     const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
     const items = [];
     const articles = [];

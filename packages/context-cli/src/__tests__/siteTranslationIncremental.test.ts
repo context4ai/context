@@ -125,9 +125,9 @@ test("orphaned translations alone keep the translation step open until submit re
     await writeFile(orphan, stored("retired"));
     const inspection = await inspectSiteTranslations(root, [pkg]);
     expect(inspection).toMatchObject({ pending: 0, orphans: ["translations/zh-CN/codeindex/retired.md"], route_satisfied: false });
-    const task = await prepareSiteTranslation(root, [pkg]);
-    expect(task.items).toEqual([]);
-    await submitSiteTranslation(root, [pkg], { expected_digest: task.expected_digest!, articles: [], map_entries: [] }, file => join(root, file));
+    // Nothing to translate: prepare removes the orphans itself.
+    expect(await prepareSiteTranslation(root, [pkg])).toMatchObject({ outcome: "orphans-removed",
+      removed: ["translations/zh-CN/codeindex/retired.md"], items: [] });
     expect(existsSync(orphan)).toBe(false);
     expect(existsSync(destination)).toBe(true);
     expect((await inspectSiteTranslations(root, [pkg])).route_satisfied).toBe(true);

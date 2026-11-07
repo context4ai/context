@@ -120,8 +120,9 @@ export async function writeReviewHtml(input: {
     ...(model.retirement ? { retirement: model.retirement } : {}),
     ...(unplaced.length ? { next_action: { command: "context task adjust --input - --format json",
       message: "Bind the listed drafts to suitable existing categories before requesting review, then regenerate this report. Content approval is not required for navigation." } } : {}),
-    ...(!unplaced.length && model.retirement?.blockers.length ? { next_action: { command: "context status --format json",
-      message: "Drafts in this batch still link to a page retired with it. Revise those drafts before requesting approval; approval cannot apply while they remain." } } : {}),
+    ...(!unplaced.length && model.retirement?.blockers.length ? { next_action: {
+      command: `context revise '${model.retirement.blockers[0]!.path.replace(/^knowledge\//u, "").replace(/'/gu, "'\\''")}' --instruction "Point links to the retired page at its replacement and update their link text." --format json`,
+      message: "Drafts in this batch still link to a page retired with it. Revise each listed draft (this command is for the first) before requesting approval; approval cannot apply while they remain." } } : {}),
     path: outPath,
     candidates: candidates.length,
     candidate_set_digest: candidateSetHash(candidates.map(({ record }) => record)),

@@ -33,7 +33,9 @@ approval and approval-after-repair. Keep the exact report reference, presented
 scope and user intent in this conversation. The HTML contains reading progress
 and plain revision notes, not approval authority. Normal explicit confirmation
 uses the Route's revision-bound resolution Action and the report's scope snapshot.
-No review code or special approval phrase is required.
+No review code or special approval phrase is required. When the report's
+`navigation.changes` is not empty, name those menu changes (added, removed,
+renamed, pointing elsewhere) in the confirmation request.
 
 For old automation, `review approve-all --force` remains a deprecated explicit
 approval alias and applies the current candidate scope without requiring a new
@@ -108,7 +110,11 @@ the correction instruction. Current candidates are repaired within this batch;
 for a current candidate, follow the CLI's returned repair command instead.
 After the repair, read the new Route and review the changed material before
 approving the batch. Requests for other pages made before approval join this
-batch; after approval they queue for the next one.
+batch; after approval they queue for the next one. Between approval and the end
+of delivery, a mechanical correction caused by this batch (a link, anchor, menu
+label or formatting) may be applied without another Review; record it with
+`context task record-fix --input <{path, reason}> --format json` and report it
+with the batch result. A content change waits for the next batch.
 
 For a repaired generated table, inspect the new Candidate's affected rows, not
 only its Repair ID or accepted Author/Composer outcome. Check the reported error

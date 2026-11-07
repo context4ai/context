@@ -275,8 +275,10 @@ can copy [the source checklist](../resources/context/source-checklist.md).
   the returned status command and its new Route.
 - **Several approved pages, program regeneration or a rebuild during production:**
   read the maintenance procedure linked by the knowledge-updates guide and use
-  its registration input. Queued means saved, not revised; explain its waiting
-  condition and do not register the same request repeatedly.
+  its registration input. While a revision batch is unapproved, the request
+  joins it (`joined-current-batch`) and its Review covers the pages; after
+  approval it is queued for the next batch. Queued means saved, not revised;
+  explain its waiting condition and do not register the same request repeatedly.
 - When the user asks to compile, build or deliver a batch, use the current Route
   to choose early delivery or rebuilding; do not guess a command name.
 - **Earlier delivery of completed articles:** when explicitly requested, finish
