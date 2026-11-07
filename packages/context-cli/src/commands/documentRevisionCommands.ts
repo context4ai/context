@@ -121,6 +121,19 @@ export function registerDocumentRevisionCommand(program: Command): void {
       const { registerKnowledgeMaintenance } = await import("../project/knowledgeMaintenance.js");
       process.stdout.write(`${JSON.stringify(await registerKnowledgeMaintenance(requireProjectRoot(), value))}\n`);
     });
+  task.command("record-fix").description("Record a mechanical correction made after the batch's approval and before its delivery")
+    .option("--input <file>", "YAML/JSON path and reason; - for stdin")
+    .option("--format <format>", "output format: json", "json")
+    .action(async (options: { input?: string; format: string }) => {
+      if (options.format !== "json" || !options.input) throw new ContextError(ExitCode.UserError,
+        "Use --input <file> --format json with {path, reason}.", { category: ErrorCategory.UserInputInvalid });
+      assertActionInputWorkspace(process.cwd(), options.input);
+      const value = await readYamlOrJsonInput({ path: options.input, label: "mechanical fix",
+        missingNext: "Provide path (approved page) and reason (why the change is mechanical).",
+        readFailureNext: "Use an input file in this workspace.", parseFailureNext: "Provide valid YAML or JSON." });
+      const { recordMechanicalFix } = await import("../project/mechanicalFixes.js");
+      process.stdout.write(`${JSON.stringify(await recordMechanicalFix(requireProjectRoot(), value))}\n`);
+    });
   task.command("advance-maintenance").description("Execute the current Graph-selected maintenance transition")
     .requiredOption("--revision <digest>", "current maintenance Route revision")
     .option("--format <format>", "output format: json", "json")

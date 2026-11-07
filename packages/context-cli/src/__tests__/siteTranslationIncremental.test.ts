@@ -87,3 +87,69 @@ test("without history the previous translation is still the draft; missing pages
     expect(await readFile(join(root, missing.file), "utf8")).toContain("Changed");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a translation of an uncommitted intermediate source still gets its diff from the submitted snapshot", async () => {
+  const { root, original, destination } = await workspace("translation-snapshot-");
+  try {
+    await writeFile(original, source);
+    git(root, "init", "-q"); git(root, "add", "."); git(root, "commit", "-qm", "base");
+    // Round one changes the source and translates it without committing.
+    const roundOne = source.replace("Second", "Round one");
+    await writeFile(original, roundOne);
+    const first = (await prepareSiteTranslation(root, [pkg])).items[0]!;
+    if (first.kind !== "article") throw new Error("Missing article");
+    await writeFile(join(root, first.file), translated.replace("第二节", "第一轮"));
+    const prepared = await prepareSiteTranslation(root, [pkg]);
+    await submitSiteTranslation(root, [pkg], { expected_digest: prepared.expected_digest!, map_entries: [],
+      articles: [{ locale: "zh-CN", approved_path: first.approved_path, file: first.file }] }, file => join(root, file));
+    expect(await readFile(destination, "utf8")).toContain(approvedArticleDigest(roundOne));
+    // Round two changes it again; Git has no commit holding round one.
+    await writeFile(original, roundOne.replace("First", "Round two"));
+    const second = (await prepareSiteTranslation(root, [pkg])).items[0]!;
+    if (second.kind !== "article") throw new Error("Missing article");
+    expect(second).toMatchObject({ draft: "generated", source_diff: `${second.file}.diff` });
+    const diff = await readFile(join(root, second.source_diff!), "utf8");
+    expect(diff).toContain("-First");
+    expect(diff).toContain("+Round two");
+    expect(diff).not.toContain("Second");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("orphaned translations alone keep the translation step open until submit removes them", async () => {
+  const { root, original, destination } = await workspace("translation-orphan-");
+  try {
+    const { inspectSiteTranslations } = await import("../project/siteTranslation.js");
+    await writeFile(original, source);
+    await writeFile(destination, stored(approvedArticleDigest(source)));
+    const orphan = join(root, "translations/zh-CN/codeindex/retired.md");
+    await writeFile(orphan, stored("retired"));
+    const inspection = await inspectSiteTranslations(root, [pkg]);
+    expect(inspection).toMatchObject({ pending: 0, orphans: ["translations/zh-CN/codeindex/retired.md"], route_satisfied: false });
+    const task = await prepareSiteTranslation(root, [pkg]);
+    expect(task.items).toEqual([]);
+    await submitSiteTranslation(root, [pkg], { expected_digest: task.expected_digest!, articles: [], map_entries: [] }, file => join(root, file));
+    expect(existsSync(orphan)).toBe(false);
+    expect(existsSync(destination)).toBe(true);
+    expect((await inspectSiteTranslations(root, [pkg])).route_satisfied).toBe(true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a receipt for an earlier translation set does not hide translations orphaned later; skip still resolves them", async () => {
+  const { root, original, destination } = await workspace("translation-orphan-receipt-");
+  try {
+    const { inspectSiteTranslations, skipSiteTranslation } = await import("../project/siteTranslation.js");
+    await writeFile(original, source.replace("Second", "Changed"));
+    await writeFile(destination, stored(approvedArticleDigest(source)));
+    const task = await prepareSiteTranslation(root, [pkg]);
+    const item = task.items[0]!;
+    if (item.kind !== "article") throw new Error("Missing article");
+    await submitSiteTranslation(root, [pkg], { expected_digest: task.expected_digest!, map_entries: [],
+      articles: [{ locale: "zh-CN", approved_path: item.approved_path, file: item.file }] }, file => join(root, file));
+    expect((await inspectSiteTranslations(root, [pkg])).route_satisfied).toBe(true);
+    await writeFile(join(root, "translations/zh-CN/codeindex/retired.md"), stored("retired"));
+    const orphaned = await inspectSiteTranslations(root, [pkg]);
+    expect(orphaned).toMatchObject({ pending: 0, route_satisfied: false });
+    await skipSiteTranslation(root, [pkg], orphaned.source_set_digest!);
+    expect((await inspectSiteTranslations(root, [pkg])).route_satisfied).toBe(true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

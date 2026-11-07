@@ -1,4 +1,7 @@
 import { markSubmissionState } from "./submissionState.js";
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
 import { readProductionRequirements, productionRequirementsSchema, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
@@ -50,6 +53,10 @@ const requestSchema = z.object({
   program_blocks: z.array(z.object({ token: z.string(), source_ref: z.string(), fact_ref: z.string(), markdown: z.string(), declaration_status: z.string().optional() }).strict()).optional(),
   refresh_sources: z.array(z.string().min(1)).min(1).optional(),
   merge_context: z.object({ approved_markdown: z.string().nullable(), draft_markdown: z.string() }).strict().optional(),
+  /** Retirements scheduled in this batch; they take effect with its delivery.
+   * Not part of any page's revision: scheduling one does not revoke drafts. */
+  retirements: z.array(z.object({ reason: z.string().trim().min(1),
+    targets: z.array(z.object({ path: z.string().min(1), replacement: z.string().min(1).optional() }).strict()).min(1) }).strict()).optional(),
 }).strict();
 export type ApprovedRevision = Omit<z.infer<typeof requestSchema>, "candidate" | "batch_candidates"> & { candidate?: CandidateRecord; batch_candidates?: CandidateRecord[] };
 
@@ -209,6 +216,7 @@ export async function prepareApprovedRevision(input: {
   build_pending?: boolean;
   requirements?: ProductionRequirements["requirements"];
   processed_scopes?: ProcessedScope[];
+  retirements?: ApprovedRevision["retirements"];
 }) {
   return withProjectWriteLock(input.projectRoot, "prepare-approved-revision", async () => {
     if (!input.replace_current) {
@@ -297,6 +305,7 @@ export async function prepareApprovedRevision(input: {
       ...(input.requirements === undefined ? {} : { requirements: input.requirements }),
       ...(input.pending_targets === undefined ? {} : { pending_targets: input.pending_targets }),
       ...(input.processed_scopes === undefined ? {} : { processed_scopes: input.processed_scopes }),
+      ...(input.retirements?.length ? { retirements: input.retirements } : {}),
     };
     const request = parseApprovedRevision({ protocol: "context.approved-revision/v1", ...payload,
       revision: requestDigest(payload) })!;
@@ -316,6 +325,33 @@ function frontmatter(markdown: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+/** Build and validate one revision draft exactly as submission does. With
+ * remember false no source region is cached, so a batch preview can run it for every
+ * issued page without advancing the task or caching source regions. */
+export async function composeRevisionCandidate(projectRoot: string,
+  request: Pick<ApprovedRevision, "target" | "program_blocks">, input: RevisionContentInput, options: { remember: boolean }) {
+  const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
+  const metadata = frontmatter(markdown);
+  const sections = approvedContextSectionsInMarkdown(markdown);
+  if (sections.length === 0 || sections.some(section => !section.id)) {
+    throw new TypeError("Revision requires stable fragment markers");
+  }
+  if (new Set(sections.map((section) => section.id)).size !== sections.length) {
+    throw new TypeError("Revision section identities must be unique");
+  }
+  const title = z.string().trim().min(1).parse(metadata.title);
+  const references = await prepareRevisionReferences({ projectRoot,
+    sourceRefs: request.target.source_refs, previous: request.target.sections,
+    sectionIds: sections.map(section => section.id!), edits: input.sections, remember: options.remember });
+  const projectedSections = sections.map((section) => ({
+    section_ref: `${request.target.article_id}#${section.id!}`, section_key: section.id!,
+    references: references.find(item => item.id === section.id)!.references,
+    markdown: section.readerVisibleBody,
+    markdown_digest: indexerProtocolDigest(section.readerVisibleBody),
+  }));
+  return { markdown, metadata, title, references, projectedSections };
+}
+
 interface RevisionSubmission extends RevisionContentInput { projectRoot: string; revision: string; preview?: boolean }
 export interface RevisionPreview { protocol: "context.approved-revision-preview/v1"; revision: string; path: string; before: string; markdown: string; changed: boolean }
 export function completeApprovedRevision(input: RevisionSubmission & { preview: true }): Promise<RevisionPreview>;
@@ -329,31 +365,13 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (!request || request.revision !== input.revision || request.candidate) throw new TypeError("Approved revision is stale. Refresh context status --format json.");
     if (request.refresh_sources) throw new TypeError("Import the explicitly adjusted source inputs, then run context task adjust with refresh: true before submitting page content.");
     await assertApprovedRevisionBase(input.projectRoot, request);
-    const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
+    const { markdown, metadata, title, references, projectedSections } = await composeRevisionCandidate(input.projectRoot, request, input, { remember: !input.preview });
     await assertRevisionRequirements(input.projectRoot, request);
     const approved = request.target.base_digest === null ? undefined : hydrateApprovedKnowledgeMarkdown({
       content: await targetBytes(input.projectRoot, request.target.previous_path ?? request.target.path), relPath: request.target.previous_path ?? request.target.path,
       metadata: await readApprovedKnowledgeMetadataIndex(input.projectRoot),
     });
-    const metadata = frontmatter(markdown);
     const replacingCandidate = (await readCandidateRecords(input.projectRoot)).some((item) => item.path === request.target.path);
-    const sections = approvedContextSectionsInMarkdown(markdown);
-    if (sections.length === 0 || sections.some(section => !section.id)) {
-      throw new TypeError("Revision requires stable fragment markers");
-    }
-    if (new Set(sections.map((section) => section.id)).size !== sections.length) {
-      throw new TypeError("Revision section identities must be unique");
-    }
-    const title = z.string().trim().min(1).parse(metadata.title);
-    const references = await prepareRevisionReferences({ projectRoot: input.projectRoot,
-      sourceRefs: request.target.source_refs, previous: request.target.sections,
-      sectionIds: sections.map(section => section.id!), edits: input.sections });
-    const projectedSections = sections.map((section) => ({
-      section_ref: `${request.target.article_id}#${section.id!}`, section_key: section.id!,
-      references: references.find(item => item.id === section.id)!.references,
-      markdown: section.readerVisibleBody,
-      markdown_digest: indexerProtocolDigest(section.readerVisibleBody),
-    }));
     const fingerprint = revisionCandidateFingerprint(request.revision, markdown, projectedSections);
     const candidate = parseCandidateRecord({
       candidate_id: indexerCandidateId(fingerprint), article_id: request.target.article_id,
@@ -377,7 +395,10 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     const approvedSections = validateArticleStructureEntries((await readKnowledgeStructure(input.projectRoot)).parsed?.articles ?? [])
       .find(article => article.article_id === request.target.article_id)?.sections;
     if (markdown === approved && indexerProtocolDigest(references) === indexerProtocolDigest(approvedSections ?? []) &&
-        request.target.previous_path === undefined && !replacingCandidate) {
+        request.target.previous_path === undefined && !replacingCandidate &&
+        // A scheduled retirement is delivered by a Review apply; a batch that
+        // would otherwise end with no draft keeps this unchanged page as one.
+        !(request.retirements?.length && !request.batch_candidates?.length && !request.pending_targets?.length)) {
       const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
       const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
       if (next || request.batch_candidates?.length || request.build_pending) {
@@ -417,9 +438,9 @@ export async function finishApprovedRevision(projectRoot: string, options: { pen
     if (options.pendingOnly && !request.pending_targets?.length) return;
     if ((await readCandidateRecords(projectRoot)).some(item => item.status === "draft")) return;
     if (request.refresh_sources) throw new TypeError("Finish the pending source adjustment before advancing this update queue.");
-    const { approvedRevisionCandidateApplied } = await import("./approvedRevisionBatch.js");
+    const { approvedRevisionCandidateDelivered } = await import("./approvedRevisionBatch.js");
     for (const candidate of [...(request.batch_candidates ?? []), ...(request.candidate ? [request.candidate] : [])]) {
-      if (!await approvedRevisionCandidateApplied(projectRoot, candidate, await targetBytes(projectRoot, candidate.path), true)) {
+      if (!await approvedRevisionCandidateDelivered(projectRoot, request, candidate, await targetBytes(projectRoot, candidate.path), true)) {
         throw new TypeError("Every page in the revision batch must be applied and closed before final cleanup");
       }
     }
@@ -436,6 +457,7 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
       ...(next.target === undefined ? {} : { target: next.target }),
       pending_targets: remaining, ...(next.create === undefined ? {} : { create: next.create }),
       ...(next.supporting_sources === undefined ? {} : { supporting_sources: next.supporting_sources }),
+      ...(request.retirements ? { retirements: request.retirements } : {}),
       ...(request.requirements === undefined ? {} : { requirements: request.requirements }), ...(request.processed_scopes === undefined ? {} : { processed_scopes: request.processed_scopes }) });
     return;
   }
@@ -480,7 +502,37 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
       .some((alias) => alias.normalize("NFC").toLowerCase() === selector));
     const aliases = [request.target.path, request.target.article_id, frontmatter(request.target.markdown).title];
     if (!selected && !aliases.some((alias) => typeof alias === "string" && alias.normalize("NFC").toLowerCase() === selector)) {
-      throw new TypeError("Another page update is active. Finish or explicitly roll back that task before starting this revision.");
+      // Another approved page joins this batch while it is unapproved.
+      const { joinableRevisionBatch, joinRevisionBatch } = await import("./revisionBatchJoin.js");
+      const batch = await joinableRevisionBatch(input.projectRoot);
+      const page = validateArticleStructureEntries((await readKnowledgeStructure(input.projectRoot)).parsed?.articles ?? [])
+        .find((article) => [article.path, article.article_id].some((alias) => alias.normalize("NFC").toLowerCase() === selector));
+      if (batch.joinable && page) {
+        const result = await joinRevisionBatch(input.projectRoot, batch.request, [{ path: page.path, instruction: input.instruction }]);
+        return { status: "joined-current-batch" as const, path: page.path, ...result,
+          message: "Added to the current unapproved batch; its Review covers this page.",
+          next_action: { command: "context status --format json" } };
+      }
+      const command = `context task maintain --input <request.yaml> --format json`;
+      throw new ContextError(ExitCode.WorkspaceStateError, batch.joinable
+        ? "Select an approved page by its path or article id to add it to the current batch."
+        : "Another page update is active and can no longer take new pages; queue this request for the next batch.", {
+        category: ErrorCategory.WorkspaceStateInvalid,
+        reason_code: batch.joinable ? "revision-target-not-approved-page" : `revision-batch-${batch.reason}`,
+        next_action: { command, instruction: batch.joinable ? "Use the approved page path from knowledge/structure.yaml."
+          : "Register {id, operation: revise, targets: [{path, instruction}]}; it starts after the current batch." },
+      });
+    }
+    // Once Review approved the whole batch it is closed: an ordinary content
+    // change starts the next batch. Rejected drafts and partially reviewed
+    // batches keep their existing repair path.
+    const live = new Set((await readCandidateRecords(input.projectRoot)).map((row) => row.candidate_id));
+    if (selected && !live.has(selected.candidate_id) && batch.every((item) => !live.has(item.candidate_id))) {
+      throw new ContextError(ExitCode.WorkspaceStateError, "This page was approved in the current batch; a further content change belongs to the next batch.", {
+        category: ErrorCategory.WorkspaceStateInvalid, reason_code: "revision-batch-batch-approved",
+        next_action: { command: "context task maintain --input <request.yaml> --format json",
+          instruction: "Register {id, operation: revise, targets: [{path, instruction}]}; it starts after this batch is delivered. A mechanical correction may use context task record-fix instead." },
+      });
     }
     const kept = batch.filter((item) => item.candidate_id !== selected?.candidate_id);
     const { candidate: _candidate, review_ready: _ready, ...previous } = request;
@@ -491,6 +543,7 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
         selector: selected.path, instruction: input.instruction, batch_candidates: batch,
         ...(request.regenerate ? { regenerate: true } : {}),
         pending_targets: pendingAfterReopen(request, selected.path),
+        ...(request.retirements ? { retirements: request.retirements } : {}),
         ...(request.requirements ? { requirements: request.requirements } : {}),
         ...(request.processed_scopes ? { processed_scopes: request.processed_scopes } : {}),
         ...(selected.approved_revision?.base_digest === null ? { create: { path: selected.path,
@@ -499,7 +552,11 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
     } else {
       base = { ...base, target: await currentApprovedRevisionTarget(input.projectRoot, request) };
     }
-    const payload = { ...base, batch_candidates: kept, instruction: input.instruction.trim(), target: { ...base.target,
+    // Feedback on a draft replaces its task; a request for the page still being
+    // written adds to it, so the earlier request is not lost.
+    const instruction = !selected && !request.candidate && !request.review_ready
+      ? `${request.instruction}\n\nAdditional request: ${input.instruction.trim()}` : input.instruction.trim();
+    const payload = { ...base, batch_candidates: kept, instruction, target: { ...base.target,
       markdown: selected?.body ?? base.target.markdown,
       ...(selected ? {
         source_refs: [...new Set([...base.target.source_refs, ...selected.source_refs])],

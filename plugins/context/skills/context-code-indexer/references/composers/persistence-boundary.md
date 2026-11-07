@@ -22,5 +22,5 @@ set rather than reading outside the workset.
 
 Use only the supplied primary artifacts and their actual regional references.
 Do not require a primary Fact table, evidence IDs, or graph nodes. Each derived
-output fragment retains real source regions from at most three files (up to
+output fragment retains real source regions from at most five files (up to
 eight regions); no reference ledger is reconstructed from the full inventory.

@@ -48,6 +48,9 @@ export async function rollbackProjectTask(input: {
     if ((await readMaintenance(input.projectRoot)).active) throw new TypeError("A maintenance batch is active. Use its current revision/Review, or cancel-maintenance with explicit draft discard; whole-task rollback would discard unrelated production.");
     const existing = await readTaskRollback(input.projectRoot);
     if (existing) {
+      // An interrupted rollback may have saved its state before settling.
+      const { settleJoinedMaintenance } = await import("./knowledgeMaintenance.js");
+      await settleJoinedMaintenance(input.projectRoot, "cancelled");
       if (input.apply && input.plan_digest === existing.revision) return {
         action: "already-applied", revision: existing.revision, next: "context status --format json",
       };
@@ -92,6 +95,9 @@ export async function rollbackProjectTask(input: {
     targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
     await runDurableMultiFileTransaction({ projectRoot: input.projectRoot, kind: "rollback-current-task",
       proposal_digest: revision, targets });
+    // The rolled-back batch takes its joined maintenance requests with it.
+    const { settleJoinedMaintenance } = await import("./knowledgeMaintenance.js");
+    await settleJoinedMaintenance(input.projectRoot, "cancelled");
     return { action: "applied", revision, changed_files: changes.map((change) => change.path),
       next: "context status --format json" };
   });
@@ -108,6 +114,8 @@ export async function finishTaskRollback(projectRoot: string) {
         (await collectPackageFreshness(projectRoot, loaded.project.packages)).some((item) => item.state !== "ready")) {
       throw new TypeError("Rollback files are saved but close/build is unfinished. Follow context status; do not repeat the rollback writes.");
     }
+    const { settleJoinedMaintenance } = await import("./knowledgeMaintenance.js");
+    await settleJoinedMaintenance(projectRoot, "cancelled");
     const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
     await clearCompletedLifecycle(projectRoot);
     return { action: "finished", next: "context status --format json" };

@@ -79,7 +79,7 @@ export function registerProjectActionCommands(program: Command): void {
         .argParser(collectWorkflowAuthorityOption)
         .default([]),
     )
-    .option("--preview", "preview an approved revision without submitting; not used for production stage files")
+    .option("--preview", "preview an approved revision, or every page of a prepared revision batch, without submitting; not used for production stage files")
     .option("--verbose", "include the full completion and next Route inline")
     .option("--format <format>", "output format: json | yaml", "json")
     .action(async (options: Record<string, unknown>) => withSubmissionState(async () => {

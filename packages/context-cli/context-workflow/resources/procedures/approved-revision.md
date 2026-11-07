@@ -30,8 +30,9 @@ A `requirement_ref` alone does not authorize it: the selected requirement in
 `src/indexers.yaml` must connect the new source to an existing task source through
 its target or evidence scopes. When `revision-source-scope-unconfirmed` is returned,
 use its `missing` and `configuration` fields to correct only the user-authorized
-association. Then retry the same `task adjust` without refresh and, once material
-is available, with `refresh: true`; reread the resulting revision. Do not invent
+association. Then retry the same `task adjust` without refresh. If it returns
+`adjusted` (the material was already local), continue; otherwise, once material
+is available, repeat with `refresh: true`. Reread the resulting revision. Do not invent
 module references, replace an older note, delete sources or clear the task to
 satisfy this boundary. Already imported material does not need to be imported again.
 The adjusted source stays citable by the remaining pages queued in the same revision;
@@ -139,13 +140,18 @@ Action schema and the same source and baseline validation.
 
 When a fragment's support changes, include `references` with its actual
 `source_ref` and `locator` (`path`, `start_line`, `end_line`). Each fragment allows
-regions from up to three source files, eight regions in total; Context reads the captured region and computes its digest.
+regions from up to five source files, eight regions in total; Context reads the captured region and computes its digest.
 For full Markdown, optional `sections` contains only `{ section_id, references }`
 entries; for local edits it can accompany `content` or update references alone.
 An explicit empty list removes that fragment's citations. Deleted fragments lose
 their references; new fragments need their own selected sources, not copied IDs.
 Uniquely moved unchanged text can retain its fingerprint at its new position;
 changed or ambiguous regions remain visible for review, not silently refreshed.
+Inside a submitted `references` list, an earlier citation repeated with the same
+`start_line`/`end_line` means "keep that evidence": Context moves it to where that
+text is now, or rejects the fragment when it no longer exists uniquely. To cite
+the text now at those lines instead, use a `quote` or `heading` locator; those
+always select current text.
 
 For example, after substituting IDs/tokens from this Route:
 
@@ -157,6 +163,15 @@ Use `--input <file>` on the Route command. If useful, append `--preview` to that
 same command: it returns the assembled Markdown and prior text without accepting
 or advancing the revision. Submit without `--preview` after checking it. Preview
 is optional; it does not replace Review or authorize a stale revision.
+
+For a prepared multi-page batch (`prepare-current`), append `--preview` to the
+batch submission. It applies the submission checks to every page against its
+issued input (task binding, fragment file and region limits, line ranges in the
+fixed source, signing) against the current Route and returns one result per page
+with its issues, without saving drafts, task state or source caches. It reports problems and never repairs them: for example, a line range
+past the end of a file is reported, not clamped. Write the whole batch, preview
+it once, correct the flagged pages, then submit; do not write ad-hoc validation
+or re-signing scripts.
 
 Preview is useful only when its assembled text will be read before deciding to
 submit. An unattended loop submits directly. Continue from the receipt's
@@ -193,7 +208,7 @@ same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The per-fragment limits (three source files, eight regions) apply after
+The per-fragment limits (five source files, eight regions) apply after
 resolving and deduplicating positions.
 
 ## Submitting several prewritten pages

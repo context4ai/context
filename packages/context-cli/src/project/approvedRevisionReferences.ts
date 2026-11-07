@@ -15,6 +15,8 @@ export async function prepareRevisionReferences(input: {
   projectRoot: string; sourceRefs: readonly string[];
   previous: ArticleStructureEntry["sections"];
   sectionIds: readonly string[]; edits: RevisionContentInput["sections"];
+  /** False for previews: resolve and sign without caching source regions. */
+  remember?: boolean;
 }): Promise<ArticleStructureEntry["sections"]> {
   const edits = new Map(input.edits?.map(edit => [edit.section_id, edit]));
   if (edits.size !== (input.edits?.length ?? 0)) throw new TypeError("Repeated revision fragment identity");
@@ -33,12 +35,27 @@ export async function prepareRevisionReferences(input: {
     const edit = edits.get(id);
     if (edit?.references !== undefined) {
       const at = ["sections", input.edits!.indexOf(edit), "references"];
+      const previous = input.previous.find(section => section.id === id)?.references ?? [];
       const references = [];
       for (const [index, reference] of edit.references.entries()) {
         if (!inScope(reference.source_ref)) throw new SubmissionInputError(
           `Fragment ${id} cites ${reference.source_ref}, which is outside this revision; allowed sources: ${input.sourceRefs.join(", ")}. `
           + "To cite new independent evidence, register it as a source, associate it with the selected requirement in src/indexers.yaml, then run context task adjust for this revision.",
-          [...at, index, "source_ref"]);
+          [...at, index, "source_ref"], "source-outside-revision");
+        // Resubmitting an earlier citation unchanged keeps its earlier evidence;
+        // quote and heading locators select current text and never take this path.
+        const submitted = reference.locator;
+        const kept = "start_line" in submitted ? previous.find(old => old.source_ref === reference.source_ref &&
+          old.locator.path === submitted.path && old.locator.start_line === submitted.start_line &&
+          old.locator.end_line === submitted.end_line) : undefined;
+        if (kept) {
+          const observed = await relocateUnchangedReference(input.projectRoot, readSource, kept);
+          if (observed.state === "current" || observed.state === "moved") { references.push(observed.reference); continue; }
+          throw new SubmissionInputError(`Fragment ${id}: ${reference.source_ref} ${kept.locator.path}:${kept.locator.start_line}-${kept.locator.end_line} `
+            + `repeats an earlier citation, so it keeps that evidence, which is ${observed.state} in the current source. `
+            + "To keep the earlier evidence, cite its current position. To cite the text now at these lines (it may be the correct new content), use a quote or heading locator.",
+          [...at, index, "locator"], "kept-reference-unresolved");
+        }
         const text = await readSource(reference.source_ref, reference.locator.path);
         let locator;
         try { locator = resolveSubmittedSourceLocator(reference.locator, text); }
@@ -47,7 +64,7 @@ export async function prepareRevisionReferences(input: {
           throw error;
         }
         const resolved = createArticleSourceReference(reference.source_ref, locator, text);
-        rememberArticleRegion(input.projectRoot, resolved, text);
+        if (input.remember !== false) rememberArticleRegion(input.projectRoot, resolved, text);
         references.push(resolved);
       }
       try { result.push({ id, references: articleFragmentReferences(references) }); }

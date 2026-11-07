@@ -26,7 +26,9 @@ Review.
 
 Without explicit session-managed authority, open the report returned by the
 Route and request confirmation or revision notes through the host user-question
-tool. Follow the selected knowledge-review dialogue to distinguish feedback,
+tool. When the CLI cannot open it (for example without a graphical
+session), follow `open_next`: open the same report path the same way after each
+regeneration, so the reader's READ marks carry over to unchanged pages. Follow the selected knowledge-review dialogue to distinguish feedback,
 approval and approval-after-repair. Keep the exact report reference, presented
 scope and user intent in this conversation. The HTML contains reading progress
 and plain revision notes, not approval authority. Normal explicit confirmation
@@ -63,9 +65,11 @@ Do not persist a duplicate review-report ledger in the workspace.
 For restructuring, compare replacement content with the affected approved pages:
 useful conditions, steps and explanations must have a destination before removal.
 Review omission rejects a candidate; it does not retire an approved article.
-Pure retirement does not enter this HTML report. Use the explicit retirement
-preview after replacement delivery, and repair its
-reported incoming references. Navigation removal alone does not remove content
+A retirement scheduled in the current batch appears in this report as planned:
+the retired pages, navigation changes, and drafts that still link to them. Revise
+those drafts before requesting approval; approval cannot apply while they remain.
+Outside a batch, retirement stays a standalone action that does not enter this
+report; use its explicit preview and repair its reported incoming references. Navigation removal alone does not remove content
 from search or packages. A renamed menu does not require a new article identity.
 
 Before requesting human review, follow the report's navigation diagnostics.
@@ -103,7 +107,8 @@ the correction instruction. Current candidates are repaired within this batch;
 `--regenerate` schedules program regeneration for approved pages. If supplied
 for a current candidate, follow the CLI's returned repair command instead.
 After the repair, read the new Route and review the changed material before
-approving the batch. Pending maintenance requests for other pages remain queued.
+approving the batch. Requests for other pages made before approval join this
+batch; after approval they queue for the next one.
 
 For a repaired generated table, inspect the new Candidate's affected rows, not
 only its Repair ID or accepted Author/Composer outcome. Check the reported error

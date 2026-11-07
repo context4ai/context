@@ -368,6 +368,13 @@ same id/input on retry. Status reports active and queued maintenance plus its
 waiting condition. Source refreshes remain explicit scope adjustments; this
 entry does not fetch remote sources or rerun every custom Composer.
 
+While a revision batch (including the pages of a source update) is not yet
+approved, `revise` and `task maintain` add pages to it instead of queueing, and
+`task retire` schedules the retirement with it. Approval closes the batch; later
+requests queue for the next one. Between approval and delivery, record a
+mechanical correction made without another Review with `context task record-fix
+--input <{path, reason}> --format json`.
+
 `context task maintenance-status --format json` exposes the request state and
 revision. `context task cancel-maintenance <id> --format json` cancels a pending
 request. Discarding an active maintenance draft additionally requires its current

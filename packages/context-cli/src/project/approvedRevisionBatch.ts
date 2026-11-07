@@ -29,9 +29,21 @@ export async function prepareRevisionBatchContinuation(root: string, request: Ap
     ...(next.regenerate ? { regenerate: true } : {}),
     ...(next.target ? { target: next.target } : {}),
     ...(next.create ? { create: next.create } : {}), ...(next.supporting_sources ? { supporting_sources: next.supporting_sources } : {}),
+    ...(request.retirements ? { retirements: request.retirements } : {}),
     ...(request.requirements ? { requirements: request.requirements } : {}),
     ...(request.processed_scopes ? { processed_scopes: request.processed_scopes } : {}) });
   return prepared.request;
+}
+
+/** A batch page counts as delivered when its accepted draft is applied, or when
+ * a mechanical fix recorded for this batch after approval matches its bytes.
+ * Status, recovery and final cleanup all use this one rule. */
+export async function approvedRevisionCandidateDelivered(root: string, request: ApprovedRevision, candidate: CandidateRecord,
+  applied: string | undefined, closed = false): Promise<boolean> {
+  if (await approvedRevisionCandidateApplied(root, candidate, applied, closed)) return true;
+  if (applied === undefined) return false;
+  const { recordedMechanicalFix } = await import("./mechanicalFixes.js");
+  return recordedMechanicalFix(root, request, candidate.path, applied);
 }
 
 /** Compare the same approved representation that close produces, including
@@ -81,7 +93,7 @@ export async function observeApprovedRevisionBatch(root: string, request: Approv
     });
     if (!candidate) {
       const applied = await readFile(join(root, "knowledge", original.path), "utf8").catch(() => undefined);
-      if (await approvedRevisionCandidateApplied(root, original, applied)) continue;
+      if (await approvedRevisionCandidateDelivered(root, request, original, applied)) continue;
       return { state: "stale" as const, candidates: [], revision_pending: true, diagnostic: "Revision batch Candidate is missing" };
     }
     if ((bytes === undefined ? null : durableContentDigest(bytes)) !== revision.base_digest ||

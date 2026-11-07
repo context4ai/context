@@ -461,7 +461,7 @@ export async function applyReviewDecisions(input: {
         navigationTargets.push(reviewFileTarget({ path, baseContent: before, targetContent: after }));
       }
     }
-    const targets = [
+    let targets = [
       feedbackTarget,
       await prepareApprovedKnowledgeSnapshotTarget({ projectRoot: input.projectRoot, pages: pagesToWrite, candidates: rows }),
       ...navigationTargets,
@@ -484,6 +484,15 @@ export async function applyReviewDecisions(input: {
         : []),
     ].filter((target): target is IndexerProjectFileTarget => target !== undefined)
       .sort((left, right) => left.path.localeCompare(right.path));
+    // Retirements scheduled in this batch take effect with its final apply, on
+    // the same final file contents and in the same transaction.
+    const { readApprovedRevision } = await import("./approvedRevision.js");
+    const batch = approved > 0 && nextRows.length === 0 ? await readApprovedRevision(input.projectRoot) : undefined;
+    if (batch?.retirements?.length && !batch.pending_targets?.length) {
+      const { mergeBatchRetirements } = await import("./articleRetirement.js");
+      const drafts = new Set([...(batch.batch_candidates ?? []), ...(batch.candidate ? [batch.candidate] : [])].map(candidate => candidate.path));
+      targets = await mergeBatchRetirements(input.projectRoot, batch.retirements, targets, drafts);
+    }
     if (targets.length > 0) {
       await runDurableMultiFileTransaction({
         projectRoot: input.projectRoot,

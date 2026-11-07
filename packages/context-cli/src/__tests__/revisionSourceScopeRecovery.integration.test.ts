@@ -42,8 +42,8 @@ test("new evidence scope diagnostics identify the missing association without mu
       .rejects.toMatchObject({ detail: { missing: "current-task-association" } });
     owner.evidence_source_scope = { targets: [{ source_ref: note.source_ref }] };
     await writeFile(config, YAML.stringify(registry));
-    await adjustCurrentTaskSources(root, payload);
-    await adjustCurrentTaskSources(root, { ...payload, refresh: true });
+    // Added material that is already imported needs no separate acquisition call.
+    expect(await adjustCurrentTaskSources(root, payload)).toMatchObject({ action: "adjusted", acquisition: "already-available" });
     const after = (await readApprovedRevision(root))!;
     expect(after.target.source_refs).toContain(note.source_ref);
     expect(after.revision).not.toBe(before.revision);
@@ -69,8 +69,7 @@ test("evidence added during a queued revision stays citable by its later pages w
     registry.requirements[0].evidence_source_scope = { targets: [{ source_ref: note.source_ref }] };
     await writeFile(config, YAML.stringify(registry));
     const payload = { instruction: "Use independently recorded evidence.", scopes: [{ source_ref: note.source_ref, requirement_ref: registry.requirements[0].id }] };
-    await adjustCurrentTaskSources(root, payload);
-    await adjustCurrentTaskSources(root, { ...payload, refresh: true });
+    expect(await adjustCurrentTaskSources(root, payload)).toMatchObject({ action: "adjusted", acquisition: "already-available" });
     const first = (await readApprovedRevision(root))!;
     expect(first.pending_targets?.[0]?.supporting_sources).toContain(note.source_ref);
     const cite = (id: string) => [{ section_id: id, references: [

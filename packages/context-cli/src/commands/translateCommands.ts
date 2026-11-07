@@ -52,7 +52,7 @@ export function registerTranslateCommands(program: Command) {
         stale: items.filter(item => item.state === "stale").length, missing: items.filter(item => item.state === "missing").length };
     });
     write({ locales: counts, pending: inspection.pending, orphans: inspection.orphans, route_satisfied: inspection.route_satisfied,
-      ...(inspection.pending > 0 ? { next_action: { command: "context translate prepare --format json" } } : {}) });
+      ...(inspection.pending > 0 || inspection.orphans.length > 0 ? { next_action: { command: "context translate prepare --format json" } } : {}) });
   });
   command.command("prepare").description("Write the pending translation task").option("--format <format>", "json", "json").action(async () => {
     const root = projectRoot();

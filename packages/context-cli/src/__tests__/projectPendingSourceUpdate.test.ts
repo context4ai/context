@@ -121,6 +121,11 @@ test("a pending update asks only about pages whose cited text changed and keeps 
     .toEqual(new Set(update.changed_references!.map(reference => reference.path)));
   expect(await baseline(root)).toEqual(before);
   await expect(beginKnowledgeUpdate(root, undefined, { pending: true })).rejects.toThrow("active task");
+  // The Route names the evidence file instead of repeating excerpts inline.
+  const input = (await collectProjectStatus(root, { managed: true })).workflow.current!.action!.input as Record<string, unknown>;
+  expect(input.reference_evidence).toBeUndefined();
+  expect(input.reference_evidence_count).toBe(update.reference_evidence!.length);
+  expect(JSON.parse(await readFile(join(root, input.reference_evidence_file as string), "utf8"))).toEqual(update.reference_evidence);
 });
 
 test("history reads fetch one missing settled commit into a shallow recovered checkout", async () => {

@@ -38,6 +38,11 @@ export async function registerKnowledgeMaintenance(root: string, value: unknown,
     const digest = indexerProtocolDigest(input);
     const existing = [...state.pending, ...(state.active ? [state.active] : [])].find(item => item.input.id === input.id);
     const completed = state.completed.find(item => item.id === input.id);
+    const joinedBefore = state.joined?.find(item => item.id === input.id);
+    if (joinedBefore) {
+      if (joinedBefore.input_digest !== digest) throw new TypeError("Maintenance id already belongs to different input. Cancel the pending request or use a new id for additional feedback.");
+      return { status: "maintenance-registered" as const, outcome: "already-joined", id: input.id, next_action: { command: "context status --format json" } };
+    }
     if (existing || completed) {
       const pendingIndex = state.pending.findIndex(item => item.input.id === input.id);
       if (existing && pendingIndex >= 0 && existing.input.timing !== input.timing &&
@@ -67,6 +72,20 @@ export async function registerKnowledgeMaintenance(root: string, value: unknown,
       return { path, article_id: matches[0]!.article_id as string };
     });
     if (new Set(targets.map(item => item.path)).size !== targets.length) throw new TypeError("Maintenance targets repeat the same approved page");
+    // Page changes join an unapproved batch instead of waiting for its delivery.
+    if (input.operation !== "rebuild") {
+      const { joinableRevisionBatch, joinRevisionBatch } = await import("./revisionBatchJoin.js");
+      const batch = await joinableRevisionBatch(root);
+      if (batch.joinable) {
+        const result = await joinRevisionBatch(root, batch.request, input.targets.map(target => ({ ...target,
+          ...(input.operation === "regenerate" ? { regenerate: true } : {}) })));
+        (state.joined ??= []).push({ id: input.id, input_digest: digest });
+        await saveMaintenance(root, state);
+        return { status: "maintenance-registered" as const, outcome: "joined-current-batch", id: input.id, targets, ...result,
+          message: "Added to the current unapproved batch. Its Review covers these pages; follow the current Route.",
+          next_action: { command: "context status --format json" } };
+      }
+    }
     const request = { input, targets, delivered_before: await deliveryDigest(root) };
     if (input.timing === "priority") state.pending.unshift(request); else state.pending.push(request);
     await saveMaintenance(root, state);
@@ -153,14 +172,53 @@ export async function advanceKnowledgeMaintenance(root: string, revision: string
       }
       active.phase = "running";
       await saveMaintenance(root, state);
+      await drainQueuedMaintenance(root);
     }
     return { outcome: "advanced", next_action: { command: "context status --format json" } };
   });
 }
 
+/** Queued page requests join a batch as soon as one exists and is unapproved,
+ * instead of waiting for its delivery. Output-only rebuilds stay queued. */
+export async function drainQueuedMaintenance(root: string): Promise<string[]> {
+  const state = await readMaintenance(root);
+  const { joinableRevisionBatch, joinRevisionBatch } = await import("./revisionBatchJoin.js");
+  const joined: string[] = [];
+  for (const item of state.pending.filter(request => request.input.operation !== "rebuild")) {
+    const batch = await joinableRevisionBatch(root);
+    if (!batch.joinable) break;
+    try {
+      await joinRevisionBatch(root, batch.request, item.input.targets.map(target => ({ ...target,
+        ...(item.input.operation === "regenerate" ? { regenerate: true } : {}) })));
+    } catch (error) {
+      // A request whose page moved stays queued and reports at its own turn.
+      if (error instanceof TypeError) continue;
+      throw error;
+    }
+    state.pending = state.pending.filter(request => request !== item);
+    (state.joined ??= []).push({ id: item.input.id, input_digest: indexerProtocolDigest(item.input) });
+    await saveMaintenance(root, state);
+    joined.push(item.input.id);
+  }
+  return joined;
+}
+
+/** Requests joined into a batch end with it: completed with its delivery,
+ * cancelled when it is discarded or rolled back. A later request with the same
+ * id is then a new request, not "already joined". */
+export async function settleJoinedMaintenance(root: string, outcome: "completed" | "cancelled"): Promise<void> {
+  const state = await readMaintenance(root);
+  if (!state.joined?.length) return;
+  state.completed.push(...state.joined.map(item => ({ ...item, outcome })));
+  delete state.joined;
+  await saveMaintenance(root, state);
+}
+
 /** Called after the local batch's actual apply/close/build, or its no-change
  * completion. Never clean the production Indexer ledger or accepted results. */
 export async function finishMaintenanceRevision(root: string, outcome: "completed" | "cancelled" = "completed"): Promise<boolean> {
+  const shared = (await readMaintenance(root)).active?.completion_outcome ?? outcome;
+  await settleJoinedMaintenance(root, shared);
   const state = await readMaintenance(root);
   if (!state.active) return false;
   state.active.completion_outcome ??= outcome;

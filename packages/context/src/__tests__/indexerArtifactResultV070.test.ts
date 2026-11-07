@@ -86,11 +86,11 @@ describe("Article result contract", () => {
     });
     rehash(result);
     expect(validate(result)).toEqual(result);
-    current.blocks[0]!.references = ["a", "b", "c", "d"].map(name => ({
+    current.blocks[0]!.references = ["a", "b", "c", "d", "e", "f"].map(name => ({
       ...reference, locator: { path: `src/${name}.ts`, start_line: 1, end_line: 1 },
     }));
     rehash(result);
-    expect(() => validate(result)).toThrow("at most 3 distinct source files");
+    expect(() => validate(result)).toThrow("at most 5 distinct source files");
   });
 
   test.each(["provider_layer_ref", "provider_integrity", "provider_bundle_digest",

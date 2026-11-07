@@ -260,4 +260,6 @@ MIT.
 
 来源刷新仍走明确范围调整；该入口不会抓取远端来源，也不代表能够重跑任意自定义 Composer。目标主体仍有未交付生产内容时，先等该写入方完成，再修订最新正文，避免恢复后覆盖。
 
+修订批次（包括来源更新的页面批次）尚未审阅通过时，`revise` 与 `task maintain` 把页面加入该批次而不是排队，`task retire` 把退役安排在该批次一并生效。审阅通过即关闭批次，之后的请求排到下一批。通过后、交付完成前，不经再次审阅的机械修正用 `context task record-fix --input <{path, reason}> --format json` 记录。
+
 `context task maintenance-status --format json` 返回维护状态和 revision。`context task cancel-maintenance <id> --format json` 取消待办；明确放弃活动维护草稿时，再提供当前 `--discard-revision`。已批准页面和其他生产成果保留。

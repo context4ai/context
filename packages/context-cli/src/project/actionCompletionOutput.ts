@@ -83,6 +83,7 @@ export async function prepareActionCompletionOutput(input: {
     } as Record<string, unknown>,
     ...(failure === undefined ? {} : { next_preparation: {
       outcome: failure.outcome, message: shortText(failure.message), command: failure.command,
+      ...(Array.isArray(failure.choices) ? { choices: failure.choices } : {}),
     } }),
     details_required: false,
     guidance: "Read result_file only when details_required is true, transport output was truncated, or the outcome is unclear. Otherwise the summary contains all task outcomes. Use next_route.inline as the complete Route when present; otherwise read next_route.file once. Legacy next_route commands/gate are summaries, not the executable contract. Required resources and read receipts still apply. Do not resubmit committed tasks or start another production driver while a submission is running.",

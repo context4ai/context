@@ -8,7 +8,7 @@ import { ExitCode } from "../types/exitCode.js";
 /** A submitted value that the author can correct in the same input file, such as
  * an unmatched locator, an unauthorized source or an oversized fragment. */
 export class SubmissionInputError extends TypeError {
-  constructor(message: string, readonly path: ReadonlyArray<string | number> = []) { super(message); }
+  constructor(message: string, readonly path: ReadonlyArray<string | number> = [], readonly reason?: string) { super(message); }
 }
 
 /** Add recovery information at the production boundary, without new checks,
@@ -30,7 +30,7 @@ export async function withProductionFeedback<T>(input: {
         : inputError ? { instruction: "Correct the reported item in the input file and resubmit it with the same revision." } : {}) },
       ...(input.file ? { file: input.file } : {}),
       ...(schemaError ? { issues: error.issues.map(issue => ({ path: issue.path, message: issue.message })) } : {}),
-      ...(inputError ? { issues: [{ path: error.path, message: error.message }] } : {}),
+      ...(inputError ? { issues: [{ path: error.path, message: error.message }], ...(error.reason ? { reason_code: error.reason } : {}) } : {}),
       ...(syntaxError && error.linePos ? { location: error.linePos } : {}),
       ...(typeof ioCode === "string" ? { io_code: ioCode } : {}),
       ...existing?.detail,

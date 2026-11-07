@@ -135,7 +135,8 @@ async function collectProjectStatusSnapshotInternal(
   const { readTaskRollback } = await import("./taskRollback.js");
   const localRollback = await readTaskRollback(projectRoot);
   const { readMaintenance } = await import("./maintenanceStorage.js");
-  const maintenance = (await readMaintenance(projectRoot)).active;
+  const maintenanceState = await readMaintenance(projectRoot);
+  const maintenance = maintenanceState.active;
   // A cleared task has no delivery action. Do not re-audit all delivered files
   // just to tell the caller to start a new task. Explicit Verify and every
   // delivery command continue to inspect their actual inputs.
@@ -222,6 +223,7 @@ async function collectProjectStatusSnapshotInternal(
   // restore the production that previously cleared its temporary workspace.
   const observation: ContextWorkflowObservation = {
     versionCurrent: phaseStatus.projectEntryValid && !deferDeliveryChecks ? (await inspectWorkspaceVersion(projectRoot)).current : false,
+    maintenanceQueued: maintenanceState.pending.length > 0,
     translationRouteSatisfied: phaseStatus.projectEntryValid && !deferDeliveryChecks
       ? await inspectSiteTranslations(projectRoot, packages).then(result => result.route_satisfied, () => false) : true,
     taskPreparation,

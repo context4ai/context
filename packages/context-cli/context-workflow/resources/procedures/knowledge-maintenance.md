@@ -44,6 +44,22 @@ adjustment procedures. A regenerated table does not advance a whole-source
 processed baseline. A changed upstream version still requires source impact
 assessment, including other affected approved pages and new topics.
 
+While the current revision batch (a maintenance batch or the pages of a source
+update) is not yet approved, a page request joins it instead of queueing: the
+result says `joined-current-batch`, the page enters this batch's Review, and a
+request for a page already drafted here restarts from that draft. Once Review
+approves the batch, new requests queue for the next batch. A new source update
+never joins; it starts its own batch. Translation and version recording wait
+until no request is queued, so they run once after the last batch.
+
+After approval and before delivery finishes, a mechanical correction caused by
+the revision (a broken link, link text pointing to a retired page, a menu label,
+an anchor or formatting) may be applied to the approved page without another
+Review. You judge whether it is mechanical; if it changes meaning or citations,
+register it for the next batch. Record each one with
+`context task record-fix --input <{path, reason}> --format json` and report the
+recorded fixes to the user with the batch result.
+
 `after-batch` waits for the current delivery boundary. Use `priority` when the
 user asks to handle the correction first: the Graph requests early delivery
 of complete pages, retaining ordinary Review gates. Never interrupt a running

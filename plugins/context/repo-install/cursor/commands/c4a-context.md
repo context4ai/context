@@ -481,7 +481,8 @@ Route (`next`, `continuation.next` or `workflow.current`). Do not call status
 again when that Route is present; refresh after configuration changes or when
 none was returned. A phase-local `next_action` is not a workspace Route.
 If `next_preparation` fails after committed outcomes, execute its recovery
-without resubmitting accepted work. Stage completion is not workspace completion:
+without resubmitting accepted work. When it lists `choices`, pick the one that
+fits the cause (for example, correct a wrong citation rather than widen scope). Stage completion is not workspace completion:
 Changed delivery content must finish Review, close and build through their Routes.
 An empty result does not prove that existing pages meet a later revision request.
 Register the actual maintenance targets rather than inferring them from task names.

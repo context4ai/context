@@ -22,8 +22,15 @@ export interface ReviewSiteNode { key: string; parent: string | null; title: str
   change: ReviewChange; oldTitle?: string; removed?: boolean }
 export interface ReviewSitePage { id: string; title: string; path: string; previousPath?: string; candidate_id?: string;
   change: ReviewChange; html: string; sources: string[]; revisionInstruction?: string; readVersion?: string }
+export interface ReviewNavigationTarget { id: string; title: string; path?: string }
+/** One changed menu entry against the navigation baseline, whether or not its
+ * page is in this batch. */
+export interface ReviewNavigationChange { key: string; title: string; changes: Array<"added" | "removed" | "renamed" | "retargeted" | "moved">;
+  old_title?: string; old_target?: ReviewNavigationTarget | null; new_target?: ReviewNavigationTarget | null }
 export interface ReviewSiteModel { storageScope: string; themeCss?: string; title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
-  navigationBaseline: "git-head" | "current" | "empty" }
+  navigationBaseline: "git-head" | "current" | "empty"; navigationChanges: ReviewNavigationChange[];
+  /** Retirements scheduled in this batch, with links still blocking them. */
+  retirement?: { retired: Array<{ path: string; title: string; replacement?: string }>; blockers: Array<{ path: string; target: string; reason: string }> } }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const body = (s: string) => s.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/u, "").replace(/<!--[^]*?-->/gu, "").trim();
 const title = (s: string, fallback: string) => {
@@ -35,8 +42,11 @@ async function optional(path: string) {
   try { return await readFile(path, "utf8"); } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw e; }
 }
 async function navigationContext(root: string, hasApproved: boolean) {
-  const current = await readKnowledgeMap(root);
-  let baseline = current, kind: ReviewSiteModel["navigationBaseline"] = hasApproved ? "current" : "empty";
+  // Retirements scheduled in the active batch are shown as their planned result.
+  const planned = await plannedRetirement(root);
+  const actual = await readKnowledgeMap(root);
+  const current = planned?.knowledge_map ?? actual;
+  let baseline = actual, kind: ReviewSiteModel["navigationBaseline"] = hasApproved ? "current" : "empty";
   if (hasApproved) {
     try {
       const { stdout } = await promisify(execFile)("git", ["show", "HEAD:./src/knowledge-map.yaml"], { cwd: root, timeout: 5000, maxBuffer: 4 * 1024 * 1024 });
@@ -46,7 +56,14 @@ async function navigationContext(root: string, hasApproved: boolean) {
   const changedArticles = new Set((current?.entries ?? []).filter(n =>
     JSON.stringify(baseline?.entries.find(b => b.key === n.key)) !== JSON.stringify(n))
     .flatMap(n => n.target ? [n.target.artifact_ref] : []));
-  return { current, baseline, kind, changedArticles };
+  return { current, baseline, kind, changedArticles, planned };
+}
+async function plannedRetirement(root: string) {
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const request = await readApprovedRevision(root);
+  if (!request?.retirements?.length) return undefined;
+  const { plannedBatchRetirement } = await import("./articleRetirement.js");
+  return plannedBatchRetirement(root, request);
 }
 /** Binds only displayed inputs, not every source, tool version or unrelated runtime file. */
 export async function reviewSiteBaselineHash(root: string, reviewedPaths: readonly string[]): Promise<string> {
@@ -56,6 +73,7 @@ export async function reviewSiteBaselineHash(root: string, reviewedPaths: readon
   const displayed = new Set([...reviewedPaths, ...((metadata.structure?.articles ?? []) as Array<{ article_id: string; path: string }>)
     .filter(a => navigation.changedArticles.has(a.article_id)).map(a => a.path)]);
   return hash(JSON.stringify([navigation.baseline, await optional(join(root, "src/knowledge-map.yaml")) ?? null,
+    navigation.planned ? [navigation.planned.retired, navigation.planned.knowledge_map ?? null] : null,
     files.map(f => [f.relPath, displayed.has(f.relPath) ? hash(f.content) : title(f.content, f.relPath)]).sort((a, b) => a[0]!.localeCompare(b[0]!))]));
 }
 /** Compare complete Markdown blocks, including fenced code, tables and nested lists. */
@@ -91,7 +109,7 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
   const metadata = await readApprovedKnowledgeMetadataIndex(root);
   const articles = (metadata.structure?.articles ?? []) as Array<{ article_id: string; path: string }>;
   const files = await readApprovedMarkdownFiles(root);
-  const { current, baseline, kind: navigationBaseline, changedArticles } = await navigationContext(root, files.length > 0);
+  const { current, baseline, kind: navigationBaseline, changedArticles, planned } = await navigationContext(root, files.length > 0);
   const byPath = new Map(files.map(f => [f.relPath, f.content]));
   const pages: ReviewSitePage[] = files.map(f => ({ id: articles.find(a => a.path === f.relPath)?.article_id ?? f.relPath,
     path: f.relPath, title: title(f.content, f.relPath), change: "unchanged", html: "", sources: [] }));
@@ -121,13 +139,41 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
   const unplaced = pages.filter(p => p.candidate_id && !nodes.some(n => n.page === p.id));
   if (unplaced.length) { nodes.push({ key: "review-unplaced", parent: null, title: "Unplaced articles", order: Number.MAX_SAFE_INTEGER, change: "new" });
     for (const [i, p] of unplaced.entries()) nodes.push({ key: `review-page-${p.id}`, parent: "review-unplaced", title: p.title, order: i, page: p.id, change: p.change }); }
+  const navigationChanges = navigationBaseline === "empty" ? [] : reviewNavigationChanges(baseline?.entries ?? [], current?.entries ?? [], pages);
   const pkgText = await optional(join(root, "package.json"));
   const pkg = pkgText ? JSON.parse(pkgText) as { name?: string } : {};
   const project = await optional(join(root, "src/index.ts")) === undefined ? undefined : await loadContextProjectModule(root);
   const siteTitle = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site?.title ? [p.site.title] : [])[0];
   const sitePackages = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site ? [p.site] : []) ?? [];
   const themeCss = siteThemeVariables(await resolveSiteTheme(root, sitePackages.length === 1 ? sitePackages[0]?.theme : undefined));
-  return { storageScope: hash(root), themeCss, title: siteTitle ?? pkg.name ?? "Knowledge reading report", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline };
+  return { storageScope: hash(root), themeCss, title: siteTitle ?? pkg.name ?? "Knowledge reading report", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline, navigationChanges,
+    ...(planned ? { retirement: { blockers: planned.blockers, retired: planned.retired.map(target => ({ path: target.path,
+      title: pages.find(page => page.path === target.path)?.title ?? target.path, ...(target.replacement ? { replacement: target.replacement } : {}) })) } } : {}) };
+}
+type MapEntry = { key: string; title: string; parent?: string | null | undefined; target?: { artifact_ref: string } | null | undefined };
+export function reviewNavigationChanges(before: readonly MapEntry[], after: readonly MapEntry[],
+  pages: ReadonlyArray<Pick<ReviewSitePage, "id" | "title" | "path">>): ReviewNavigationChange[] {
+  const target = (ref: string | undefined): ReviewNavigationTarget | null => {
+    if (ref === undefined) return null;
+    const page = pages.find(item => item.id === ref);
+    return page ? { id: ref, title: page.title, path: page.path } : { id: ref, title: ref };
+  };
+  const result: ReviewNavigationChange[] = [];
+  for (const entry of after) {
+    const old = before.find(item => item.key === entry.key);
+    if (!old) { result.push({ key: entry.key, title: entry.title, changes: ["added"], new_target: target(entry.target?.artifact_ref) }); continue; }
+    const changes: ReviewNavigationChange["changes"] = [];
+    if (old.title !== entry.title) changes.push("renamed");
+    if (old.target?.artifact_ref !== entry.target?.artifact_ref) changes.push("retargeted");
+    if ((old.parent ?? null) !== (entry.parent ?? null)) changes.push("moved");
+    if (changes.length) result.push({ key: entry.key, title: entry.title, changes,
+      ...(changes.includes("renamed") ? { old_title: old.title } : {}),
+      ...(changes.includes("retargeted") ? { old_target: target(old.target?.artifact_ref), new_target: target(entry.target?.artifact_ref) } : {}) });
+  }
+  for (const old of before) if (!after.some(entry => entry.key === old.key)) {
+    result.push({ key: old.key, title: old.title, changes: ["removed"], old_target: target(old.target?.artifact_ref) });
+  }
+  return result;
 }
 export const reviewHtmlJson = (value: unknown) => JSON.stringify(value).replace(/</gu, "\\u003c").replace(/\u2028/gu, "\\u2028").replace(/\u2029/gu, "\\u2029");
 export { escapeReviewHtml };

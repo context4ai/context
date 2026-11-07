@@ -72,6 +72,11 @@ async function readPayloadText(path: string): Promise<string> {
   return readPayloadTextFromStdin(process.stdin);
 }
 
+/** A plain YAML scalar ending a key with ": " starts a nested mapping. */
+function unquotedColonText(message: string): boolean {
+  return /Nested mappings are not allowed in compact mappings|Implicit map keys need to be/u.test(message);
+}
+
 export async function readYamlOrJsonInput(input: {
   path: string | undefined;
   label: string;
@@ -101,7 +106,9 @@ export async function readYamlOrJsonInput(input: {
     const message = error instanceof Error ? error.message : String(error);
     throw userInputError(`${input.label} is invalid YAML/JSON: ${message}`, {
       path: input.path,
-      next: input.parseFailureNext,
+      next: unquotedColonText(message)
+        ? `${input.parseFailureNext}. Quote text that contains ": ", for example summary: "Upgrade: Context" or a block scalar (summary: |).`
+        : input.parseFailureNext,
     });
   }
 }

@@ -1,6 +1,6 @@
 import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import YAML from "yaml";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { ARTICLE_FRAGMENT_REGION_LIMIT, ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT, articleFragmentReferences, createArticleSourceReference,
   indexerKnowledgeCollectionSchema, indexerProtocolDigest, repoContentScopeMatches } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
@@ -164,7 +164,7 @@ export async function prepareProductionArticle(input: {
     }
     let unique;
     try { unique = articleFragmentReferences(references); }
-    catch { throw articleError(task, files.references.path, "A fragment cites more than three distinct source regions; split the claim or choose sufficient references.", fragment.id); }
+    catch (error) { throw articleError(task, files.references.path, error instanceof ZodError ? error.issues.map(issue => issue.message).join("; ") : error instanceof Error ? error.message : String(error), fragment.id); }
     sections.push({ section_ref: `${task.article_id}#${fragment.id}`, section_key: fragment.id,
       references: unique, markdown: fragment.readerVisibleBody, markdown_digest: indexerProtocolDigest(fragment.readerVisibleBody) });
   }

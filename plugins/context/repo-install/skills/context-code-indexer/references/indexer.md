@@ -129,7 +129,7 @@ affected sections when appropriate. Preserve still-valid examples, limitations
 and confirmed contributions. New explanatory context does not require
 repartitioning unchanged code.
 
-Each fragment uses actual source regions from at most three source files (up
+Each fragment uses actual source regions from at most five source files (up
 to eight regions in total); the CLI computes content digests. Organize fragments
 by topic and cite only sources that support that fragment. If either limit is
 exceeded, split by topic or keep the primary supporting files. Do not use fallback evidence from an unrelated

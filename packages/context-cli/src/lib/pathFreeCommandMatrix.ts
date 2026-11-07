@@ -39,6 +39,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "task cancel-maintenance", view: "production-semantic", handles: ["id", "revision", "outcome", "next_command"], notes: "Cancels pending maintenance or explicitly discards only its current unfinished drafts." },
   { command: "task adjust", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Invalidate selected current source worksets while retaining peers." },
   { command: "task rollback", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Preview and apply explicitly selected rollback bytes." },
+  { command: "task record-fix", view: "production-semantic", handles: ["path", "reason", "outcome", "next_action"], notes: "Record a mechanical correction made after a batch's approval and before its delivery; only valid in that window." },
   { command: "task retire", view: "production-semantic", handles: ["revision", "targets", "blockers", "next_command"], notes: "Preview and atomically retire approved articles with reference cleanup and a temporary restore input." },
   { command: "task finish-rollback", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Finish rollback cleanup after close and build." },
   { command: "source import", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Import managed Markdown or prefetched Lark responses." },

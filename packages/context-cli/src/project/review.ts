@@ -28,7 +28,7 @@ import {
 } from "./reviewShared.js";
 import { readConfirmedReviewScope } from "./reviewReportScope.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import { htmlReportReference, openLocalFile } from "./localHtmlReport.js";
+import { htmlReportReference, openLocalFile, REPORT_OPEN_FALLBACK } from "./localHtmlReport.js";
 import { findContextProjectRoot } from "./workspace.js";
 import type { ReviewContinuation } from "./workflow/workflowContinuation.js";
 
@@ -366,6 +366,7 @@ export async function runReviewHtmlCommand(input: {
         ? "context review list --all --format json"
         : `context review list ${collection} --format json`,
       ...(openResult !== undefined ? { opened: openResult.opened, open_error: openResult.error } : {}),
+      ...(openResult !== undefined && !openResult.opened ? { open_next: REPORT_OPEN_FALLBACK } : {}),
     }, null, 2)}\n`);
     return;
   }
@@ -382,6 +383,7 @@ export async function runReviewHtmlCommand(input: {
       ...(openResult !== undefined ? [
         `opened: ${openResult.opened ? "yes" : "no"}`,
         ...(openResult.error !== undefined ? [`open_error: ${openResult.error}`] : []),
+        ...(!openResult.opened ? [`open_next: ${REPORT_OPEN_FALLBACK}`] : []),
       ] : []),
     ],
     next: result.next_action ? `${result.next_action.message} ${result.next_action.command}`

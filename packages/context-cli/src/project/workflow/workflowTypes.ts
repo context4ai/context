@@ -93,6 +93,8 @@ export interface ContextWorkflowObservation {
   sourceUpdatePending?: boolean;
   versionCurrent?: boolean;
   translationRouteSatisfied?: boolean;
+  /** Queued maintenance follows this batch; translate and version once after it. */
+  maintenanceQueued?: boolean;
   unfinishedIndexerTasks?: boolean;
   taskPreparation?: "cleared" | "resume-requested" | undefined;
   projectRoot: string;

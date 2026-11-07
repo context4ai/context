@@ -8,7 +8,7 @@ import {
   readReviewCandidateSnapshot,
   type ReviewCandidateView,
 } from "./reviewShared.js";
-import { collectReviewSiteModel, escapeReviewHtml, reviewHtmlJson, type ReviewSiteModel } from "./reviewSiteModel.js";
+import { collectReviewSiteModel, escapeReviewHtml, reviewHtmlJson, type ReviewNavigationChange, type ReviewSiteModel } from "./reviewSiteModel.js";
 import { saveReviewReportScope } from "./reviewReportScope.js";
 import { REVIEW_SITE_CLIENT } from "./reviewSiteClient.js";
 import { REVIEW_SITE_STYLES } from "./reviewSiteStyles.js";
@@ -82,7 +82,9 @@ export async function writeReviewHtml(input: {
   candidates: number;
   candidate_set_digest: string;
   structure_digests: string[];
-  navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[] };
+  navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[];
+    changes: ReviewNavigationChange[] };
+  retirement?: ReviewSiteModel["retirement"];
   next_action?: { command: string; message: string };
 }> {
   const reviewScope = input.all === true ? "all" : input.collection;
@@ -113,9 +115,13 @@ export async function writeReviewHtml(input: {
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));
   return {
     navigation: { current_revision: (await readKnowledgeMap(input.projectRoot))?.revision ?? null,
-      structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced },
+      structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced,
+      changes: model.navigationChanges },
+    ...(model.retirement ? { retirement: model.retirement } : {}),
     ...(unplaced.length ? { next_action: { command: "context task adjust --input - --format json",
       message: "Bind the listed drafts to suitable existing categories before requesting review, then regenerate this report. Content approval is not required for navigation." } } : {}),
+    ...(!unplaced.length && model.retirement?.blockers.length ? { next_action: { command: "context status --format json",
+      message: "Drafts in this batch still link to a page retired with it. Revise those drafts before requesting approval; approval cannot apply while they remain." } } : {}),
     path: outPath,
     candidates: candidates.length,
     candidate_set_digest: candidateSetHash(candidates.map(({ record }) => record)),

@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -189,12 +190,15 @@ export async function inspectSiteTranslations(projectRoot: string, packages: rea
     }
   }
   const pending = items.filter(item => item.state !== "current").length;
-  const sourceSetDigest = sha256(JSON.stringify(items.map(item =>
-    [item.locale, item.kind, item.kind === "article" ? item.approved_path : item.key, item.source_digest])));
+  // Orphans are part of the set: a receipt for an earlier set (submitted or
+  // explicitly skipped) does not cover translations orphaned afterwards.
+  const itemsKey = items.map(item => [item.locale, item.kind, item.kind === "article" ? item.approved_path : item.key, item.source_digest]);
+  const sourceSetDigest = sha256(JSON.stringify(orphans.length ? { items: itemsKey, orphans: [...orphans].sort() } : itemsKey));
   const receipt = await readReceipt(projectRoot);
   const resolved = receipt?.source_set_digest ?? null;
   return { locales, items, pending, orphans: orphans.sort(), source_set_digest: sourceSetDigest, resolved_digest: resolved,
-    route_satisfied: pending === 0 || resolved === sourceSetDigest };
+    // Orphaned translations alone still need the submit step that removes them.
+    route_satisfied: (pending === 0 && orphans.length === 0) || resolved === sourceSetDigest };
 }
 
 const DRAFT_ROOT = ".tmp/agent-payloads/translations";
@@ -202,9 +206,28 @@ const SOURCE_HISTORY_LIMIT = 50;
 
 /** Diff from the approved version a translation was made from. Missing or
  * partial-clone history yields undefined; never trigger a lazy fetch. */
+/** Source text a translation was made from, kept so later rounds can diff
+ * against uncommitted intermediate versions. Missing snapshots are not recovered. */
+function sourceSnapshotPath(digest: string): string {
+  return `${TRANSLATION_RUNTIME_ROOT}/sources/${digest}.md`;
+}
+
+function noIndexDiff(projectRoot: string, before: string, after: string): Promise<string | undefined> {
+  return new Promise(resolveDiff => execFile("git", ["diff", "--no-index", "--no-color", "--no-ext-diff", "--no-textconv", "--", before, after],
+    { cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+      // Exit status 1 means the files differ; anything else is unavailable.
+      const status = (error as { code?: unknown } | null)?.code;
+      resolveDiff(error === null || status === 1 ? stdout.trim() || undefined : undefined);
+    }));
+}
+
 async function sourceDiffSince(projectRoot: string, relPath: string, digest: string | undefined): Promise<string | undefined> {
-  if (digest === undefined || !await canReadRepoObjects(projectRoot)) return undefined;
+  if (digest === undefined) return undefined;
   const path = `knowledge/${relPath}`;
+  if (/^[a-f0-9]{64}$/u.test(digest) && existsSync(join(projectRoot, sourceSnapshotPath(digest)))) {
+    return noIndexDiff(projectRoot, sourceSnapshotPath(digest), path);
+  }
+  if (!await canReadRepoObjects(projectRoot)) return undefined;
   const commits = await optionalRepoGit(projectRoot, ["log", "--format=%H", "-n", String(SOURCE_HISTORY_LIMIT), "--", path]);
   for (const commit of commits?.split("\n").filter(Boolean) ?? []) {
     const content = await optionalRepoGit(projectRoot, ["show", `${commit}:./${path}`]);
@@ -328,6 +351,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
     const digest = assertExpectedDigest(inspection, input.expected_digest);
     const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
     const writes: Array<{ path: string; content: string }> = [];
+    const snapshots = new Map<string, string>();
     const issues: Array<{ locale: string; target: string; issues: string[] }> = [];
     const translatedAt = new Date().toISOString();
     const drafts: string[] = [];
@@ -352,6 +376,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
         translation: { locale: article.locale, ...(file.article?.article_id ? { artifact_ref: file.article.article_id } : {}),
           source_digest: approvedArticleDigest(file.content), translated_at: translatedAt } }).trimEnd();
       writes.push({ path: translationArticlePath(article.locale, file.relPath), content: `---\n${head}\n---\n\n${body.trimStart()}` });
+      snapshots.set(sourceSnapshotPath(approvedArticleDigest(file.content)), file.content);
     }
     const mapEntries = new Map(((await readKnowledgeMap(projectRoot))?.entries ?? []).map(entry => [entry.key, entry]));
     const mapUpdates = new Map<string, Array<{ key: string; title: string; digest: string }>>();
@@ -371,6 +396,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       writes.push({ path: mapTranslationPath(locale), content: stringifyYaml({ locale, entries }) });
     }
     for (const write of writes) await atomicWrite(join(projectRoot, write.path), write.content);
+    for (const [path, content] of snapshots) await atomicWrite(join(projectRoot, path), content);
     for (const draft of drafts) for (const path of [draft, `${draft}.diff`]) await rm(join(projectRoot, path), { force: true });
     for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
     await writeReceipt(projectRoot, digest, "submitted");
