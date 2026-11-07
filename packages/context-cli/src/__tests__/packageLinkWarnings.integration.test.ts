@@ -1,3 +1,4 @@
+import { collectProjectStatus } from "../project/status.js";
 import { expect, test } from "bun:test";
 import { cp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -62,8 +63,11 @@ test("package builds leave source-region checks to verify", async () => {
     await acceptStarterPackageTemplates({ projectRoot: root });
     const first = (await buildProjectPackages(root)).packages[0]!;
     await rm(join(root, "fixture-source"), { recursive: true, force: true });
-    expect((await verifyProjectWorkspace(root)).issues).toContainEqual(expect.objectContaining({
-      code: "approved-source-region-changed", severity: "warning" }));
+    const verified = await verifyProjectWorkspace(root);
+    expect(verified.evidenceStatus).toBe("pass-with-unverifiable-evidence");
+    expect(verified.issues).toContainEqual(expect.objectContaining({ code: "source-read-failed", severity: "warning", message: expect.stringContaining("context source recovery-plan") }));
+    expect((await collectProjectStatus(root)).evidenceStatus).not.toBe("pass");
+    await closeProjectWorkspace(root);
     const rebuilt = (await buildProjectPackages(root)).packages[0]!;
     expect(rebuilt.state).toBe("unchanged");
     const pages = (await readdir(join(root, first.outDir), { recursive: true })).filter(path => path.endsWith(".md"));

@@ -1,3 +1,5 @@
+import { recoverDurableMultiFileTransactions } from "./durableMultiFileTransaction.js";
+import { withProjectWriteLock } from "./writeLock.js";
 import { readLegacyReviewPayload, warnLegacyReview } from "./reviewLegacy.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
@@ -235,7 +237,7 @@ export async function readReviewPayloadFile(filePath: string, projectRoot?: stri
   return parseReviewPayloadText(raw);
 }
 
-function formatApplyResult(result: ApplyReviewDecisionsResult & { continuation?: Awaited<ReturnType<ReviewContinuation>> }, format: ReviewFormat): string {
+function formatApplyResult(result: ApplyReviewDecisionsResult & { report_path?: string; continuation?: Awaited<ReturnType<ReviewContinuation>> }, format: ReviewFormat): string {
   if (format === "json") return `${JSON.stringify(result, null, 2)}\n`;
   return formatFeedback({
     symbol: "✓",
@@ -243,6 +245,7 @@ function formatApplyResult(result: ApplyReviewDecisionsResult & { continuation?:
     subject: "review decisions",
     headline: `${result.applied} decision(s)`,
     body: [
+      ...(result.report_path ? [`report: ${result.report_path}`] : []),
       `approved: ${result.approved}`,
       `rejected: ${result.rejected}`,
       `materialized: ${result.materialized}`,
@@ -454,7 +457,12 @@ export async function runReviewApplyCommand(input: {
   const projectRoot = projectRootFromCwd(input.cwd);
   const payloadPath = isAbsolute(input.payloadInput) ? input.payloadInput : resolve(input.cwd, input.payloadInput);
   const payload = await readReviewPayloadFile(payloadPath, projectRoot);
-  const result = await applyReviewDecisions({ projectRoot, payload });
+  const result = await withProjectWriteLock(projectRoot, "review-with-report", async () => {
+    await recoverDurableMultiFileTransactions(projectRoot);
+    const report = await writeReviewHtml({ projectRoot, ...(payload.collection ? { collection: payload.collection } : { all: true }) });
+    const applied = await applyReviewDecisions({ projectRoot, payload });
+    return { ...applied, report_path: report.path };
+  });
   const continuation = await input.afterApply?.(projectRoot);
   process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
@@ -489,26 +497,35 @@ export async function runReviewApproveAllCommand(input: {
     ? "managed-session"
     : "explicit-user-confirmation";
   const projectRoot = projectRootFromCwd(input.cwd);
-  const scoped = await reviewCommandScope({
-    projectRoot,
-    ...(input.collection !== undefined ? { collection: input.collection } : {}),
-    ...(input.all === true ? { all: true } : {}),
-  });
-  const confirmedScope = input.confirmed === true
-    ? await readConfirmedReviewScope(projectRoot, scoped.collection ?? "all")
-    : undefined;
-  const result = await applyReviewDecisions({
-    projectRoot,
-    payload: {
-      ...(confirmedScope === undefined ? {} : { baseline_hash: confirmedScope.baseline_hash }),
-      decisions: [],
-      default: "approved",
-      note: input.managed === true
-        ? "managed-session auto approval"
-        : "explicit user confirmation",
-      ...(scoped.collection !== undefined ? { collection: scoped.collection } : {}),
-      scope: confirmedScope?.scope ?? scoped.scope,
-    },
+  const { scoped, report, result } = await withProjectWriteLock(projectRoot, "review-with-report", async () => {
+    await recoverDurableMultiFileTransactions(projectRoot);
+    const scoped = await reviewCommandScope({
+      projectRoot,
+      ...(input.collection !== undefined ? { collection: input.collection } : {}),
+      ...(input.all === true ? { all: true } : {}),
+    });
+    const confirmedScope = input.confirmed === true
+      ? await readConfirmedReviewScope(projectRoot, scoped.collection ?? "all")
+      : undefined;
+    // Render managed batches before applying: afterwards their drafts no longer
+    // carry the before/after material required by the reading report.
+    const report = input.managed === true ? await writeReviewHtml({ projectRoot,
+      ...(scoped.collection ? { collection: scoped.collection } : { all: true }) }) : undefined;
+    const appliedScope = report ? await readConfirmedReviewScope(projectRoot, scoped.collection ?? "all") : confirmedScope;
+    const result = await applyReviewDecisions({
+      projectRoot,
+      payload: {
+        ...(appliedScope ? { baseline_hash: appliedScope.baseline_hash } : {}),
+        decisions: [],
+        default: "approved",
+        note: input.managed === true
+          ? "managed-session auto approval"
+          : "explicit user confirmation",
+        ...(scoped.collection !== undefined ? { collection: scoped.collection } : {}),
+        scope: appliedScope?.scope ?? scoped.scope,
+      },
+    });
+    return { scoped, report, result };
   });
   const continuation = await input.afterApply?.(projectRoot);
   if ((input.format ?? "text") === "json") {
@@ -516,6 +533,7 @@ export async function runReviewApproveAllCommand(input: {
     process.stdout.write(`${JSON.stringify({
       kind: "review.approve-all.result",
       decision_source: decisionSource,
+      ...(report ? { report_path: report.path } : {}),
       scope: compactScope,
       applied: result.applied,
       approved: result.approved,
@@ -546,6 +564,7 @@ export async function runReviewApproveAllCommand(input: {
     headline: `${result.approved} candidate(s) approved`,
     body: [
       `decision source: ${decisionSource}`,
+      ...(report ? [`review report: ${report.path}`] : []),
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,

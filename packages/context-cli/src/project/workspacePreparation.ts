@@ -16,7 +16,7 @@ import { PRODUCTION_STAGES_ROOT } from "./productionStageStore.js";
 // source snapshots, approved pages, package output, locks or transaction journals.
 export const PREPARATION_ROOTS = [LIFECYCLE_ROOT, INDEXER_RUNTIME_ROOT, MAINTENANCE_ROOT,
   REVIEW_RUNTIME_ROOT, REVIEW_ACTION_ROOT, STRUCTURE_REPORT_ROOT, CANDIDATE_SNAPSHOT_ROOT,
-  PRODUCTION_STAGES_ROOT];
+  PRODUCTION_STAGES_ROOT, ".tmp/context-runtime/revision", ".tmp/context-runtime/format-only-update.json"];
 const KIND = "prepare-workspace";
 const previewCommand = "context task prepare --format json";
 const applyCommand = (revision: string) => `${previewCommand} --apply --plan-digest '${revision}'`;

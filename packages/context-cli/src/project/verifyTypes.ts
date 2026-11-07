@@ -8,6 +8,7 @@ export interface ProjectVerifyIssue {
   node_ref?: string;
   source_keys?: string[];
   message: string;
+  reference_states?: Array<{ section_id: string; state: "current" | "moved" | "ambiguous" | "not-found" | "unavailable"; reason?: string }>;
 }
 
 export interface ProjectVerifyResult {

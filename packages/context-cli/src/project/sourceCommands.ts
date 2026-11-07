@@ -40,6 +40,7 @@ import { registerSourceFetchCommands } from "./sourceFetchCommands.js";
 import { removeProjectSource } from "./sourceRemoval.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { configureRegisteredSources, type ConfigurationSource } from "./sourceProjectConfiguration.js";
+import { restoreDocumentSnapshot } from "./documentSnapshotRestore.js";
 
 type DataFormat = "json" | "yaml" | "table";
 
@@ -524,9 +525,10 @@ Resume performs registration only unless --configure is explicitly supplied.
     });
 
   source.command("restore")
-    .description("Restore registered repository checkouts from explicit local or clone decisions")
+    .description("Restore repository checkouts or a registered document snapshot from Git history")
     .requiredOption("--input <file>", "YAML/JSON recovery payload path, or - for stdin")
     .option("--format <format>", "output format: json | yaml | table", "json")
+    .addHelpText("after", '\nDocument payload: {"type":"lark","name":"handbook","commit":"optional-commit"}. Omit commit for the most recent complete capture; type "file" is also supported.')
     .action(async (...args: unknown[]) => {
       const options = actionOptions(...args);
       const format = assertChoice(options.format, DATA_FORMATS, "--format") as DataFormat;
@@ -538,6 +540,10 @@ Resume performs registration only unless --configure is explicitly supplied.
         readFailureNext: "Check the recovery payload path and retry.",
         parseFailureNext: "Fix the YAML/JSON recovery payload and retry.",
       });
+      if (raw !== null && typeof raw === "object" && "type" in raw && (raw.type === "lark" || raw.type === "file")) {
+        writeFormatted(await restoreDocumentSnapshot(projectRoot, raw), format);
+        return;
+      }
       writeFormatted(await restoreRepositorySources({
         projectRoot,
         payload: parseRepositoryRecoveryPayload(raw),

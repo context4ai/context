@@ -1,3 +1,4 @@
+import { markSubmissionState } from "./submissionState.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerProtocolDigest } from "@c4a/context";
@@ -43,6 +44,7 @@ function writeTarget(path: string, previous: string | undefined, content: string
 }
 
 export interface ProductionSubmissionResult {
+  submission_state: "committed" | "not-committed";
   accepted: Array<{ task: string; receipt: string }>;
   failed: Array<{ task: string; reason: string; file?: string; section?: string }>;
   stage_state: "active" | "waiting-user" | "blocked" | "ended";
@@ -92,7 +94,7 @@ export async function completeProductionSubmission(input: {
     const baselines = new Map<string, Promise<string>>();
     let sourceReader: Awaited<ReturnType<typeof registeredArticleSourceReader>> | undefined;
     let approvedTargets: ReturnType<typeof productionApprovedTargetsIndex> | undefined;
-    const result: ProductionSubmissionResult = { accepted: [], failed: [], stage_state: "active" };
+    const result: ProductionSubmissionResult = { submission_state: "not-committed", accepted: [], failed: [], stage_state: "active" };
     const tasksById = new Map(stage.tasks.map(task => [task.id, task]));
     const pending = new Map<string, { candidate: CandidateRecord; digest: string }>();
     // Check only currently issued submitted inputs. Independent source checks
@@ -211,6 +213,8 @@ export async function completeProductionSubmission(input: {
         }
       }
     }
+    result.submission_state = result.accepted.length ? "committed" : "not-committed";
+    if (result.accepted.length) markSubmissionState("committed");
     const submissionOrder = new Map(fixed.tasks.map((task, index) => [task.task, index]));
     result.accepted.sort((a, b) => submissionOrder.get(a.task)! - submissionOrder.get(b.task)!);
     result.stage_state = dispatchProductionStage(stage, productionCapabilitiesSchema.parse({})).state;

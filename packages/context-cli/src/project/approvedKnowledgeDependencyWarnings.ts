@@ -1,6 +1,6 @@
-import { articleSourceRegionDigest, locateArticleRegion } from "@c4a/context";
+import { SourceReadError } from "./gitObjectReader.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
-import { readArticleRegionBaseline } from "./articleRegionBaselines.js";
+import { createArticleReferenceObserver } from "./articleReferenceObservation.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
@@ -18,42 +18,44 @@ export async function approvedKnowledgeDependencyWarnings(
   );
   if (!articles.some(article => article.sections.some(section => section.references.length))) return [];
   const read = await registeredArticleSourceReader(projectRoot);
+  const observe = createArticleReferenceObserver(read);
   const issues: ProjectVerifyIssue[] = [];
   let repoImpact: ReturnType<typeof repoContentImpactReader> | undefined;
   let pending: Promise<PendingSourceScope[]> | undefined;
   for (const article of articles) {
     const changed: string[] = [];
     const moved: string[] = [];
+    const referenceStates: NonNullable<ProjectVerifyIssue["reference_states"]> = [];
     for (const section of article.sections) {
       for (const reference of section.references) {
-        if (reference.source_ref.startsWith("repo-content:")) {
-          repoImpact ??= repoContentImpactReader(projectRoot);
-          const impact = await (await repoImpact)(reference);
-          if (impact.state === "unchanged") continue;
-          if (impact.state === "moved") {
-            moved.push(`${section.id}: ${reference.source_ref}/${impact.current_path ?? reference.locator.path}`);
+        try {
+          if (reference.source_ref.startsWith("repo-content:")) {
+            repoImpact ??= repoContentImpactReader(projectRoot);
+            const impact = await (await repoImpact)(reference);
+            if (impact.state === "unchanged") continue;
+            if (impact.state === "moved") {
+              moved.push(`${section.id}: ${reference.source_ref}/${impact.current_path ?? reference.locator.path}`);
+              continue;
+            }
+            changed.push(section.id);
+            break;
+          }
+          const result = await observe(reference);
+          if (result.state === "current") continue;
+          if (result.state === "moved") {
+            const locator = result.reference.locator;
+            moved.push(`${section.id}: ${reference.source_ref}/${locator.path} L${locator.start_line}–L${locator.end_line}`);
             continue;
           }
+          referenceStates.push({ section_id: section.id, state: result.state, ...(result.reason ? { reason: result.reason } : {}) });
           changed.push(section.id);
           break;
+        } catch (error) {
+          if (!(error instanceof SourceReadError)) throw error;
+          issues.push({ severity: "warning", code: "source-read-failed", path: article.path,
+            source_keys: [reference.source_ref],
+            message: `${reference.source_ref}/${reference.locator.path}: ${error.message} No citation state was determined. Run context source recovery-plan --format json, then retry verification.` });
         }
-        try {
-          const text = await read(reference.source_ref, reference.locator.path);
-          let current: string | undefined;
-          try { current = articleSourceRegionDigest(text, reference.locator); }
-          catch (error) { if (!(error instanceof RangeError)) throw error; }
-          if (current === reference.content_digest) continue;
-          const previous = readArticleRegionBaseline(projectRoot, reference.content_digest);
-          const relocated = previous === undefined ? null : locateArticleRegion(previous, text, reference.locator.path);
-          if (relocated) {
-            moved.push(`${section.id}: ${reference.source_ref}/${relocated.path} L${relocated.start_line}–L${relocated.end_line}`);
-            continue;
-          }
-        } catch {
-          // Missing, unreadable, invalid or shorter sources all need review.
-        }
-        changed.push(section.id);
-        break;
       }
     }
     if (!changed.length && !moved.length) continue;
@@ -64,6 +66,7 @@ export async function approvedKnowledgeDependencyWarnings(
       ? " A cited repository moved past its processed commit; run context update --pending --format json first." : "";
     if (changed.length) issues.push({
       severity: "warning", code: "approved-source-region-changed", path: article.path,
+      ...(referenceStates.length ? { reference_states: referenceStates } : {}),
       message: `Source regions changed or are unavailable for fragments: ${changed.join(", ")}.${update || " Inspect current sources and revise this article;"} Verification does not rewrite approved references.`,
     });
     if (moved.length) issues.push({

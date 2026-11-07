@@ -56,12 +56,17 @@ export interface DocumentSourceStatus {
   normalizerVersion?: string;
   captureFidelity?: DocumentCaptureFidelityReport;
   resourceMaterialization?: DocumentResourceMaterializationReport;
+  missing_resources?: {
+    items: DocumentResourceMaterializationReport["items"];
+    retry_action: { command: string; input: { refresh_sources: string[] } };
+  };
   diagnostics: string[];
   agent_hints: string[];
   workspaceDiagnostics: string[];
 }
 
 export interface ProjectStatus {
+  sourceUpdate?: Awaited<ReturnType<typeof import("./pendingSourceUpdates.js").inspectPendingSourceUpdates>>;
   repoContent?: import("./repoContentLinks.js").RepoContentLinkResult[];
   projectRoot: string;
   sourceCount: number;

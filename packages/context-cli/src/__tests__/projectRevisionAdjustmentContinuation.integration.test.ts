@@ -30,7 +30,7 @@ async function reviewedCurrentPage() {
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this explanation." })),
+  await complete(root, { stage: "source-update", decisions: (update.scope_pages ?? []).map(path => ({ path, instruction: "Clarify this explanation." })),
     scope_summary: "Both related pages need clarification.", new_topics: [] });
   for (let index = 0; index < 2; index++) {
     const request = (await readApprovedRevision(root))!;

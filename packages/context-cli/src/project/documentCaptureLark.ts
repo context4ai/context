@@ -1,4 +1,5 @@
 import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
+import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import type { CaptureLarkPhaseDefinition, LarkSourceRegistryEntry } from "@c4a/context";
@@ -8,6 +9,7 @@ import {
   normalizeMarkdownDocument,
   normalizeSnapshotRelativePath,
   type DocumentCaptureFidelityReport,
+  type DocumentResourceMaterializationReport,
   type DocumentSnapshotAssetEntry,
   type DocumentSnapshotFileInput,
   type DocumentSnapshotManifestMetadata,
@@ -17,6 +19,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { detectExternalEnvironmentIssue } from "../lib/externalEnvironment.js";
 import {
+  DEFAULT_RESOURCE_POLICY,
   fetchFeishuDocSnapshot,
   LarkCliError,
   LarkCliNotInstalledError,
@@ -25,7 +28,7 @@ import {
 } from "../lib/feishu.js";
 import { ExitCode } from "../types/exitCode.js";
 import { documentSourceAddCommand, resolveDocumentPhaseSource } from "./documentRun.js";
-import { larkSourceIdentities } from "./larkSourceIdentity.js";
+import { larkSourceIdentities, larkSnapshotIdentityDiagnostic } from "./larkSourceIdentity.js";
 import {
   renderDocumentManifestFile,
   updateDocumentManifestFile,
@@ -39,6 +42,9 @@ import { withProjectWriteLock } from "./writeLock.js";
 import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
 import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
 import { assertSnapshotResourcePolicy, readLarkSnapshotBundle } from "./larkSnapshotBundle.js";
+import { checkedLarkRevision, larkSnapshotComparable, larkSnapshotFingerprint, rememberCheckedLarkRevision } from "./larkCaptureFreshness.js";
+import { documentSnapshotFidelityState, readDocumentSnapshotCaptureReport } from "./documentSnapshotFidelity.js";
+import { beginFormatOnlyUpdate, invalidateFormatOnlyUpdate, recordFormatOnlyCapture } from "./formatOnlyUpdate.js";
 
 export interface CaptureLarkRunResult {
   kind: "document.capture.lark.result";
@@ -68,7 +74,7 @@ export interface CaptureLarkRunResult {
     content_hash?: string;
   }>;
   fidelity: DocumentCaptureFidelityReport;
-  resource_materialization: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>["resourceMaterialization"];
+  resource_materialization: DocumentResourceMaterializationReport;
   diagnostics: string[];
   next_action: WorkspaceRouteReevaluation;
 }
@@ -356,6 +362,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
   larkRunner?: LarkRunner;
   prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
   snapshotDirectory?: string;
+  refreshSources?: readonly string[];
 }): Promise<CaptureLarkRunResult> {
   const resolved = await resolveDocumentPhaseSource({
     projectRoot: input.projectRoot,
@@ -375,6 +382,22 @@ async function runCaptureLarkPhaseUnlocked(input: {
   const entry = resolved.entry as LarkSourceRegistryEntry;
   assertLarkSnapshotMaterializedAt(entry);
   const target = larkTarget(entry);
+  const manifestPath = sourceManifestPath(entry);
+  const materializedAt = entry.materializedAt;
+  const materializedAtAbsPath = join(input.projectRoot, materializedAt);
+  const { current: currentManifestFile, previous: previousManifest, recovery } = await readDocumentManifestForCapture({
+    projectRoot: input.projectRoot, manifestPath, sourceType: "lark", sourceName: resolved.sourceName,
+  });
+  const fingerprint = previousManifest === null || larkSnapshotIdentityDiagnostic(entry, previousManifest) !== null
+    ? undefined : await larkSnapshotFingerprint(input.projectRoot, materializedAt, previousManifest);
+  const refresh = input.refreshSources?.includes(`lark:${resolved.sourceName}`) === true;
+  const previousRevision = (fingerprint === undefined ? undefined : await checkedLarkRevision(input.projectRoot, resolved.sourceName, fingerprint))
+    ?? previousManifest?.metadata?.source?.revisionId;
+  const unchangedRevisionId = !refresh && !input.prefetched && !recovery &&
+    Object.entries(input.phase.resources ?? {}).every(([key, value]) => value === DEFAULT_RESOURCE_POLICY[key as keyof typeof DEFAULT_RESOURCE_POLICY]) &&
+    previousManifest?.normalizer_version === LARK_DOCUMENT_NORMALIZER_VERSION && fingerprint !== undefined
+    ? previousRevision : undefined;
+  await beginFormatOnlyUpdate(input.projectRoot);
   let fetched: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>;
   let capturedAt = (input.now ?? new Date()).toISOString();
   try {
@@ -386,6 +409,8 @@ async function runCaptureLarkPhaseUnlocked(input: {
     } else fetched = await fetchFeishuDocSnapshot({
       url: target.value,
       resourcePolicy: input.phase.resources,
+      requireCompleteBody: true,
+      ...(typeof unchangedRevisionId === "string" ? { unchangedRevisionId } : {}),
       ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
     }, input.larkRunner);
   } catch (error) {
@@ -396,6 +421,47 @@ async function runCaptureLarkPhaseUnlocked(input: {
       throw new ContextError(failure.code, failure.message, { ...failure.detail, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, acquisition_cause: failure.detail?.reason_code });
     }
     throw failure;
+  }
+
+  if (fetched.fidelity.evidence_status === "error" || fetched.fidelity.projection_status === "error") {
+    throw new ContextError(ExitCode.WorkspaceStateError, `lark source ${resolved.sourceName} returned an incomplete body; the existing snapshot was not changed`, {
+      category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
+      sourceName: resolved.sourceName, issues: fetched.fidelity.issues,
+      next: `context run ${input.phase.id} --format json`,
+    });
+  }
+  if (fetched.unchanged && previousManifest !== null) {
+    const state = documentSnapshotFidelityState(previousManifest, readDocumentSnapshotCaptureReport({
+      projectRoot: input.projectRoot, materializedAt, manifest: previousManifest,
+    }));
+    return {
+      kind: "document.capture.lark.result", source: { type: "lark", name: resolved.sourceName,
+        identity: target.kind, title: entry.title ?? fetched.title ?? previousManifest.files[0]?.title ?? resolved.sourceName,
+        ...(entry.url === undefined ? {} : { url: entry.url }) },
+      access_identity: fetched.accessIdentity, identity_fallback: fetched.identityFallback,
+      snapshot: { manifest: manifestPath, materializedAt, snapshot_hash: previousManifest.snapshot_hash, changed: false },
+      documents: previousManifest.files.map(file => ({ path: file.path, title: file.title ?? resolved.sourceName, line_count: file.line_count })),
+      assets: previousManifest.assets ?? [], fidelity: state.report ?? fetched.fidelity,
+      resource_materialization: state.resourceMaterialization ?? fetched.resourceMaterialization,
+      diagnostics: [...state.blocking, ...state.warnings], next_action: workspaceRouteReevaluation(input.phase.id),
+    };
+  }
+
+  // A retry must not replace previously captured resources with transient
+  // failures. Keep the complete old snapshot; do not claim stale bytes are fresh.
+  if (previousManifest && previousRevision !== undefined && fetched.revisionId === previousRevision) {
+    const previous = documentSnapshotFidelityState(previousManifest, readDocumentSnapshotCaptureReport({
+      projectRoot: input.projectRoot, materializedAt, manifest: previousManifest,
+    }));
+    const lost = fetched.resourceMaterialization.items.filter(item =>
+      previous.resourceMaterialization?.items.some(old => old.kind === item.kind && old.locator === item.locator && old.status === "materialized" &&
+        (item.status !== "materialized" || item.reason_code === "document.resource.preview" && old.reason_code !== "document.resource.preview")));
+    if (lost.length) throw new ContextError(ExitCode.WorkspaceStateError,
+      "Previously captured resources were degraded; the existing snapshot was preserved. Check resource policy and access before retrying the explicit refresh.",
+      { category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
+        resources: lost.map(item => ({ locator: item.locator, reason: item.reason })),
+        next_action: { command: `context run ${input.phase.id} --input - --format json`,
+          input: { refresh_sources: [`lark:${resolved.sourceName}`] } } });
   }
 
   let normalized = normalizeMarkdownDocument(fetched.markdown);
@@ -435,10 +501,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     title,
     locator,
   }];
-  const manifestPath = sourceManifestPath(entry);
   const manifestAbsPath = join(input.projectRoot, manifestPath);
-  const materializedAt = entry.materializedAt;
-  const materializedAtAbsPath = join(input.projectRoot, materializedAt);
   const manifest = createDocumentSnapshotManifest({
     sourceType: "lark",
     sourceName: resolved.sourceName,
@@ -455,10 +518,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     }),
     normalizerVersion: LARK_DOCUMENT_NORMALIZER_VERSION,
   });
-  const { current: currentManifestFile, previous: previousManifest, recovery } = await readDocumentManifestForCapture({
-    projectRoot: input.projectRoot, manifestPath, sourceType: "lark", sourceName: resolved.sourceName,
-  });
-  const changed = previousManifest?.snapshot_hash !== manifest.snapshot_hash;
+  let changed = !!recovery || previousManifest === null || larkSnapshotComparable(previousManifest) !== larkSnapshotComparable(manifest);
   const manifestToWrite = changed || previousManifest === null
     ? manifest
     : {
@@ -469,7 +529,8 @@ async function runCaptureLarkPhaseUnlocked(input: {
     current: currentManifestFile,
     snapshot: manifestToWrite,
   }));
-
+  let capturedFiles: Record<string, string | null> = {};
+  const cacheDiagnostics: string[] = [];
   try {
     const requestedWrites: AtomicFileBatchWrite[] = [{
       path: join(materializedAtAbsPath, documentPath),
@@ -483,16 +544,32 @@ async function runCaptureLarkPhaseUnlocked(input: {
         });
       }
     }
-    requestedWrites.push({ path: manifestAbsPath, bytes: manifestContent });
     const writes: AtomicFileBatchWrite[] = [];
     for (const write of requestedWrites) {
       if (!await fileContentMatches(write.path, write.bytes)) writes.push(write);
     }
+    const currentPaths = new Set([
+        ...assets.map((asset) => asset.entry.path),
+        ...(await listSnapshotAssetFiles(materializedAtAbsPath, assetRoot)).filter(path => normalized.includes(path)),
+    ]);
     const removals = await staleSnapshotAssetPaths({
-      materializedAtAbsPath,
-      assetRoot,
-      currentPaths: new Set(assets.filter((asset) => asset.bytes !== undefined).map((asset) => asset.entry.path)),
+      materializedAtAbsPath, assetRoot, currentPaths,
     });
+    changed ||= writes.length > 0 || removals.length > 0;
+    if (!changed && fingerprint !== undefined && fetched.revisionId !== undefined) {
+      await rememberCheckedLarkRevision(input.projectRoot, resolved.sourceName, fetched.revisionId, fingerprint);
+    }
+    if (changed && !await fileContentMatches(manifestAbsPath, manifestContent)) writes.push({ path: manifestAbsPath, bytes: manifestContent });
+    capturedFiles = Object.fromEntries([
+        ...requestedWrites.map(write => [write.path.slice(input.projectRoot.length + 1), `sha256:${createHash("sha256").update(write.bytes).digest("hex")}`]),
+        ...removals.map(path => [path.slice(input.projectRoot.length + 1), null]),
+    ]);
+    for (const path of currentPaths) {
+      const relativePath = `${materializedAt}/${path}`;
+      if (relativePath in capturedFiles) continue;
+      try { capturedFiles[relativePath] = `sha256:${createHash("sha256").update(await readFile(join(input.projectRoot, relativePath))).digest("hex")}`; }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") capturedFiles[relativePath] = null; else throw error; }
+    }
     await applyAtomicFileBatch({
       transactionRoot: join(input.projectRoot, ".tmp", "context-runtime", "capture-transactions"),
       writes,
@@ -508,25 +585,19 @@ async function runCaptureLarkPhaseUnlocked(input: {
       next: `fix write permissions or restore ${materializedAt}, then rerun context run capture:lark:${resolved.sourceName}`,
     });
   }
-
-  if (fetched.fidelity.evidence_status === "error") {
-    throw new ContextError(
-      ExitCode.WorkspaceStateError,
-      `lark source ${resolved.sourceName} audit snapshot was preserved, but capture fidelity validation failed`,
-      {
-        category: ErrorCategory.PartialFailure,
-        code: "lark.capture.fidelity-loss",
-        sourceName: resolved.sourceName,
-        snapshot: {
-          manifest: manifestPath,
-          materializedAt,
-          snapshot_hash: manifest.snapshot_hash,
-          changed,
-        },
-        issues: fetched.fidelity.issues.filter((issue) => issue.impact === "evidence"),
-        next: "context status --format json",
-      },
-    );
+  if (changed) {
+    try { await recordFormatOnlyCapture(input.projectRoot, { source: `lark:${resolved.sourceName}`, manifestPath, snapshot: manifest, files: capturedFiles }); }
+    catch (error) {
+      try { await invalidateFormatOnlyUpdate(input.projectRoot); }
+      catch (cleanupError) {
+        throw new ContextError(ExitCode.WorkspaceStateError, "The document snapshot was saved, but its temporary format-only baseline could not be invalidated.", {
+          category: ErrorCategory.PartialFailure, outcome: "committed", reason_code: "format-only-baseline-unavailable",
+          next: "Restore write access to .tmp/context-runtime before continuing; do not repeat the completed capture.",
+          cause: String(cleanupError),
+        });
+      }
+      cacheDiagnostics.push(`format_only_unavailable: snapshot saved; normal version recording applies. ${String(error)}`);
+    }
   }
 
   if (fetched.resourceMaterialization.status === "error") {
@@ -579,6 +650,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     fidelity: fetched.fidelity,
     resource_materialization: fetched.resourceMaterialization,
     diagnostics: [
+      ...cacheDiagnostics,
       ...(recovery === undefined ? [] : [recovery.diagnostic]),
       ...(fetched.identityFallback
         ? [`info: lark.capture.identity-fallback: capture used an identity fallback; document identity: ${fetched.accessIdentity}; embedded reads may use the fallback identity`]
@@ -601,6 +673,7 @@ export async function runCaptureLarkPhase(input: {
   larkRunner?: LarkRunner;
   prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
   snapshotDirectory?: string;
+  refreshSources?: readonly string[];
 }): Promise<CaptureLarkRunResult> {
   return withProjectWriteLock(input.projectRoot, "capture-lark", () => runCaptureLarkPhaseUnlocked(input));
 }

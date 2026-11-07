@@ -8,7 +8,7 @@ import { readProcessedScopes } from "@c4a/context";
 import { DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
-import { pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
+import { inspectPendingSourceUpdates, pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
 import { registeredRepoHistoryReader } from "../project/articleSourceReader.js";
 import { collectProjectStatus } from "../project/status.js";
 import { readApprovedRevision } from "../project/approvedRevision.js";
@@ -90,7 +90,7 @@ test("the scope decision can revise an existing page whose citations are unchang
   expect(await baseline(root)).toEqual(before);
 });
 
-test("concurrent history reads in a shallow checkout share one fetch and confirm every moved citation", async () => {
+test("digest relocation in a shallow checkout confirms moved citations without fetching history", async () => {
   const root = await settledKnowledge();
   const source = join(root, "fixture-source");
   await moveCitedTextAndAddExport(root);
@@ -106,7 +106,7 @@ test("concurrent history reads in a shallow checkout share one fetch and confirm
   expect(update.changed_references).toBeUndefined();
   expect(update.candidates).toEqual([]);
   const fetches = (await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch --quiet"));
-  expect(fetches).toHaveLength(1);
+  expect(fetches).toHaveLength(0);
 });
 
 test("a pending update asks only about pages whose cited text changed and keeps the old baseline until decided", async () => {
@@ -134,4 +134,36 @@ test("history reads fetch one missing settled commit into a shallow recovered ch
   execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
   const read = await registeredRepoHistoryReader(root);
   expect(await read(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts", first)).toBe(original);
+});
+
+
+test("missing processed versions and malformed structures report unknown rather than current", async () => {
+  const { createDocumentRevisionWorkspace } = await import("./projectDocumentRevisionV074.fixture.js");
+  const root = await createDocumentRevisionWorkspace(); roots.push(root);
+  expect(await inspectPendingSourceUpdates(root)).toMatchObject({ state: "unknown", scopes: [],
+    issues: [expect.objectContaining({ reason_code: "processed-version-missing" })] });
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "unknown" });
+  await writeFile(join(root, "knowledge/structure.yaml"), "articles: [invalid");
+  expect(await inspectPendingSourceUpdates(root)).toMatchObject({ state: "unknown", scopes: [],
+    issues: [expect.objectContaining({ reason_code: "processed-structure-invalid" })] });
+});
+
+test("unknown baselines do not hide another confirmed pending update", async () => {
+  const root = await settledKnowledge();
+  await moveCitedTextAndAddExport(root);
+  const path = join(root, "src/indexers.yaml"); const requirements = YAML.parse(await readFile(path, "utf8"));
+  requirements.requirements[0].target_scope.targets.push({ source_ref: "repo:unprocessed-source" });
+  await writeFile(path, YAML.stringify(requirements));
+  const pending = await inspectPendingSourceUpdates(root);
+  expect(pending.state).toBe("pending"); expect(pending.scopes).toEqual([scope]);
+  expect(pending.issues.some(issue => issue.source_ref === "repo:unprocessed-source")).toBe(true);
+  expect((await collectProjectStatus(root)).workflow.current?.node).toBe("process-source-update");
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared", diagnostics: pending.issues });
+});
+
+test("unreadable registries produce an unknown diagnostic rather than throwing", async () => {
+  const root = await settledKnowledge();
+  await writeFile(join(root, "sources/repo/index.yaml"), "sources: [invalid");
+  expect(await inspectPendingSourceUpdates(root)).toMatchObject({ state: "unknown", scopes: [],
+    issues: [{ reason_code: "source-registry-unreadable" }] });
 });

@@ -30,7 +30,7 @@ const taskFile = ".tmp/context-runtime/indexer/current.json";
 
 test("preparation removes all selected task/maintenance state and retains sources and results", async () => {
   const root = await fixture();
-  const discarded = [taskFile, ".tmp/context-runtime/indexer/Z.json", ".tmp/context-runtime/indexer/a.json", ".tmp/context-runtime/maintenance/current.json", ".tmp/context-runtime/lifecycle/candidates.jsonl"];
+  const discarded = [taskFile, ".tmp/context-runtime/indexer/Z.json", ".tmp/context-runtime/indexer/a.json", ".tmp/context-runtime/maintenance/current.json", ".tmp/context-runtime/revision/update.json", ".tmp/context-runtime/revision/request.json", ".tmp/context-runtime/lifecycle/candidates.jsonl"];
   const kept = ["knowledge/page.md", "knowledge/structure.yaml", "sources/lark/body.md", "sources/note/n.md", "sources/sessions/s.md", "src/index.ts", ".tmp/repo/local.ts", ".tmp/work-start-report.md", "dist/page.md"];
   for (const path of [...discarded, ...kept]) await put(root, path);
   const preview = await prepareWorkspace({ projectRoot: root });

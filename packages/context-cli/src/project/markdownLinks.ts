@@ -19,13 +19,17 @@ interface MdastNode {
   };
 }
 
+function markdownTree(content: string): MdastNode {
+  return reuseCommandValue(`markdown-tree:${content}`, () => unified().use(remarkParse).parse(content) as MdastNode);
+}
+
 /** Reader link occurrences, including reference-style links. Unlike destination
  * rewrites, a presentation projection replaces the whole link with its label. */
 export function markdownReaderLinks(content: string): Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> {
   // Both supported link forms require a bracket. This is only a lexical
   // absence check; anything potentially containing a link still uses Markdown.
   if (!content.includes("[")) return [];
-  const tree = unified().use(remarkParse).parse(content) as MdastNode;
+  const tree = markdownTree(content);
   const links: Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> = inlineLinksFromTree(content, tree);
   const definitions = new Map<string, string>();
   const walk = (node: MdastNode, visit: (node: MdastNode) => void): void => {
@@ -127,7 +131,7 @@ function destinationRange(raw: string): { start: number; end: number; labelEnd: 
 export function markdownInlineLinks(content: string): MarkdownInlineLink[] {
   if (!content.includes("[")) return [];
   const links = reuseCommandValue(`markdown-inline-links:${content}`, () => {
-    const tree = unified().use(remarkParse).parse(content) as MdastNode;
+    const tree = markdownTree(content);
     return inlineLinksFromTree(content, tree);
   });
   // Callers may edit or reorder results; keep the command-local value private.
@@ -182,7 +186,7 @@ export function replaceMarkdownInlineLinkTargets(
   // Reference-style destinations live in definitions, not at the [label][id]
   // occurrence. Rewrite each definition once without changing reader labels.
   if (content.includes("]:")) {
-    const tree = unified().use(remarkParse).parse(content) as MdastNode;
+    const tree = markdownTree(content);
     const visit = (node: MdastNode): void => {
       if (node.type === "definition" && node.url !== undefined) {
         const start = node.position?.start?.offset;

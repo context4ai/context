@@ -1,3 +1,4 @@
+import { markSubmissionState } from "./submissionState.js";
 import { previousProductionDrafts } from "./productionDraftMigration.js";
 import { resolveProductionDependency } from "./productionDependencies.js";
 import { randomUUID } from "node:crypto";
@@ -208,6 +209,7 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
       ? { stage: stage.id, submission: file.digest, path: article.path } : article.path).slice(7)]));
     if (identities.size !== plan.articles.length) throw new TypeError("Plan article paths must be unique");
     if (stage.report_approved && identities.size > 0 && [...identities.values()].every(id => stage.tasks.some(task => task.id === id))) {
+      markSubmissionState("committed");
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage, capabilities: plan.capabilities });
       const previous = await previousProductionDrafts(input.projectRoot, stage, stage.tasks.filter(task => [...identities.values()].includes(task.id)));
       return { stage_state: prepared.state, ...(previous.length ? { previous_drafts: previous } : {}), next: { directory: prepared.directory, agent_directory: prepared.agent_directory, mode: prepared.mode,
@@ -243,6 +245,7 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     const usage = stage.report_approved ? [...stage.indexer_usage, ...plan.indexer_usage] : plan.indexer_usage;
     const updated = validateProductionStage({ ...amended, indexer_usage: [...new Map(usage.map(item => [JSON.stringify(item), item])).values()] });
     await saveExpandedProductionScope(input.projectRoot, updated, request.requirements, additional.materials.sources);
+    markSubmissionState("committed");
     try {
       const previous = await previousProductionDrafts(input.projectRoot, updated, tasks);
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage: updated, capabilities: plan.capabilities });

@@ -20,7 +20,7 @@ import {
 import { readDocumentSourcesRegistry } from "./documentSources.js";
 import { larkSnapshotIdentityDiagnostic } from "./larkSourceIdentity.js";
 import { collectPackageFreshness, type PackageFreshness } from "./packageBuilder.js";
-import { findDocumentSnapshotForSource } from "./documentBatchManifest.js";
+import { documentSnapshotLookup } from "./documentBatchManifest.js";
 import { diagnoseRepoSources, listRepoSources, type RepoSourceRecord, type RepoSourceStatus } from "./repoSources.js";
 import { readProjectCloseStatus, type ProjectCloseStatus } from "./close.js";
 import type {
@@ -132,9 +132,10 @@ export async function readSourceStatus(projectRoot: string): Promise<{
   }
   try {
     const registry = await readDocumentSourcesRegistry(projectRoot);
+    const manifests = new Map<string, ReturnType<typeof documentSnapshotLookup>>();
     documentSources = await Promise.all([
-      ...registry.files.map((source) => documentSourceStatus(projectRoot, "file", source)),
-      ...registry.larks.map((source) => documentSourceStatus(projectRoot, "lark", source)),
+      ...registry.files.map((source) => documentSourceStatus(projectRoot, "file", source, manifests)),
+      ...registry.larks.map((source) => documentSourceStatus(projectRoot, "lark", source, manifests)),
       ...await (await import("./managedDocumentStatus.js")).boundManagedDocumentStatuses(projectRoot, registry),
     ]);
     diagnostics.push(...documentSources.flatMap((source) => source.workspaceDiagnostics));
@@ -205,21 +206,25 @@ async function documentSourceStatus(
   projectRoot: string,
   type: "file",
   source: FileSourceRegistryEntry,
+  manifests: Map<string, ReturnType<typeof documentSnapshotLookup>>,
 ): Promise<DocumentSourceStatus>;
 async function documentSourceStatus(
   projectRoot: string,
   type: "lark",
   source: LarkSourceRegistryEntry,
+  manifests: Map<string, ReturnType<typeof documentSnapshotLookup>>,
 ): Promise<DocumentSourceStatus>;
 async function documentSourceStatus(
   projectRoot: string,
   type: "file" | "lark",
   source: FileSourceRegistryEntry | LarkSourceRegistryEntry,
+  manifests: Map<string, ReturnType<typeof documentSnapshotLookup>>,
 ): Promise<DocumentSourceStatus> {
   const materializedAt = source.materializedAt ?? defaultDocumentMaterializedAt(type, source.name);
   const manifest = source.snapshot?.manifest ?? defaultDocumentManifest(materializedAt);
   const readiness = documentSnapshotReadiness({
     projectRoot,
+    manifests,
     type,
     sourceName: source.name,
     materializedAt,
@@ -255,6 +260,13 @@ async function documentSourceStatus(
     ...(readiness.normalizerVersion === undefined ? {} : { normalizerVersion: readiness.normalizerVersion }),
     ...(readiness.captureFidelity === undefined ? {} : { captureFidelity: readiness.captureFidelity }),
     ...(readiness.resourceMaterialization === undefined ? {} : { resourceMaterialization: readiness.resourceMaterialization }),
+    ...(type === "lark" && readiness.resourceMaterialization?.items.some(item => item.status === "failed") ? {
+      missing_resources: {
+        items: readiness.resourceMaterialization.items.filter(item => item.status === "failed"),
+        retry_action: { command: `context run capture:lark:${source.name} --input - --format json`,
+          input: { refresh_sources: [`lark:${source.name}`] } },
+      },
+    } : {}),
     diagnostics: readiness.diagnostics,
     agent_hints: agentHints,
     workspaceDiagnostics: readiness.workspaceDiagnostics,
@@ -290,6 +302,7 @@ async function documentSourceSiteHint(input: {
 
 function documentSnapshotReadiness(input: {
   projectRoot: string;
+  manifests: Map<string, ReturnType<typeof documentSnapshotLookup>>;
   type: "file" | "lark";
   sourceName: string;
   materializedAt: string;
@@ -315,10 +328,13 @@ function documentSnapshotReadiness(input: {
     };
   }
   try {
-    const manifest = findDocumentSnapshotForSource(
-      JSON.parse(readFileSync(manifestPath, "utf8")) as unknown,
-      input.sourceName,
-    );
+    let lookup = input.manifests.get(manifestPath);
+    if (!lookup) {
+      try { lookup = documentSnapshotLookup(JSON.parse(readFileSync(manifestPath, "utf8")) as unknown); }
+      catch (error) { lookup = () => { throw error; }; }
+      input.manifests.set(manifestPath, lookup);
+    }
+    const manifest = lookup(input.sourceName);
     if (manifest === null) {
       return {
         ready: false,

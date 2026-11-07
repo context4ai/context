@@ -45,7 +45,11 @@ export async function buildApprovedRevisionRoute(input: {
   return { protocol: "context.workflow.route.v1", id: resolved.routeId, node: resolved.node,
     reason_code: resolved.reasonCode, revision, availability: resolved.availability,
     commands: [{ command: `context${authorityCommandOptions(input.authorities, "workflow")} action complete-current --revision '${revision}'${input.managed ? " --managed" : ""} --input - --format json`,
-      effect: "write", availability: "immediate", managed_execution: "agent-required" }],
+      effect: "write", availability: "immediate", managed_execution: "agent-required" },
+      ...(request?.pending_targets?.length && !request.refresh_sources && !recovery ? [{
+        command: `context${authorityCommandOptions(input.authorities, "workflow")} action prepare-current --revision '${revision}'${input.managed ? " --managed" : ""} --format json`,
+        effect: "write" as const, availability: "immediate" as const, managed_execution: "agent-required" as const,
+      }] : [])],
     ...(action === undefined ? {} : { action }),
     resources: { required: resolved.resources.required.map((location) => projectWorkflowResourceLocation(location, revision, input.authorities)),
       recommended: resolved.resources.recommended.map((location) => projectWorkflowResourceLocation(location, revision, input.authorities)) }, after_action: { evaluate: true } };

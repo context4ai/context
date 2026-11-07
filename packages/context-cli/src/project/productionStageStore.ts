@@ -1,3 +1,4 @@
+import { markSubmissionState } from "./submissionState.js";
 import { constants } from "node:fs";
 import { readFile, access, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -88,6 +89,7 @@ export async function saveProductionStage(root: string, value: ProductionStage):
   const stage = validateProductionStage(value);
   await withProjectWriteLock(root, "production-stage", async () => {
     await writeProductionProjection(root, join(productionStageDirectory(stage.id), "manifest.json"), `${JSON.stringify(stage)}\n`);
+    markSubmissionState("committed");
     await writeProductionProjection(root, CURRENT_PATH, `${JSON.stringify({ stage: stage.id })}\n`);
   });
 }

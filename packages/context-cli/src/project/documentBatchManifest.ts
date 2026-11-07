@@ -53,21 +53,28 @@ export function parseDocumentSnapshotBatchManifest(value: unknown): DocumentSnap
 }
 
 export function findDocumentSnapshotForSource(value: unknown, sourceName: string): DocumentSnapshotManifest | null {
+  return documentSnapshotLookup(value)(sourceName);
+}
+
+/** Parse a batch once for one observation, then resolve its source entries. */
+export function documentSnapshotLookup(value: unknown): (sourceName: string) => DocumentSnapshotManifest | null {
   if (value !== null && typeof value === "object" && !Array.isArray(value) &&
     (value as Record<string, unknown>).schema_version === DOCUMENT_SNAPSHOT_BATCH_SCHEMA_VERSION) {
-    const identity = batchIdentity(sourceName);
-    if (identity === undefined) throw new TypeError(`batch manifest cannot resolve non-batch source: ${sourceName}`);
     const batch = parseDocumentSnapshotBatchManifest(value);
-    const snapshot = batch.sources[identity.module];
-    if (snapshot === undefined) return null;
-    if (snapshot.source_name !== sourceName) throw new TypeError(`document snapshot batch source entry does not match ${sourceName}`);
-    return snapshot;
+    return (sourceName) => {
+      const identity = batchIdentity(sourceName);
+      if (identity === undefined) throw new TypeError(`batch manifest cannot resolve non-batch source: ${sourceName}`);
+      const snapshot = batch.sources[identity.module];
+      if (snapshot === undefined) return null;
+      if (snapshot.source_name !== sourceName) throw new TypeError(`document snapshot batch source entry does not match ${sourceName}`);
+      return snapshot;
+    };
   }
   const snapshot = parseDocumentSnapshotManifest(value);
-  if (snapshot.source_name !== sourceName) {
-    throw new TypeError(`document snapshot is for ${snapshot.source_name}, expected ${sourceName}`);
-  }
-  return snapshot;
+  return (sourceName) => {
+    if (snapshot.source_name !== sourceName) throw new TypeError(`document snapshot is for ${snapshot.source_name}, expected ${sourceName}`);
+    return snapshot;
+  };
 }
 
 export function parseDocumentSnapshotForSource(value: unknown, sourceName: string): DocumentSnapshotManifest {

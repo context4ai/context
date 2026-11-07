@@ -78,19 +78,22 @@ test("keeping pages whose cited text changed returns a receipt and retains the o
   const result = await keepAll(root);
   expect(result.outcome).toBe("unchanged");
   const warnings = result.reference_warnings as Array<{ path: string; state: string }>;
-  expect(warnings.map(item => item.state)).toEqual(["changed", "changed"]);
+  expect(warnings.map(item => item.state)).toEqual(["not-found", "not-found"]);
   expect(String(result.reference_warning_instruction)).toContain("context revise");
   expect(await citedLines(root)).toEqual(before);
 }, 60_000);
 
-test("a missing region baseline is reported, never treated as unchanged", async () => {
+test("digest relocation succeeds when no saved region or processed baseline exists", async () => {
   const root = await initialRevisionKnowledge(roots);
   const before = await citedLines(root);
   await commitSource(root, `// header\n${await readFile(join(root, "fixture-source/src/index.ts"), "utf8")}`);
   await rm(join(root, ".tmp/context-runtime/source-regions"), { recursive: true, force: true });
   const result = await keepAll(root);
-  expect((result.reference_warnings as Array<{ state: string }>).map(item => item.state)).toEqual(["unavailable", "unavailable"]);
-  expect(await citedLines(root)).toEqual(before);
+  expect(result.reference_warnings).toBeUndefined();
+  for (const [path, reference] of Object.entries(await citedLines(root))) {
+    expect(reference.locator.start_line).toBe(2);
+    expect(reference.content_digest).toBe(before[path]!.content_digest);
+  }
 }, 60_000);
 
 test("a missing region baseline is recovered from the previously settled commit", async () => {
@@ -115,28 +118,29 @@ test("a recovered baseline still reports cited text that changed", async () => {
   await commitSource(root, "export const answer = 43;\n");
   await rm(join(root, ".tmp/context-runtime/source-regions"), { recursive: true, force: true });
   const result = await keepAll(root);
-  expect((result.reference_warnings as Array<{ state: string }>).map(item => item.state)).toEqual(["changed", "changed"]);
+  expect((result.reference_warnings as Array<{ state: string }>).map(item => item.state)).toEqual(["not-found", "not-found"]);
   expect(await citedLines(root)).toEqual(before);
 }, 60_000);
 
-test("a mixed batch relocates the kept page when the revision queue settles", async () => {
+test("a mixed batch retains immediate mechanical moves while the revision queue settles", async () => {
   const root = await initialRevisionKnowledge(roots);
   await commitSource(root, `// header\n${await readFile(join(root, "fixture-source/src/index.ts"), "utf8")}`);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
-  const [revised, kept] = update.candidates;
+  expect(update.candidates).toEqual([]);
+  const [revised, kept] = update.scope_pages!;
   const result = await complete(root, { stage: "source-update", scope_summary: "Clarify one page.", new_topics: [],
-    decisions: [{ path: revised!.path, instruction: "Clarify the entry point." }, { path: kept!.path }] });
+    decisions: [{ path: revised!, instruction: "Clarify the entry point." }, { path: kept! }] });
   expect(result.outcome).toBe("revisions-prepared");
   expect(result.reference_warnings).toBeUndefined();
-  expect((await citedLines(root))[kept!.path]!.locator.start_line).toBe(1);
+  expect((await citedLines(root))[kept!]!.locator.start_line).toBe(2);
   const request = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "documented public entry point") });
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root);
   await buildProjectPackages(root);
   const after = await citedLines(root);
-  expect(after[kept!.path]!.locator.start_line).toBe(2);
-  expect(after[revised!.path]!.locator.start_line).toBe(2);
+  expect(after[kept!]!.locator.start_line).toBe(2);
+  expect(after[revised!]!.locator.start_line).toBe(2);
   expect(await structureIssues(root)).toEqual([]);
 }, 60_000);

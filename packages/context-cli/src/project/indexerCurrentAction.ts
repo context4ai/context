@@ -12,6 +12,7 @@ import { completeCurrentProductionAction } from "./productionAction.js";
 import { readApprovedRevision } from "./approvedRevision.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
 import { withProductionFeedback } from "./productionFeedback.js";
+import { withSubmissionState } from "./submissionState.js";
 
 /** A retained production stage does not own a separately active maintenance
  * revision or source update. Both command decoding and dispatch use this rule. */
@@ -20,7 +21,7 @@ export async function currentProductionOwnsAction(projectRoot: string): Promise<
   return !await readApprovedRevision(projectRoot) && !await readKnowledgeUpdate(projectRoot);
 }
 
-export async function completeCurrentIndexerAction(input: {
+async function completeCurrentIndexerActionInternal(input: {
   cwd: string;
   revision: string;
   value: unknown;
@@ -39,6 +40,11 @@ export async function completeCurrentIndexerAction(input: {
     );
   }
   if (await currentProductionOwnsAction(found.projectRoot)) return completeCurrentProductionAction({ ...input, projectRoot: found.projectRoot });
+  if (input.value && typeof input.value === "object" && "tasks" in input.value) {
+    const { completeApprovedRevisionSubmission } = await import("./approvedRevisionSubmission.js");
+    return withProductionFeedback({ operation: "maintenance-action", file: input.submissionPath },
+      () => completeApprovedRevisionSubmission({ ...input, projectRoot: found.projectRoot }));
+  }
   return withProductionFeedback({ operation: "maintenance-action", file: input.submissionPath }, async () => {
   const authorities = contextWorkflowAuthorities({
     managed: input.managed === true,
@@ -60,7 +66,7 @@ export async function completeCurrentIndexerAction(input: {
       managed: input.managed === true, authorities });
     const { completeKnowledgeUpdate } = await import("./knowledgeUpdate.js");
     const result = await completeKnowledgeUpdate({ projectRoot: found.projectRoot, revision: input.revision,
-      decisions: semantic.decisions, scope_summary: semantic.scope_summary, new_topics: semantic.new_topics });
+      decisions: semantic.decisions, scope_summary: semantic.scope_summary, new_topics: semantic.new_topics, format_only: semantic.format_only });
     return completedRevisionReceipt(found.projectRoot, semantic.stage, result, input.managed === true, authorities);
   }
   if (semantic.stage === "approved-revision") {
@@ -96,9 +102,13 @@ export async function completeCurrentIndexerAction(input: {
   });
 }
 
+export function completeCurrentIndexerAction(input: Parameters<typeof completeCurrentIndexerActionInternal>[0]) {
+  return withSubmissionState(() => completeCurrentIndexerActionInternal(input), { managed: input.managed === true });
+}
+
 async function completedRevisionReceipt(projectRoot: string, stage: string, result: Record<string, unknown>,
   managed: boolean, authorities: readonly ContextWorkflowAuthority[]) {
-  const receipt = { protocol: "context.indexer.current-action-completion/v2" as const, stage, ...result };
+  const receipt = { protocol: "context.indexer.current-action-completion/v2" as const, stage, ...result, submission_state: "committed" as const };
   try {
     const status = await collectProjectStatus(projectRoot, { managed, authorities });
     return { ...receipt, workflow: status.workflow };

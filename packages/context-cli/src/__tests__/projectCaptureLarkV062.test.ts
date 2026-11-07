@@ -119,6 +119,18 @@ describe("0.6.2 Lark capture phase", () => {
       expect(Object.keys(batchManifest.sources as Record<string, unknown>).sort()).toEqual(["guide-a", "guide-b"]);
       expect(parseDocumentSnapshotForSource(batchManifest, "20260712/guide-b").files[0]?.path).toBe("guide-b.md");
       expect(existsSync(join(projectRoot, "sources", "lark", "20260712", "guide-b.md"))).toBe(true);
+      // A valid target inside a damaged batch must not take the unchanged shortcut.
+      const damaged = structuredClone(batchManifest) as { sources: Record<string, unknown> };
+      damaged.sources["broken-sibling"] = { invalid: true };
+      const batchPath = join(projectRoot, "sources/lark/20260712/manifest.json");
+      writeFileSync(batchPath, JSON.stringify(damaged));
+      const repaired = JSON.parse(await runPhase({ cwd: projectRoot, phaseId: "capture:lark:20260712/guide-a",
+        format: "json", larkRunner: okLarkRunner([]) }));
+      expect(repaired.result.snapshot.changed).toBe(true);
+      const restored = JSON.parse(readFileSync(batchPath, "utf8"));
+      expect(Object.keys(restored.sources).sort()).toEqual(["guide-a", "guide-b"]);
+      expect(restored.sources["guide-b"]).toEqual(damaged.sources["guide-b"]);
+
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -311,7 +323,7 @@ describe("0.6.2 Lark capture phase", () => {
       expect(metadataOnlyManifest.captured_at).not.toBe(manifest.captured_at);
       expect(metadataOnlyManifest.metadata?.source?.revisionId).toBe("rev-003");
       expect(metadataOnlyManifest.assets?.find((asset) => asset.path === "assets/cover.png")?.content_hash).toBeUndefined();
-      expect(existsSync(join(projectRoot, "sources", "lark", "handbook", "assets", "cover.png"))).toBe(false);
+      expect(readFileSync(join(projectRoot, "sources", "lark", "handbook", "assets", "cover.png"), "utf8")).toBe("updated-image");
 
     } finally {
       rmSync(root, { recursive: true, force: true });

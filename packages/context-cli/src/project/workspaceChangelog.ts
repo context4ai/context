@@ -1,16 +1,21 @@
-import { isDefaultSiteTheme, SITE_THEME_FILE } from "./siteTheme.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { workspaceVersionComparison } from "./workspaceVersionComparison.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile, lstat, readdir, realpath } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import { z } from "zod";
 import { withProjectWriteLock } from "./writeLock.js";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import { recoverDurableMultiFileTransactions, runDurableMultiFileTransaction } from "./durableMultiFileTransaction.js";
+
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
+import { excludedWorkspaceContent, observeWorkspaceContent, type WorkspaceSnapshotFormat } from "./workspaceContentSnapshot.js";
+export { workspaceContentSnapshot } from "./workspaceContentSnapshot.js";
 
 const exec = promisify(execFile);
 const semver = z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u);
@@ -37,56 +42,49 @@ export async function workspaceVersion(root: string): Promise<string> {
   const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   return semver.parse(manifest.version ?? "0.0.0");
 }
-function excluded(path: string) {
-  return /(?:^|\/)(?:\.tmp|\.git|node_modules)(?:\/|$)/u.test(path) || /^dist(?:\/|$)/u.test(path) ||
-    ["changelog.yaml", "CHANGELOG.md", ".context-version.json", ".context-builds.json", ".context-published.json"].includes(path);
+interface VersionCheckpoint { version?: string; digest?: string; format?: WorkspaceSnapshotFormat; checked?: string }
+
+/** Existing disposable checkpoint, also used after an explicitly accepted
+ * presentation-only update. The caller holds the workspace write lock. */
+export async function writeWorkspaceVersionCheckpoint(root: string, version: string, digest: string,
+  format: WorkspaceSnapshotFormat = "git-blob-v1"): Promise<void> {
+  await atomicWriteFile(join(root, VERSION_CHECKPOINT), JSON.stringify({ version, digest, format }) + "\n");
 }
-export async function workspaceContentSnapshot(root: string) {
-  let paths: string[] | undefined;
+
+async function migrateCheckpoint(root: string, original: string | undefined, value: VersionCheckpoint): Promise<void> {
   try {
-    paths = (await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."], { cwd: root, maxBuffer: 16 * 1024 * 1024 })).stdout.split("\0").filter(Boolean);
-    // An independent workspace may live in an ignored directory of a parent
-    // repository. Its empty parent Git listing is not an empty knowledge base.
-    // Nonempty listings keep the usual Git ignore behavior without another call.
-    if (paths.length === 0) {
-      const gitRoot = (await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root })).stdout.trim();
-      if (await realpath(gitRoot) !== await realpath(root)) paths = undefined;
-    }
-  } catch { paths = undefined; }
-  if (paths === undefined) {
-    const discovered: string[] = [];
-    const visit = async (dir: string) => {
-      for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
-        const path = dir ? `${dir}/${entry.name}` : entry.name;
-        if (excluded(path)) continue;
-        if (entry.isDirectory()) await visit(path);
-        else if (entry.isFile()) discovered.push(path);
-      }
-    };
-    await visit("");
-    paths = discovered;
-  }
-  const files: Record<string, string> = {};
-  for (const path of [...new Set(paths)].filter(path => !excluded(path)).sort()) {
-    let bytes: Buffer;
-    try { if (!(await lstat(join(root, path))).isFile()) continue; bytes = await readFile(join(root, path)); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
-    if (path === SITE_THEME_FILE && isDefaultSiteTheme(bytes.toString("utf8"))) continue;
-    if (path === "package.json") { const value = JSON.parse(bytes.toString()); delete value.version; bytes = Buffer.from(JSON.stringify(value)); }
-    files[path] = createHash("sha256").update(bytes).digest("hex");
-  }
-  return files;
+    await withProjectWriteLock(root, "migrate-version-checkpoint", async () => {
+      // An observation must not overwrite a newer record from another command.
+      if (await optionalWorkspaceText(root, VERSION_CHECKPOINT) !== original) return;
+      await atomicWriteFile(join(root, VERSION_CHECKPOINT), JSON.stringify(value) + "\n");
+    });
+  } catch { /* Checkpoints are disposable; inspection can use its verified result. */ }
 }
 export async function inspectWorkspaceVersion(root: string, baseRef?: string) {
-  const files = await workspaceContentSnapshot(root);
+  const snapshot = await observeWorkspaceContent(root);
+  const { files } = snapshot;
   const entries = await readWorkspaceChangelog(root);
   const version = await workspaceVersion(root);
   const comparison = await workspaceVersionComparison(root, version, Object.keys(files), baseRef);
-  comparison.removed = comparison.removed.filter(path => !excluded(path));
+  comparison.removed = comparison.removed.filter(path => !excludedWorkspaceContent(path));
   const digest = hash(files);
-  let checkpoint: { version?: string; digest?: string } | undefined;
-  try { checkpoint = JSON.parse(await optionalWorkspaceText(root, VERSION_CHECKPOINT) ?? "null") ?? undefined; }
+  const checkpointText = await optionalWorkspaceText(root, VERSION_CHECKPOINT);
+  let checkpoint: VersionCheckpoint | undefined;
+  try { checkpoint = JSON.parse(checkpointText ?? "null") ?? undefined; }
   catch { /* A disposable checkpoint never prevents inspection or recovery. */ }
+  if (checkpoint?.version === version && checkpoint.digest !== digest && (!checkpoint.format || checkpoint.format === "sha256-v1" && snapshot.format === "git-blob-v1")) {
+    // Keep the old inclusion rules for the failure key as well: restoring a
+    // formerly included PLAN file must invalidate a failed migration attempt.
+    const fast = await observeWorkspaceContent(root, { legacy: !checkpoint.format });
+    const checked = hash(fast.files);
+    if (checkpoint.checked !== checked) {
+      const legacy = await observeWorkspaceContent(root, { legacy: !checkpoint.format, raw: true });
+      checkpoint = hash(legacy.files) === checkpoint.digest
+        ? { version, digest, format: snapshot.format }
+        : { ...checkpoint, checked };
+      await migrateCheckpoint(root, checkpointText, checkpoint);
+    }
+  }
   const recorded = entries[0]?.version === version;
   const matches = checkpoint?.version === version && checkpoint.digest === digest;
   const changed = checkpoint?.version === version ? !matches
@@ -96,7 +94,7 @@ export async function inspectWorkspaceVersion(root: string, baseRef?: string) {
     // Reconstruct from Git when the cache is missing; non-Git workspaces retain their recorded version.
     current: recorded && (matches || checkpoint?.version !== version && (comparison.base_commit === null || !changed)),
     expected_digest: hash({ files, version, entries, base: comparison.base_commit }),
-    ...comparison, files, content_digest: digest };
+    ...comparison, files, content_digest: digest, snapshot_format: snapshot.format };
 }
 export function renderChangelog(entries: readonly ChangelogEntry[]) {
   const escape = (value: string) => value.replace(/[\\<>\[\]`*_{}]/gu, "\\$&").replace(/[\r\n]/gu, " ");
@@ -112,13 +110,25 @@ export async function recordWorkspaceVersion(root: string, value: unknown) {
   return withProjectWriteLock(root, "record-workspace-version", async () => {
     await recoverDurableMultiFileTransactions(root);
     const status = await inspectWorkspaceVersion(root, input.base_ref);
-    if (status.expected_digest !== input.expected_digest) throw new TypeError("Version diff changed; run context version inspect --format json and review the new diff.");
-    if (!status.changed && !input.triggers.some(trigger => trigger.kind === "dist")) throw new TypeError("No formal content changed; build or temporary progress does not require a new version.");
+    const previousEntries = await readWorkspaceChangelog(root);
+    const latest = previousEntries[0];
+    const descriptionOnly = input.version === status.version && latest?.version === input.version && status.current && !status.changed;
+    if (descriptionOnly) {
+      const unchanged = input.title === latest.title && hash(input.changes) === hash(latest.changes) &&
+        hash(input.triggers) === hash(latest.triggers) && (input.actor === undefined || hash(input.actor) === hash(latest.actor));
+      if (unchanged) return { version: input.version, outcome: "already-recorded" as const,
+        next_action: { command: "context status --format json" } };
+      if (status.tagged) throw new ContextError(ExitCode.UserError, "A tagged version description cannot be changed.", {
+        category: ErrorCategory.UserInputInvalid, reason_code: "version-tagged", next: "Record a new version for a published update.",
+      });
+    } else {
+      if (status.expected_digest !== input.expected_digest) throw new TypeError("Version diff changed; run context version inspect --format json and review the new diff.");
+      if (!status.changed && !input.triggers.some(trigger => trigger.kind === "dist")) throw new TypeError("No formal content changed; build or temporary progress does not require a new version.");
+    }
     const previous = status.previous_version ?? status.version;
     const a = previous.split(".").map(Number), b = input.version.split(".").map(Number);
     const amend = status.reusable_version === input.version;
     if (!amend && !(b[0]! > a[0]! || b[0] === a[0] && (b[1]! > a[1]! || b[1] === a[1] && b[2]! > a[2]!))) throw new TypeError("The new SemVer must be greater than the previous workspace version; only an untagged current entry may be amended after checking the publication target.");
-    const previousEntries = await readWorkspaceChangelog(root);
     let actor = input.actor ?? (amend ? previousEntries[0]?.actor : undefined);
     if (!actor) { try { const name = (await exec("git", ["config", "user.name"], { cwd: root })).stdout.trim(); if (name) actor = { name, kind: "git" }; } catch { /* Identity is optional. */ } }
     const { expected_digest: _, base_ref: _base, ...fields } = input;
@@ -127,16 +137,17 @@ export async function recordWorkspaceVersion(root: string, value: unknown) {
     const entry = changelogEntrySchema.parse({ ...fields, date: new Date().toISOString(), ...(actor ? { actor } : {}) });
     const entries = [entry, ...(amend ? previousEntries.slice(1) : previousEntries)];
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")); manifest.version = entry.version;
-    const writes = { "package.json": JSON.stringify(manifest, null, 2) + "\n", "changelog.yaml": stringify({ entries }),
-      "CHANGELOG.md": renderChangelog(entries) };
+    const writes: Record<string, string> = { ...(!descriptionOnly ? { "package.json": JSON.stringify(manifest, null, 2) + "\n" } : {}),
+      "changelog.yaml": stringify({ entries }), "CHANGELOG.md": renderChangelog(entries) };
     const targets = await Promise.all(Object.entries(writes).map(async ([path, content]) => {
       const before = await optionalWorkspaceText(root, path);
       return { path, content, operation: "write" as const, base_digest: before === undefined ? null : durableContentDigest(before), target_digest: durableContentDigest(content) };
     }));
     targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
     await runDurableMultiFileTransaction({ projectRoot: root, kind: "record-workspace-version", proposal_digest: hash(writes), targets });
-    try { await atomicWriteFile(join(root, VERSION_CHECKPOINT), JSON.stringify({ version: entry.version, digest: status.content_digest }) + "\n"); }
+    try { if (!descriptionOnly) await writeWorkspaceVersionCheckpoint(root, entry.version, status.content_digest, status.snapshot_format); }
     catch { /* The durable version is committed; a disposable cache cannot undo it. */ }
-    return { version: entry.version, next_action: { command: "context status --format json" } };
+    if (!descriptionOnly) await rm(join(root, ".tmp/context-runtime/format-only-update.json"), { force: true }).catch(() => undefined);
+    return { version: entry.version, ...(descriptionOnly ? { outcome: "description-updated" as const } : {}), next_action: { command: "context status --format json" } };
   });
 }

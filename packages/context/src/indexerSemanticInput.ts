@@ -392,6 +392,7 @@ export const approvedRevisionSemanticInputSchema = z.union([
 
 export const sourceUpdateSemanticInputSchema = z.object({
   stage: z.literal("source-update"),
+  format_only: z.array(z.object({ source_ref: z.string().min(1), reason: z.string().trim().min(1) }).strict()).optional(),
   decisions: z.array(z.object({ path: z.string().min(1), instruction: z.string().trim().min(1).optional(),
     supporting_sources: z.array(z.string().min(1)).min(1).optional() }).strict()),
   scope_summary: z.string().trim().min(1),

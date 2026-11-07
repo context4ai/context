@@ -1,3 +1,6 @@
+import { prepareApprovedRevisionSubmission } from "../project/approvedRevisionSubmission.js";
+import { readApprovedRevision } from "../project/approvedRevision.js";
+import { withSubmissionState } from "../project/submissionState.js";
 import { assertActionInputWorkspace } from "../project/actionInputWorkspace.js";
 import { Command, Option } from "commander";
 import { prepareActionCompletionOutput, serializeActionCompletion } from "../project/actionCompletionOutput.js";
@@ -29,13 +32,14 @@ export function registerProjectActionCommands(program: Command): void {
 
   action.command("prepare-current")
     .description("Prepare or retry current production batch directories without resubmitting accepted articles")
-    .option("--revision <revision>", "current production stage identity")
+    .option("--revision <revision>", "current production stage or approved-revision identity")
+    .option("--managed", "prepare under current-conversation managed approval")
     .option("--schema", "show the known-task input schema without a workspace or revision")
     .option("--input <file>", "already-decided article tasks under .tmp/agent-work; prepare and submit the plan together, then wait for report approval")
     .option("--source <source-ref>", "source selected for this request; repeat for multi-source investigation", (value: string, previous: string[]) => [...previous, value], [])
     .option("--multi-agent", "this caller can coordinate multiple independent batch directories; default is one batch")
     .option("--format <format>", "output format: json | yaml", "json")
-    .action(async (options: { revision?: string; schema?: boolean; multiAgent?: boolean; format: string; input?: string; source: string[] }) => {
+    .action(async (options: { revision?: string; managed?: boolean; schema?: boolean; multiAgent?: boolean; format: string; input?: string; source: string[] }) => {
       if (options.schema) {
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
@@ -52,7 +56,9 @@ export function registerProjectActionCommands(program: Command): void {
         "prepare-current requires a Context workspace", { category: ErrorCategory.WorkspaceNotFound,
           reason_code: "action-workspace-not-found", next_action: { command: "context entry --format json", instruction: "Locate the intended workspace before preparing task files." } });
       const result = options.input ? await prepareKnownProductionTasks({ projectRoot: root.projectRoot, cwd: process.cwd(),
-        revision, path: options.input }) : await prepareCurrentProductionStage({ projectRoot: root.projectRoot,
+        revision, path: options.input }) : await readApprovedRevision(root.projectRoot)
+        ? await prepareApprovedRevisionSubmission({ projectRoot: root.projectRoot, revision, managed: options.managed === true,
+          authorities: mergedWorkflowAuthorities(program.opts().workflowAuthority, []) }) : await prepareCurrentProductionStage({ projectRoot: root.projectRoot,
         revision, multiAgent: options.multiAgent === true, ...(options.source.length ? { sources: options.source } : {}) });
       await new Promise<void>((resolve, reject) => {
         process.stdout.write(serializeActionCompletion(result, options.format as "json" | "yaml"), error => {
@@ -76,7 +82,7 @@ export function registerProjectActionCommands(program: Command): void {
     .option("--preview", "preview an approved revision without submitting; not used for production stage files")
     .option("--verbose", "include the full completion and next Route inline")
     .option("--format <format>", "output format: json | yaml", "json")
-    .action(async (options: Record<string, unknown>) => {
+    .action(async (options: Record<string, unknown>) => withSubmissionState(async () => {
       const format = options.format;
       if (format !== "json" && format !== "yaml") {
         throw new ContextError(ExitCode.UserError, "--format must be json or yaml", {
@@ -124,5 +130,5 @@ export function registerProjectActionCommands(program: Command): void {
           if (error) reject(error); else resolve();
         });
       });
-    });
+    }, { managed: options.managed === true }));
 }

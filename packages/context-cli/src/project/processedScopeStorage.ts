@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
-  readProcessedScopes, indexerProtocolDigest, validateArticleStructureEntries, type ProcessedScope } from "@c4a/context";
+  readProcessedScopes, indexerProtocolDigest, validateArticleStructureEntries, type ProcessedScope, type ArticleSourceReference } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
-import { assertPinnedSource } from "./indexerParserSourceMaterialization.js";
+
 import { repoContentWorkingVersion, advanceRepoContentReferences } from "./repoContentEvidence.js";
 import { inspectSettledReferences } from "./settledReferenceRelocation.js";
 
@@ -26,7 +26,6 @@ export async function currentScopeSourceVersion(projectRoot: string, sourceRef: 
     if (entries.length !== 1) throw new TypeError(`Source must identify one registered repository: ${sourceRef}`);
     const version = entries[0]!.ref;
     if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(version)) throw new TypeError("Processing requires a fixed commit, not a moving ref");
-    await assertPinnedSource(join(projectRoot, entries[0]!.materializedAt), version);
     return version;
   }
   const entries = (type === "file" ? sources.files : type === "lark" ? sources.larks : [])
@@ -92,4 +91,30 @@ export async function invalidateChangedProcessedRequirements(projectRoot: string
   const retained = scopes.filter((scope) => !changed.has(scope.requirement_ref));
   if (retained.length === scopes.length) return;
   await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, processed_scopes: retained }));
+}
+
+/** Caller holds the write lock. Re-observe immediately before replacing only
+ * locators; processed scopes remain untouched until the scope decision settles. */
+export async function migrateUnchangedScopeReferences(projectRoot: string, scopes: readonly string[]): Promise<Array<{ article: string; section: string; before: ArticleSourceReference; after: ArticleSourceReference }>> {
+  const structure = await readKnowledgeStructure(projectRoot);
+  if (!structure.parsed) return [];
+  const previous = validateArticleStructureEntries(structure.parsed.articles ?? []);
+  const first = await inspectSettledReferences(projectRoot, previous, scopes);
+  if (!first.observations.some(item => item.state === "moved")) return [];
+  const latest = await readKnowledgeStructure(projectRoot);
+  if (latest.sha256 !== structure.sha256) throw new TypeError("Knowledge structure changed during reference inspection; retry the update.");
+  const second = await inspectSettledReferences(projectRoot, previous, scopes);
+  if (indexerProtocolDigest(first.articles) !== indexerProtocolDigest(second.articles) ||
+    indexerProtocolDigest(first.fileDigests) !== indexerProtocolDigest(second.fileDigests)) {
+    throw new TypeError("Source content changed during reference inspection; retry the update.");
+  }
+  const { approvedStructureInputHashFor } = await import("./close.js");
+  const input_hash = structure.parsed.input_hash === await approvedStructureInputHashFor(projectRoot, previous)
+    ? await approvedStructureInputHashFor(projectRoot, second.articles) : structure.parsed.input_hash;
+  await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, input_hash, articles: second.articles }));
+  return previous.flatMap(article => article.sections.flatMap(section => section.references.flatMap((before, index) => {
+    const after = second.articles.find(item => item.path === article.path)!.sections.find(item => item.id === section.id)!.references[index]!;
+    return indexerProtocolDigest(before) === indexerProtocolDigest(after) ? [] : [{ article: article.path, section: section.id, before, after }];
+  })));
+
 }

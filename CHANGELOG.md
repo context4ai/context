@@ -2,6 +2,15 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.92 - 2026-11-07
+
+- Reduce repeated workspace, snapshot and source reads during status and source updates. Repository evidence uses fixed-commit Git object reads; read failures remain distinguishable from missing files. Verification continues with source recovery warnings, while an unreadable source selected for update still blocks that update. Status no longer reports passing evidence when verification did not complete.
+- Prepare and submit ordered batches of approved-article revisions through the existing task-file transport. Each article retains its own validation and write boundary; interruptions report which tasks were saved and leave the remaining suffix resumable. Managed submissions retain their managed recovery route.
+- Classify unchanged and moved citations by their signed line digest without requiring a local history cache. Source updates can show verified historical excerpts and explicit Lark formatting-only proposals without rewriting unaffected prose. Ambiguous or changed evidence remains an Agent decision.
+- Make identical version-record replays a no-op and allow metadata-only corrections to the latest untagged record. Ignore Agent plan files in formal content snapshots and preserve content detection across supported digest migrations.
+- Keep complete Lark snapshots when a same-revision acquisition fails or downgrades previously materialized resources to previews or references. Retry incomplete captures, preserve generic projections, repair damaged manifests and support verified snapshot restoration from Git history.
+- Generate an HTML report before applying review decisions, including managed review, after recovering interrupted transactions. Report-generation failures stop the apply. Add explicit orphan-lock recovery and improve maintenance queue ordering, pending-update diagnostics and concise status output.
+
 ## 0.7.91 - 2026-11-02
 
 - The HTML review report has labelled previous and next buttons (“Previous −” and “Next +”, 上一页 − and 下一页 + in Chinese) at the top right, left of “Copy revision notes”, and the same `-` and `+` keys. They step through the articles under review in navigation order. From the home page, `+` opens the first article and `−` is disabled; `−` on the first article returns home, and `+` is disabled on the last article. The keys are ignored while typing revision notes or when combined with Ctrl, Cmd or Alt, so browser zoom keeps working.

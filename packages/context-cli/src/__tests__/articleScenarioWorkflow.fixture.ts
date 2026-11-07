@@ -92,6 +92,7 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
     expect(status.verifyErrors).toBe(0);
     expect(await readProductionStage(root)).toBeUndefined();
     expect(status.workflow.current?.node).toBe("reopen-cleared-task");
+    if (!scenario.sourceType) expect(status.sourceUpdate?.state).toBe("unknown");
     if (options.organization) {
       const reading = (await readKnowledgeMap(root))!;
       expect(reading.entries.find(entry => entry.key === "reader-root")?.title).toBe(options.organization.accepted);

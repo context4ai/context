@@ -71,6 +71,7 @@ export async function verifyProjectWorkspace(
   projectRoot: string,
   options: {
     approvedStructureOverride?: Record<string, unknown>;
+    checkSourceRegions?: boolean;
   } = {},
 ): Promise<ProjectVerifyResult> {
   const issues: ProjectVerifyIssue[] = [];
@@ -163,7 +164,9 @@ export async function verifyProjectWorkspace(
     issues,
     ...(options.approvedStructureOverride !== undefined ? { structureOverride: options.approvedStructureOverride } : {}),
   });
-  issues.push(...await approvedKnowledgeDependencyWarnings(projectRoot, options.approvedStructureOverride));
+  if (options.checkSourceRegions !== false) {
+    issues.push(...await approvedKnowledgeDependencyWarnings(projectRoot, options.approvedStructureOverride));
+  }
 
   return {
     ok: issues.every((issue) => issue.severity !== "error"),

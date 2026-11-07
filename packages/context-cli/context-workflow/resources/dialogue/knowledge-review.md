@@ -59,5 +59,5 @@ Do not report fully managed or inaccessible material as read by the user.
 With explicit session-managed authority, consume the required current Markdown
 review resource and use its scope template and Route's atomic apply command.
 Read pages before deciding, leave repair and undecided pages pending, and reuse
-still-available review of unchanged pages. Do not open HTML or create a parallel
+still-available review of unchanged pages. Give the user the report path returned by review apply. Do not open HTML on the user’s behalf or create a parallel
 review ledger. After any apply or repair, follow the freshly evaluated Route.

@@ -54,6 +54,7 @@ import {
   packageBuildChanges,
   packageOutputFingerprint,
   packageOutputSnapshot,
+  packageOutputFileCount,
   walkPackageFiles,
   parsePackageLinkWarnings,
   type PackageBuildLinkWarning,
@@ -421,10 +422,6 @@ export async function collectPackageFreshness(
       }),
     });
     const builtManifest = await readPackageManifest(projectRoot, pkg);
-    const output = await packageOutputFingerprint(projectRoot, pkg);
-    if (builtManifest === null && output.files === 0) {
-      return { name: pkg.name, kind: packageKind(pkg), state: "missing", inputFiles: selected.length, outputFiles: 0 };
-    }
     const currentFingerprint = await packageInputFingerprint({
       projectRoot,
       pkg,
@@ -435,6 +432,14 @@ export async function collectPackageFreshness(
     const inputIsCurrent = builtManifest !== null &&
       builtManifest.builderProtocol === PACKAGE_BUILDER_PROTOCOL_VERSION &&
       builtManifest.fingerprint === currentFingerprint;
+    // Changed inputs already prove staleness. Keep counting the output, but
+    // read its bytes only when they can affect the freshness result.
+    const output = builtManifest !== null && !inputIsCurrent
+      ? { files: await packageOutputFileCount(projectRoot, pkg), fingerprint: undefined }
+      : await packageOutputFingerprint(projectRoot, pkg);
+    if (builtManifest === null && output.files === 0) {
+      return { name: pkg.name, kind: packageKind(pkg), state: "missing", inputFiles: selected.length, outputFiles: 0 };
+    }
     if (inputIsCurrent && output.files > 0) {
       await validatePackageIndexLinks({ projectRoot, pkg });
     }
@@ -505,7 +510,9 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         next: "Run context close --format json, then rerun context build.",
       });
     }
-    const verify = await verifyProjectWorkspace(projectRoot);
+    // Publishing already approved bytes must not require a local source checkout.
+    // Explicit verify and source updates still perform source-region observation.
+    const verify = await verifyProjectWorkspace(projectRoot, { checkSourceRegions: false });
     verifyEvidenceStatus = verify.evidenceStatus;
     if (verify.evidenceStatus === "fail") {
       const errors = verify.issues.filter((issue) => issue.severity === "error").length;

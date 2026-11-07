@@ -45,27 +45,40 @@ export function registerDocumentRevisionCommand(program: Command): void {
     });
   task.command("recover").description("Inspect or preview scoped recovery independently of the normal workflow Route")
     .option("--operation <operation>", "inspect, writer-lock or transactions; use ordinary file submission/revise for article repair", "inspect")
+    .option("--managed", "preserve explicit session-managed authority in recovery continuation")
     .option("--apply", "apply the reviewed recovery scope within existing user authorization")
     .option("--plan-digest <digest>", "exact current recovery preview")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { operation: string; apply?: boolean; planDigest?: string; format: string }) => {
+    .action(async (options: { operation: string; managed?: boolean; apply?: boolean; planDigest?: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");
       if (!["inspect", "writer-lock", "transactions"].includes(options.operation)) throw new TypeError("Use inspect, writer-lock or transactions. Repair current task files or use context revise for an accepted article; old workset/plan recovery is not supported.");
       if (options.operation === "inspect" && options.apply) throw new TypeError("Inspection is read-only; select a recovery operation to apply.");
       const projectRoot = requireProjectRoot();
       const { inspectTaskRecovery, recoverTaskTransactions } = await import("../project/taskRecovery.js");
       const { recoverWriterLock } = await import("../project/writeLockRecovery.js");
-      const base = { projectRoot, ...(options.apply ? { apply: true } : {}),
+      const base = { projectRoot, managed: options.managed === true, ...(options.apply ? { apply: true } : {}),
         ...(options.planDigest ? { plan_digest: options.planDigest } : {}) };
       try {
-        const result = options.operation === "inspect" ? await inspectTaskRecovery(projectRoot)
+        const result = options.operation === "inspect" ? await inspectTaskRecovery(projectRoot, options.managed)
           : options.operation === "writer-lock" ? await recoverWriterLock(base)
           : await recoverTaskTransactions(base);
-        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        let observation: Record<string, unknown> = {};
+        if (options.apply && options.operation !== "inspect") {
+          try {
+            const { collectProjectStatus } = await import("../project/status.js");
+            const { workflowRouteOutput } = await import("../project/workflow/workflowRouteOutput.js");
+            const status = await collectProjectStatus(projectRoot, { managed: options.managed === true });
+            observation = { next_route: await workflowRouteOutput(projectRoot, status.workflow.current) };
+          } catch (error) {
+            observation = { next_preparation_error: error instanceof Error ? error.message : String(error),
+              next_action: { command: `context status${options.managed ? " --managed" : ""} --format json` } };
+          }
+        }
+        process.stdout.write(`${JSON.stringify({ ...result, ...observation }, null, 2)}\n`);
       } catch (error) {
         process.exitCode = ExitCode.WorkspaceStateError;
         process.stdout.write(`${JSON.stringify({ action: "recovery-blocked", error: error instanceof Error ? error.message : String(error),
-          recovery: await inspectTaskRecovery(projectRoot) }, null, 2)}\n`);
+          recovery: await inspectTaskRecovery(projectRoot, options.managed) }, null, 2)}\n`);
       }
     });
   task.command("prepare").description("Preview or discard current task state; preserve knowledge, sources and other temporary files")

@@ -4,7 +4,7 @@ import type { PackageImportWarning } from "./importsPages.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { readCommandDirectory } from "./commandReadCache.js";
+import { readCommandDirectory, reuseCommandFileRead } from "./commandReadCache.js";
 import { join, relative } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
 import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
@@ -104,12 +104,13 @@ export async function packageOutputSnapshot(
   pkg: PackageDefinition,
   knowledgeGroups: ReadonlyMap<string, string>,
   previousOutputs: readonly PackageOutputFile[] = [],
+  reuse = false,
 ): Promise<PackageOutputFile[]> {
   const previousByPath = new Map(previousOutputs.map((file) => [file.path, file]));
   const files = (await Promise.all(packageOutputDirs(pkg).map(async output =>
     (await walkPackageFiles(join(projectRoot, output))).map(file => ({ ...file,
       relPath: toPosixPath(relative(join(projectRoot, pkg.outDir), file.absPath)) }))))).flat();
-  return Promise.all(files.map(async (file) => {
+  const read = () => Promise.all(files.map(async (file) => {
     const current = classifyOutputFile(file.relPath, knowledgeGroups);
     const previous = previousByPath.get(file.relPath);
     const classification = current.kind === "file" && previous !== undefined
@@ -134,6 +135,12 @@ export async function packageOutputSnapshot(
       sha256: createHash("sha256").update(content).digest("hex"),
     };
   }));
+  return reuse ? reuseCommandFileRead({ key: `package-output:${pkg.outDir}`, paths: files.map(file => file.absPath), read }) : read();
+}
+
+export async function packageOutputFileCount(projectRoot: string, pkg: PackageDefinition): Promise<number> {
+  return (await Promise.all(packageOutputDirs(pkg).map(output => walkPackageFiles(join(projectRoot, output)))))
+    .reduce((count, files) => count + files.length, 0);
 }
 
 export async function packageOutputFingerprint(projectRoot: string, pkg: PackageDefinition, observed?: readonly PackageOutputFile[]): Promise<{
@@ -142,7 +149,7 @@ export async function packageOutputFingerprint(projectRoot: string, pkg: Package
 }> {
   // A caller that just inspected the completed output can reuse those exact
   // hashes. Do not retain a snapshot across writes or separate commands.
-  const snapshot = observed ?? await packageOutputSnapshot(projectRoot, pkg, new Map());
+  const snapshot = observed ?? await packageOutputSnapshot(projectRoot, pkg, new Map(), [], true);
   return {
     fingerprint: createHash("sha256").update(JSON.stringify({
       outDirExists: existsSync(join(projectRoot, pkg.outDir)),
