@@ -80,9 +80,10 @@ Agent knowledge package. Keep every code claim traceable.
 ```
 
 If the Agent entry is present but the `context` executable is missing, the
-entry reports the exact installation recovery and stops. It does not run an
-installation preflight on every request and does not confuse a normal workflow
-`not found` diagnostic with a missing executable.
+entry installs it once when the host already allows upgrading to a minimum
+version; otherwise it reports the exact installation recovery and stops. It does
+not run an installation preflight on every request and does not confuse a normal
+workflow `not found` diagnostic with a missing executable.
 
 ## How one Agent entry drives the workflow
 

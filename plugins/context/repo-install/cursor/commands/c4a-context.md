@@ -141,19 +141,26 @@ obtaining a workflow Route. Run the version check separately: do not chain
 After an authorized upgrade, verify the executable version once, then refresh entry/status and
 discard commands and revisions obtained from the previous installation.
 
-If the executable cannot start (`ENOENT` or exit 127 naming `context`), explain
-that the CLI is missing and ask the user to install or authorize installation:
+If the executable cannot start (`ENOENT` or exit 127 naming `context`), the CLI
+is missing. When the host requires a minimum CLI version and allows upgrading, a
+missing CLI is below that minimum: install it once with the host's command, or
+with the first command below if the host gives none, then verify with
+`context --version` and continue with entry/status. If the installation fails or
+the version still cannot be confirmed, report the blocker without retrying.
+Without that host permission, explain that the CLI is missing and ask the user to
+install or authorize installation:
 
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-For an authorized local installation into a repository instead of the global
-host, read [local installation options](../resources/context/local-install.md).
+Run `context plugin install` only when the host does not already provide this
+plugin. For an authorized local installation into a repository instead of the
+global host, read [local installation options](../resources/context/local-install.md).
 
-Stop with that recovery. Do not run an installation preflight or auto-install;
-a normal Context `not found` diagnostic does not mean the executable is missing.
+Otherwise stop with that recovery. Do not run an installation preflight; a normal
+Context `not found` diagnostic does not mean the executable is missing.
 
 Enable debug only when requested: use `entry --debug` for initialization or
 `context debug enable` in an existing workspace. It records diagnostics under
