@@ -14,6 +14,10 @@ trigger take precedence. For example, a scheduler's task content:
 
 ```text
 /c4a-context routine update
+
+This is the routine update of the Billing knowledge base. Refresh it from the
+latest registered code and documents, revise the affected articles so they
+describe the current state, and publish once everything is delivered.
 Scope: repository web-app; document "Billing rules"
 
 ROUTINE_POLICY:
@@ -23,8 +27,10 @@ ROUTINE_POLICY:
   time_budget_minutes: 90    # stop starting new batches after this
 ```
 
-The trigger does not need to repeat this procedure, the workspace targets or the
-delivery configuration; one or two sentences of team-specific guidance are enough.
+Start the trigger with one short paragraph naming the knowledge base and what the
+run should achieve, including any team-specific guidance; it tells the agent
+which workspace and what matters. The trigger does not need to repeat this
+procedure, the workspace targets or the delivery configuration.
 
 - The review keys use the task-scoped review override contract in the entry
   Skill. Without them, the existing policy applies and the run waits at those
@@ -42,9 +48,12 @@ delivery configuration; one or two sentences of team-specific guidance are enoug
 ## Run
 
 1. **Prepare.** Check the CLI as the entry Skill requires and align versions
-   with [version alignment](version-alignment.md). Clone a missing
-   workspace or registered repository (shallow or partial for large ones), then
-   update the workspace branch from its remote. Never discard local work.
+   with [version alignment](version-alignment.md). Enter the workspace named by
+   the host configuration before the entry, cloning it when the current
+   directory does not have it; never initialize a new workspace for a routine
+   run, and report a missing or unconfigured workspace instead. Clone a missing
+   registered repository (shallow or partial for large ones), then update the
+   workspace branch from its remote. Never discard local work.
 2. **Resume first.** If `context status` shows an unfinished task, finish it (use
    `context task recover --format json` when status cannot evaluate). If a
    `PLAN-*.md` from an earlier routine run is unfinished, continue its next stage
