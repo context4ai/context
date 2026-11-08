@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.95 - 2026-11-08
 
 - The entry Skill enters the existing workspace named by the host or the user before running the entry, cloning it when the current directory does not have it. Requests about existing knowledge (routine updates, revisions, source updates, recovery, progress checks) never create a new workspace; a missing configured workspace is reported instead. Routine update triggers start with a short paragraph naming the knowledge base and the goal of the run.
 - Routine updates state the effective review, publish and time-budget settings and where they came from before any other step, and repeat them in each report; later turns keep them even when the original trigger is no longer visible. The trigger's review settings take precedence over the host's review settings, and an explicit plain-language statement that the whole run is managed and reviewed by the agent delegates both reviews.
