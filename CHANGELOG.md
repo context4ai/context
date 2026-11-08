@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- The entry Skill enters the existing workspace named by the host or the user before running the entry, cloning it when the current directory does not have it. Requests about existing knowledge (routine updates, revisions, source updates, recovery, progress checks) never create a new workspace; a missing configured workspace is reported instead. Routine update triggers start with a short paragraph naming the knowledge base and the goal of the run.
+
 ## 0.7.94 - 2026-11-08
 
 - Routine updates revise affected articles as the current state of the knowledge, without patch notes or change remarks in the article text.
@@ -221,8 +225,6 @@ All notable changes to Context are documented here.
 - Inline complete small workflow Routes while retaining file-based fallback and existing authorization and read-receipt checks.
 - Keep capture-only requests out of article production, reuse URL registration and capture receipts, and retain string diagnostics in compact output.
 - Keep source baseline details in provenance and citations rather than reader-facing article prose.
-
-## 0.7.94 - 2026-11-08
 
 ## 0.7.34 - 2026-09-22
 

@@ -180,6 +180,16 @@ Enable debug only when requested: use `entry --debug` for initialization or
 
 ### Run the entry
 
+Run the entry in the workspace the request is about. When the host configuration
+or the user names an existing workspace (a Git repository with its branch and
+directory) and the current directory is not that workspace, clone it first
+(shallow or partial for a large repository), or fetch and check out the named
+branch, then enter its workspace directory. A request about existing knowledge,
+such as a routine update, a revision, a source update, recovery or a progress
+check, never creates a workspace: if the entry still returns
+`initialize-workspace`, report that the configured workspace is missing instead
+of offering to initialize one.
+
 Once the activation condition is met, run:
 
 ```bash
@@ -200,7 +210,8 @@ initialization, use `context entry context/ --dev --debug --language zh-CN
 Follow the returned `next_action.command`:
 
 - `enter-workspace` and `evaluate-workflow` are read-only.
-- `initialize-workspace` may run immediately if the user requested initialization;
+- `initialize-workspace` starts a new knowledge project. It may run immediately if
+  the user requested initialization;
   otherwise confirm the target. For `context.gate.workspace_initialize_nonempty`,
   reuse the user's explicit target choice; ask if the nonempty target was not
   clearly selected.
