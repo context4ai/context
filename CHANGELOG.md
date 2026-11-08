@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## 0.7.93 - 2026-11-07
+## 0.7.93 - 2026-11-08
 
 - Changes requested while a revision batch is unapproved join that batch, including the pages of a source update: `context task maintain` and `context revise` add the page to the current Review instead of queueing behind delivery or failing as busy. A page already drafted in the batch restarts from its latest draft. Approval closes the batch; later requests queue for the next one. Translation and version recording wait until no maintenance is queued.
 - `context task retire` inside an unapproved batch schedules the retirement with that batch. Its preview lists pages whose links need updating (they join the batch), navigation entries that will point to the replacement, and translations that become orphaned. The Review report shows the planned result, and the final Review apply computes it on the final drafts in the same write. When only translations of removed pages remain, `translate prepare` deletes them itself; new orphans are no longer hidden by an earlier translation receipt.
