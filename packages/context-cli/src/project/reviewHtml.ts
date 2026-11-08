@@ -8,7 +8,7 @@ import {
   readReviewCandidateSnapshot,
   type ReviewCandidateView,
 } from "./reviewShared.js";
-import { collectReviewSiteModel, escapeReviewHtml, reviewHtmlJson, type ReviewSiteModel } from "./reviewSiteModel.js";
+import { collectReviewSiteModel, escapeReviewHtml, reviewHtmlJson, type ReviewNavigationChange, type ReviewSiteModel } from "./reviewSiteModel.js";
 import { saveReviewReportScope } from "./reviewReportScope.js";
 import { REVIEW_SITE_CLIENT } from "./reviewSiteClient.js";
 import { REVIEW_SITE_STYLES } from "./reviewSiteStyles.js";
@@ -72,6 +72,20 @@ function resolveOutputPath(projectRoot: string, outPath: string | undefined, rev
   return isAbsolute(outPath) ? outPath : resolve(projectRoot, outPath);
 }
 
+/** Each blocker kind has its own fix: an article draft is revised, a navigation
+ * entry is adjusted, a package template is edited by hand. */
+function retirementBlockerFix(path: string): { command: string; instruction: string } {
+  if (path.startsWith("knowledge/") && path.endsWith(".md")) {
+    const page = path.slice("knowledge/".length).replace(/'/gu, "'\\''");
+    return { command: `context revise '${page}' --instruction "Update links to the retired page: point them at its replacement when there is one, otherwise remove or reword them, and update their link text." --format json`,
+      instruction: "Revise this draft in the current batch." };
+  }
+  if (path === KNOWLEDGE_MAP_PATH) return { command: "context task adjust --inspect --format json",
+    instruction: "Rebind or remove this navigation entry, which points into the retired page, through the returned adjustment input." };
+  return { command: "context status --format json",
+    instruction: `Edit the link in ${path} by hand (it is a package template, not an article), then regenerate the report.` };
+}
+
 export async function writeReviewHtml(input: {
   projectRoot: string;
   collection?: KnowledgeCollection;
@@ -82,7 +96,9 @@ export async function writeReviewHtml(input: {
   candidates: number;
   candidate_set_digest: string;
   structure_digests: string[];
-  navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[] };
+  navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[];
+    changes: ReviewNavigationChange[] };
+  retirement?: ReviewSiteModel["retirement"];
   next_action?: { command: string; message: string };
 }> {
   const reviewScope = input.all === true ? "all" : input.collection;
@@ -111,11 +127,16 @@ export async function writeReviewHtml(input: {
   const unplaced = model.pages.filter(page => page.candidate_id && !menu.has(page.id) &&
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));
+  const retirementFixes = model.retirement?.blockers.map(blocker => ({ ...blocker, fix: retirementBlockerFix(blocker.path) }));
   return {
     navigation: { current_revision: (await readKnowledgeMap(input.projectRoot))?.revision ?? null,
-      structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced },
+      structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced,
+      changes: model.navigationChanges },
     ...(unplaced.length ? { next_action: { command: "context task adjust --input - --format json",
       message: "Bind the listed drafts to suitable existing categories before requesting review, then regenerate this report. Content approval is not required for navigation." } } : {}),
+    ...(retirementFixes ? { retirement: { ...model.retirement!, blockers: retirementFixes } } : {}),
+    ...(!unplaced.length && retirementFixes?.length ? { next_action: { ...retirementFixes[0]!.fix,
+      message: "Some links still point to a page retired in this batch. Fix each item in retirement.blockers as its fix says before requesting approval; approval cannot apply while they remain." } } : {}),
     path: outPath,
     candidates: candidates.length,
     candidate_set_digest: candidateSetHash(candidates.map(({ record }) => record)),

@@ -86,9 +86,9 @@ test("reports every oversized fragment together before reading sources", async (
     files: { task: task.id, input: task.input, content: file("content.md", base.markdown),
       references: file("references.yaml", YAML.stringify({ sections: [
         { id: "a", references: [...refs(9), ...refs(9)] },
-        { id: "b", references: ["one.md", "two.md", "three.md", "four.md"].flatMap(path => refs(1, path)) },
+        { id: "b", references: ["one.md", "two.md", "three.md", "four.md", "five.md", "six.md"].flatMap(path => refs(1, path)) },
       ] })) },
-  })).rejects.toThrow("a: 9 distinct source regions (maximum 8); b: 4 distinct source files (maximum 3)");
+  })).rejects.toThrow("a: 9 distinct source regions (maximum 8); b: 6 distinct source files (maximum 5)");
   expect(reads).toBe(0);
 });
 

@@ -580,6 +580,11 @@ async function main(): Promise<void> {
   const pkg = JSON.parse(pkgRaw) as { version?: string };
   const version = pkg.version;
   if (!version) throw new Error("package.json is missing `version`");
+  // Agents compare this line with `context --version` and the workspace SDK.
+  const entrySkill = await readFile(join(PLUGIN_SOURCE_ROOT, "skills", "context", "SKILL.md"), "utf8");
+  if (!entrySkill.includes(`This Skill ships with Context ${version}.`)) {
+    throw new Error(`plugins/context/skills/context/SKILL.md must state "This Skill ships with Context ${version}."`);
+  }
 
   await syncIndexerAuthoringReferences(repoRoot);
   const targetLabel = "dist/plugins";

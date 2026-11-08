@@ -23,6 +23,8 @@ const stateSchema = z.object({
   pending: z.array(requestSchema),
   active: requestSchema.extend({ phase: z.enum(["preparing", "running", "finishing", "cancelling"]), completion_outcome: z.enum(["completed", "cancelled"]).optional() }).optional(),
   completed: z.array(z.object({ id: z.string(), input_digest: z.string(), outcome: z.enum(["completed", "cancelled"]).optional() }).strict()),
+  /** Requests merged into the active revision batch; they finish with it. */
+  joined: z.array(z.object({ id: z.string(), input_digest: z.string() }).strict()).optional(),
 }).strict();
 export type MaintenanceState = z.infer<typeof stateSchema>;
 export async function readMaintenance(root: string): Promise<MaintenanceState> {

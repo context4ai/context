@@ -202,9 +202,11 @@ export function createContextWorkflowFacts(
       templates_reviewed: packageTemplatesReviewed(observation),
       current: packagesCurrent && !partialDelivery,
     },
-    translation: { route_satisfied: partialDelivery || observation.translationRouteSatisfied !== false },
+    // Queued maintenance will change content again: translate and record the
+    // version once after the queue is empty instead of after every batch.
+    translation: { route_satisfied: partialDelivery || observation.maintenanceQueued === true || observation.translationRouteSatisfied !== false },
     version: { current: observation.versionCurrent !== false,
-      recording_satisfied: partialDelivery || ((deliveryReady || outputOnlyMaintenance) && observation.unfinishedIndexerTasks === true) || observation.versionCurrent !== false },
+      recording_satisfied: partialDelivery || observation.maintenanceQueued === true || ((deliveryReady || outputOnlyMaintenance) && observation.unfinishedIndexerTasks === true) || observation.versionCurrent !== false },
     logs: {
       configured: runtimeEvents.configured,
       ...(buildLogPending && hasApprovedKnowledge && packagesCurrent

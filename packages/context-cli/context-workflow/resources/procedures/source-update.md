@@ -27,8 +27,10 @@ still check the change for additions before submitting the scope decision.
 Those pages are listed in `scope_pages`: they need no decision, but include one
 with an `instruction` when an addition or shared change affects it.
 
-Follow each changed reference's `evidence_ref` into `reference_evidence` for
-digest-verified historical text and the current excerpt. Missing history is
+Follow each changed reference's `evidence_ref` into the JSON array in
+`reference_evidence_file` (`reference_evidence_count` entries) for
+digest-verified historical text and the current excerpt. Read only the entries
+for references you are deciding; the Route does not repeat them inline. Missing history is
 explicitly marked unavailable. The current excerpt is from the old position
 or nearby lines, not a claimed replacement; only a `format_only_proposals`
 entry supplies a mapped replacement for your decision.

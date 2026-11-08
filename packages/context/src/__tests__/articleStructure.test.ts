@@ -34,11 +34,11 @@ describe("article structure", () => {
       { ...section, references: regions(9) },
     ] }])).toThrow("at most 8 source regions");
     expect(validateArticleStructureEntries([{ ...article(), sections: [
-      { ...section, references: ["a.ts", "a.ts", "b.md", "c.md"].map((path, index) => at(path, index + 1)) },
-    ] }])[0]!.sections[0]!.references).toHaveLength(4);
+      { ...section, references: ["a.ts", "a.ts", "b.md", "c.md", "d.md", "e.md"].map((path, index) => at(path, index + 1)) },
+    ] }])[0]!.sections[0]!.references).toHaveLength(6);
     expect(() => validateArticleStructureEntries([{ ...article(), sections: [
-      { ...section, references: ["a.ts", "b.md", "c.md", "d.md"].map(path => at(path, 1)) },
-    ] }])).toThrow("at most 3 distinct source files");
+      { ...section, references: ["a.ts", "b.md", "c.md", "d.md", "e.md", "f.md"].map(path => at(path, 1)) },
+    ] }])).toThrow("at most 5 distinct source files");
   });
 
   test("rejects duplicate identities or paths instead of overwriting", () => {

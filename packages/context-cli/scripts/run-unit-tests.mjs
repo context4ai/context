@@ -72,7 +72,13 @@ if (!match || !Number.isSafeInteger(Number(match[2])) || Number(match[1]) > Numb
 const shardIndex = Number(match[1]) - 1;
 const shardCount = Number(match[2]);
 const { durations } = JSON.parse(await readFile(new URL("./test-durations.json", import.meta.url), "utf8"));
-const assignments = balancedTestShards(selected, shardCount, durations);
+// verify:full runs the default scope and then full-only in the same shard job.
+// Seed the default assignment with each shard's full-only work so the job
+// totals stay even; full-only and full scopes are balanced on their own.
+const fullOnlyLoads = scope === "default"
+  ? balancedTestShards(allTests.filter(file => fullOnly.has(file)), shardCount, durations).map(item => item.durationMs)
+  : [];
+const assignments = balancedTestShards(selected, shardCount, durations, fullOnlyLoads);
 const tests = shardCount === 1 ? selected : assignments[shardIndex].files;
 if (selected.length === 0) throw new Error(`no Context CLI unit tests found under ${testsRoot}`);
 if (args.includes("--list")) {

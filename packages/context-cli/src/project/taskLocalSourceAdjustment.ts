@@ -56,19 +56,23 @@ export async function adjustLocalRevisionSources(root: string, input: {
           },
           next_action: {
             command: "context status --format json",
-            instruction: "After correcting the authorized requirement association, reread the current Route. Retry the same task adjust payload without refresh, then with refresh: true once the selected material is available. Use the resulting fresh revision for submission. Already imported evidence does not need rewriting or recapture.",
+            instruction: "After correcting the authorized requirement association, reread the current Route. Retry the same task adjust payload without refresh; when it returns acquisition-authorized, repeat with refresh: true once the selected material is available. Use the resulting fresh revision for submission. Already imported evidence does not need rewriting or recapture.",
           },
           retained: { source_files: true, approved_pages: true, current_revision: true },
         });
     }
   }
+  // Material already fixed for this task or delivered at the source's current
+  // version needs no acquisition; complete the adjustment in this call.
+  const refresh = input.refresh === true || await selectedSourcesAlreadyAcquired(root, selected, bound);
+  if (refresh && !input.refresh) current.refresh_sources = selected;
   if (input.refresh && (!current.refresh_sources || indexerProtocolDigest([...current.refresh_sources].sort()) !== indexerProtocolDigest([...selected].sort()))) {
     throw new TypeError("No matching acquisition adjustment exists. Run task adjust without refresh first.");
   }
   const raw = await readFile(join(root, await revisionStoragePath(root)), "utf8");
   let next: Record<string, unknown>;
   const discardIds = new Set<string>();
-  if (!input.refresh) {
+  if (!refresh) {
     next = { ...current, refresh_sources: selected };
   } else {
     const oldScopes = [...(revision?.processed_scopes ?? update?.scopes ?? []),
@@ -151,7 +155,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
       next = { ...payload, revision: indexerProtocolDigest(payload) };
     }
   }
-  if (update && !input.refresh) {
+  if (update && !refresh) {
     const { revision: _revision, ...payload } = next; void _revision;
     next.revision = indexerProtocolDigest(payload);
   }
@@ -170,7 +174,19 @@ export async function adjustLocalRevisionSources(root: string, input: {
   }
   targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   await runDurableMultiFileTransaction({ projectRoot: root, kind: "adjust-local-update", proposal_digest: indexerProtocolDigest(targets), targets });
-  return { action: input.refresh ? "adjusted" : "acquisition-authorized", source_refs: selected,
+  return { action: refresh ? "adjusted" : "acquisition-authorized", source_refs: selected,
     retained_pending_pages: revision?.pending_targets?.length ?? update?.candidates.length ?? 0,
-    next: input.refresh ? "context status --format json" : "Acquire/import only the selected inputs, then repeat context task adjust with the same scope and instruction plus refresh: true. Keep current approved pages and queued work." };
+    ...(refresh && !input.refresh ? { acquisition: "already-available" } : {}),
+    next: refresh ? "context status --format json" : "Acquire/import only the selected inputs, then repeat context task adjust with the same scope and instruction plus refresh: true. Keep current approved pages and queued work." };
+}
+
+/** Only sources added to this task can skip acquisition. Re-selecting a bound
+ * source asks for a newer version, which still needs the acquire step. An added
+ * source counts as acquired only when its material at the registered version
+ * is readable here; otherwise the two-step flow stays. No scan or upstream lookup. */
+async function selectedSourcesAlreadyAcquired(root: string, selected: readonly string[], bound: readonly string[]): Promise<boolean> {
+  if (selected.length === 0 || selected.some((source) => bound.includes(source))) return false;
+  const { sourceMaterialAvailable } = await import("./processedScopeStorage.js");
+  for (const source of selected) if (!await sourceMaterialAvailable(root, source)) return false;
+  return true;
 }

@@ -61,8 +61,8 @@ Provider Skill 投影到 Claude、Codex 和 Cursor 的用户技能目录。
 结论都要保留可追溯引用。
 ```
 
-如果 Agent 入口已经存在但缺少 `context` 可执行文件，入口会给出准确的安装恢复
-方法并停止。它不会为每次调用增加安装预检，也不会把普通工作流中的 `not found`
+如果 Agent 入口已经存在但缺少 `context` 可执行文件：宿主已允许升级到最低版本时，
+入口会安装一次；否则给出准确的安装恢复方法并停止。它不会为每次调用增加安装预检，也不会把普通工作流中的 `not found`
 诊断误判成可执行文件缺失。
 
 ## 飞书读取身份
@@ -259,5 +259,7 @@ MIT.
 多页使用 `context task maintain --input <文件> --format json`。输入包含 `id`、`operation`（`revise`、`regenerate` 或 `rebuild`）、可选 `timing`（`after-batch` 或 `priority`），以及 `targets: [{ path, instruction }]`。`rebuild` 不带 targets，只重新打包已批准内容，不完成生产任务。重试复用相同 id 和输入。状态会说明当前维护、待办及等待原因。
 
 来源刷新仍走明确范围调整；该入口不会抓取远端来源，也不代表能够重跑任意自定义 Composer。目标主体仍有未交付生产内容时，先等该写入方完成，再修订最新正文，避免恢复后覆盖。
+
+修订批次（包括来源更新的页面批次）尚未审阅通过时，`revise` 与 `task maintain` 把页面加入该批次而不是排队，`task retire` 把退役安排在该批次一并生效。审阅通过即关闭批次，之后的请求排到下一批。通过后、交付完成前，不经再次审阅的机械修正用 `context task record-fix --input <{path, reason}> --format json` 记录。
 
 `context task maintenance-status --format json` 返回维护状态和 revision。`context task cancel-maintenance <id> --format json` 取消待办；明确放弃活动维护草稿时，再提供当前 `--discard-revision`。已批准页面和其他生产成果保留。

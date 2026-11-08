@@ -1,6 +1,6 @@
 import { readProductionRequirements } from "./productionRequirements.js";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import YAML from "yaml";
 import { loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
   readProcessedScopes, indexerProtocolDigest, validateArticleStructureEntries, type ProcessedScope, type ArticleSourceReference } from "@c4a/context";
@@ -34,6 +34,35 @@ export async function currentScopeSourceVersion(projectRoot: string, sourceRef: 
   const entry = entries[0]!;
   const manifest = entry.snapshot?.manifest ?? `${entry.materializedAt}/manifest.json`;
   return parseDocumentSnapshotForSource(JSON.parse(await readFile(join(projectRoot, manifest), "utf8")), entry.name).snapshot_hash;
+}
+
+/** Whether a source's material at its registered version can be read locally:
+ * the repository checkout at its fixed commit, the managed note body, or every
+ * file of a captured document snapshot. Only this source; never fetches. */
+export async function sourceMaterialAvailable(projectRoot: string, sourceRef: string): Promise<boolean> {
+  try {
+    if (sourceRef.startsWith("repo-content:")) return true;
+    const split = sourceRef.indexOf(":");
+    const type = sourceRef.slice(0, split);
+    const name = sourceRef.slice(split + 1);
+    if (type === "note" || type === "sessions") {
+      await currentScopeSourceVersion(projectRoot, sourceRef);
+      return true;
+    }
+    if (type === "repo") {
+      const { diagnoseRepoSources } = await import("./repoSources.js");
+      const statuses = await diagnoseRepoSources({ projectRoot, name });
+      return statuses.length === 1 && statuses[0]!.ready;
+    }
+    const sources = await loadSourcesRegistry({ rootDir: projectRoot });
+    const entries = (type === "file" ? sources.files : type === "lark" ? sources.larks : []).filter((entry) => entry.id === name || entry.name === name);
+    if (entries.length !== 1) return false;
+    const manifestPath = entries[0]!.snapshot?.manifest ?? `${entries[0]!.materializedAt}/manifest.json`;
+    const snapshot = parseDocumentSnapshotForSource(JSON.parse(await readFile(join(projectRoot, manifestPath), "utf8")), entries[0]!.name);
+    const base = join(projectRoot, dirname(manifestPath));
+    for (const file of snapshot.files) await access(join(base, file.path));
+    return true;
+  } catch { return false; }
 }
 
 /** Pin already acquired local inputs. This function does not fetch upstream. */

@@ -275,8 +275,7 @@ test("same-task input adjustment keeps the approved body and queued pages and re
   registry.requirements[0].evidence_source_scope.targets.push({ source_ref: note.source_ref, module_refs: [] });
   await writeFile(registryPath, YAML.stringify(registry));
   const addition = { scopes: [{ source_ref: note.source_ref, requirement_ref: scope.requirement_ref }], instruction: "Use the extra confirmed explanation on the current page." };
-  await adjustCurrentTaskSources(root, addition);
-  await adjustCurrentTaskSources(root, { ...addition, refresh: true });
+  expect(await adjustCurrentTaskSources(root, addition)).toMatchObject({ action: "adjusted", acquisition: "already-available" });
   const extended = (await readApprovedRevision(root))!;
   expect(extended.target.source_refs).toContain(note.source_ref);
   expect(extended.pending_targets).toEqual(old.pending_targets?.map(item => ({ ...item, supporting_sources: [note.source_ref] })));

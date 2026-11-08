@@ -58,6 +58,7 @@ const DEFAULT_INTERNAL_FIELDS = [
   "template_root",
   "report_path",
   "result_file",
+  "reference_evidence_file",
   "project_root",
   "input_project_root",
   "input_file",
@@ -123,6 +124,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "normalized_path" ||
     field === "file_path" ||
     field === "result_file" ||
+    field === "reference_evidence_file" ||
     field === "instruction_path" ||
     field === "view_path" ||
     field === "repo_root" ||
@@ -171,6 +173,9 @@ function semanticReplacementFor(field: string): string {
   if (field === "old_path") return "Historical repository-relative evidence path from Git rename detection; resolve only with the recorded repository and baseline commit, never with the current registration path.";
   if (field === "result_file") {
     return "An explicit completion-report locator for Host reading, not a semantic identity or an inferred cache path; retain revision and outcome fields in the summary.";
+  }
+  if (field === "reference_evidence_file") {
+    return "An explicit source-update evidence locator for the Agent to read on demand; identify each entry by its evidence_ref, not by the file path.";
   }
   if (field === "payload.path") {
     return "Pass the payload with --input and identify it by schema_version, node_ref, view_ref, section_id, source_ref, or digest.";

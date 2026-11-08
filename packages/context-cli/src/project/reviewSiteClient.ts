@@ -16,7 +16,10 @@ const words = {
   close: ['关闭', 'Close'], baseline: ['无 Git 导航基线，目录沿用当前工作区；未推断历史目录变化。', 'No Git navigation baseline. The current workspace navigation is shown.'],
   approvedContext: ['既有正文，仅供对照。', 'Existing content, shown for reference.'], unchanged: ['本次未变更内容略。', 'Unchanged content omitted.'],
   previous: ['查看旧文本', 'Previous text'], removed: ['移除或替换的旧内容', 'Removed or replaced content'],
-  removedNav: ['移除的目录条目', 'Removed navigation entries'], unplaced: ['待落位文章', 'Unplaced articles'],
+  navChanges: ['导航变化', 'Navigation changes'], added: ['新增', 'Added'], removedEntry: ['删除', 'Removed'],
+  retiredPages: ['本批次退役的页面', 'Pages retired in this batch'], replacedBy: ['替代页', 'Replaced by'],
+  retireBlockers: ['仍链接到退役页面的草稿（批准前需修改）', 'Drafts still linking to a retired page (update before approval)'],
+  renamed: ['改名', 'Renamed'], retargeted: ['改指向', 'Points to'], moved: ['移动', 'Moved'], noTarget: ['无页面', 'no page'], unplaced: ['待落位文章', 'Unplaced articles'],
   sources: ['来源引用', 'Sources'], feedbackTag: ['修订', 'Notes'],
   previousPage: ['上一页 −', 'Previous −'], nextPage: ['下一页 +', 'Next +'],
   previousHint: ['上一页（快捷键 -）', 'Previous article (key -)'], nextHint: ['下一页（快捷键 +）', 'Next article (key +)'],
@@ -207,6 +210,25 @@ function workspaceTree() {
   return \`<div class="workspace-tree">\${lines(root)}</div>\`;
 }
 
+function targetLabel(target) { return target ? escape(target.title) + (target.path ? \` <small>\${escape(target.path)}</small>\` : '') : t('noTarget'); }
+function retirementSection() {
+  const retirement = DATA.retirement;
+  if (!retirement) return '';
+  return \`<h2>\${t('retiredPages')}</h2><ul>\` + retirement.retired.map(page => \`<li class="removed"><del>\${escape(page.title)}</del> <small>\${escape(page.path)}</small>\${page.replacement ? \` — \${t('replacedBy')}: \${escape(page.replacement)}\` : ''}</li>\`).join('') + '</ul>'
+    + (retirement.blockers.length ? \`<h3>\${t('retireBlockers')}</h3><ul>\` + retirement.blockers.map(item => \`<li>\${escape(item.path)}: \${escape(item.target)}</li>\`).join('') + '</ul>' : '');
+}
+function navigationChanges() {
+  const changes = DATA.navigationChanges || [];
+  if (!changes.length) return '';
+  return \`<h2>\${t('navChanges')}</h2><ul class="nav-changes">\` + changes.map(change => {
+    const parts = change.changes.map(kind => kind === 'renamed' ? \`\${t('renamed')}: \${escape(change.old_title)} → \${escape(change.title)}\`
+      : kind === 'retargeted' ? \`\${t('retargeted')}: \${targetLabel(change.old_target)} → \${targetLabel(change.new_target)}\`
+      : kind === 'removed' ? t('removedEntry') : kind === 'added' ? t('added') : t('moved'));
+    const label = change.changes.includes('removed') ? \`<del>\${escape(change.title)}</del>\` : escape(change.title);
+    return \`<li class="\${change.changes.includes('removed') ? 'removed' : ''}">\${label} — \${parts.join('; ')}</li>\`;
+  }).join('') + '</ul>';
+}
+
 function renderHome() {
   $('article').innerHTML = \`<h1>\${t('home')}</h1><p class="stats">\${t('homeHint')}</p>\`
     + (DATA.navigationBaseline === 'current' ? \`<p class="note">\${t('baseline')}</p>\` : '')
@@ -218,7 +240,7 @@ function renderHome() {
       return \`<section class="home-group"><h3>\${nodeLabel(node)}\${badge(nodeChange(node))}</h3><div class="cards">\`
         + pages.map(page => \`<button data-page="\${escape(page.id)}">\${escape(page.title)}\${badge(page.change)}<span data-status-for="\${escape(page.id)}">\${badges(page)}</span></button>\`).join('') + '</div></section>';
     }).join('')
-    + (DATA.nodes.some(node => node.removed) ? \`<h2>\${t('removedNav')}</h2><ul>\${DATA.nodes.filter(node => node.removed).map(node => \`<li class="removed">\${nodeLabel(node)}</li>\`).join('')}</ul>\` : '')
+    + retirementSection() + navigationChanges()
     + \`<h2>\${t('files')}</h2>\${workspaceTree()}\`;
 }
 

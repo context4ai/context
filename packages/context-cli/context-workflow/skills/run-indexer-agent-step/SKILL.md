@@ -48,7 +48,9 @@ while route.node == initial_node and no_new_read_or_confirmation_gate(route):
 ```
 
 Use preview only when someone will read the assembled Markdown before deciding
-to submit; unattended loops submit directly. On failure, follow the returned
+to submit; unattended loops submit directly. A prepared multi-page batch is the
+exception: preview the whole batch once before submitting it, since that one
+call checks every page without saving drafts or task state. On failure, follow the returned
 submission state and recovery action: correct uncommitted input, continue after
 committed work, or recover an uncertain transaction before deciding to retry.
 

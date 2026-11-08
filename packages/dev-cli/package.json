@@ -1,7 +1,7 @@
 {
   "name": "@c4a/dev-cli",
   "description": "Developer menu for Context build, verification, link, and release preparation",
-  "version": "0.7.92",
+  "version": "0.7.93",
   "private": true,
   "type": "module",
   "license": "MIT",

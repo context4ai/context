@@ -80,9 +80,10 @@ Agent knowledge package. Keep every code claim traceable.
 ```
 
 If the Agent entry is present but the `context` executable is missing, the
-entry reports the exact installation recovery and stops. It does not run an
-installation preflight on every request and does not confuse a normal workflow
-`not found` diagnostic with a missing executable.
+entry installs it once when the host already allows upgrading to a minimum
+version; otherwise it reports the exact installation recovery and stops. It does
+not run an installation preflight on every request and does not confuse a normal
+workflow `not found` diagnostic with a missing executable.
 
 ## How one Agent entry drives the workflow
 
@@ -367,6 +368,13 @@ targets and packages approved content without completing production. Reuse the
 same id/input on retry. Status reports active and queued maintenance plus its
 waiting condition. Source refreshes remain explicit scope adjustments; this
 entry does not fetch remote sources or rerun every custom Composer.
+
+While a revision batch (including the pages of a source update) is not yet
+approved, `revise` and `task maintain` add pages to it instead of queueing, and
+`task retire` schedules the retirement with it. Approval closes the batch; later
+requests queue for the next one. Between approval and delivery, record a
+mechanical correction made without another Review with `context task record-fix
+--input <{path, reason}> --format json`.
 
 `context task maintenance-status --format json` exposes the request state and
 revision. `context task cancel-maintenance <id> --format json` cancels a pending

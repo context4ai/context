@@ -2,6 +2,18 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.93 - 2026-11-08
+
+- Changes requested while a revision batch is unapproved join that batch, including the pages of a source update: `context task maintain` and `context revise` add the page to the current Review instead of queueing behind delivery or failing as busy. A page already drafted in the batch restarts from its latest draft. Approval closes the batch; later requests queue for the next one. Translation and version recording wait until no maintenance is queued.
+- `context task retire` inside an unapproved batch schedules the retirement with that batch. Its preview lists pages whose links need updating (they join the batch), navigation entries that will point to the replacement, and translations that become orphaned. The Review report shows the planned result, and the final Review apply computes it on the final drafts in the same write. When only translations of removed pages remain, `translate prepare` deletes them itself; new orphans are no longer hidden by an earlier translation receipt.
+- After approval and before delivery finishes, `context task record-fix` records a mechanical correction made without another Review, with its reason.
+- `complete-current --preview` checks every page of a prepared revision batch with the submission rules without saving workflow state, Candidates or source-region caches. A resubmitted earlier citation with the same lines keeps its earlier evidence (moved if needed); quote and heading locators select the current text.
+- A fragment may cite up to five distinct source files (previously three); the eight-region limit is unchanged. Earlier CLI versions reject such fragments.
+- The Review report lists every navigation change, including entries for pages outside the batch, and the command output includes the same list. Source-update evidence moves out of the Route into a file. Translation tasks diff against the source text that was last translated, even when it was never committed.
+- Clearer next steps: rejected batch submissions offer correcting an out-of-scope citation or adjusting scope; fully accepted batches are no longer labelled paused; `task adjust` completes in one call when newly added material is already local; `review html --open` without a graphical session returns the path to open instead of calling `xdg-open`; YAML errors from unquoted `: ` suggest quoting.
+- Routine updates: a scheduled "routine update" request follows one documented procedure (resume earlier work, check sources for changes before fetching, one batch at a time within a time budget, merge per batch, publish once), configured by the host's `ROUTINE_POLICY`; the trigger only narrows the scope. Routine runs keep the top-level navigation and report proposed changes instead of waiting. When the host allows upgrading to a minimum version, a missing CLI is installed once instead of stopping.
+- Version alignment: the entry Skill states the Context version it ships with. When entering production, the Agent compares it with the CLI and the workspace SDK and upgrades all three to the latest release of the current major version; moving to a new major version is presented to the user with the latest release of both majors and a recommendation. The SDK upgrade is committed with the next delivery.
+
 ## 0.7.92 - 2026-11-07
 
 - Reduce repeated workspace, snapshot and source reads during status and source updates. Repository evidence uses fixed-commit Git object reads; read failures remain distinguishable from missing files. Verification continues with source recovery warnings, while an unreadable source selected for update still blocks that update. Status no longer reports passing evidence when verification did not complete.

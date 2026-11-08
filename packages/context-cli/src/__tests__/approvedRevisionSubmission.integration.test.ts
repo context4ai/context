@@ -16,6 +16,7 @@ async function fixture() {
     pending_targets: [{ path: "architecture/usage.md", instruction: "Clarify usage" }] });
   const batch = await prepareApprovedRevisionSubmission({ projectRoot: root, revision: prepared.revision, managed: true });
   expect(batch.next_action.command).toContain("--managed");
+  expect(batch.next_action.instruction).toContain("--preview");
   for (const [index, task] of batch.tasks.entries()) {
     const request = JSON.parse(await readFile(join(root, task.task_input), "utf8"));
     await writeFile(join(root, batch.agent_directory, batch.submission.tasks[index]!.edits), JSON.stringify({ stage: "approved-revision",
@@ -101,4 +102,87 @@ test("Node artifact prepares and consumes the same tasks transport", async () =>
   const result = JSON.parse((await execute("node", [cli, "action", "complete-current", "--managed", "--revision", revision, "--input", manifest], options)).stdout);
   expect(result).toMatchObject({ outcome: "accepted", committed_count: 2, details_required: false });
   expect(await readCandidateRecords(root)).toHaveLength(2);
+}, 120000);
+
+test("an out-of-scope citation offers correcting it or adjusting scope; full acceptance is not reported as paused", async () => {
+  const { root, batch, revision } = await fixture();
+  const second = join(root, batch.agent_directory, batch.submission.tasks[1]!.edits);
+  const request = JSON.parse(await readFile(join(root, batch.tasks[1]!.task_input), "utf8"));
+  const sectionId = /<!-- context:section id="([^"]+)"/u.exec(request.target.markdown)![1]!;
+  await writeFile(second, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: sectionId,
+    references: [{ source_ref: "note:elsewhere.md", locator: { path: "elsewhere.md", start_line: 1, end_line: 1 } }] }] }));
+  const { CONTEXT_WORKFLOW_AUTHORITIES } = await import("../project/workflow/workflowTypes.js");
+  const result = await completeCurrentIndexerAction({ cwd: root, revision, value: batch.submission, managed: true,
+    authorities: [CONTEXT_WORKFLOW_AUTHORITIES.sourceRead] }) as unknown as
+    { next_preparation: { command: string; choices: Array<{ action: string; command: string }> } };
+  expect(result).toMatchObject({ outcome: "paused", progress: { accepted: 1, pending: 1 } });
+  expect(result.next_preparation.choices.map((choice: { action: string }) => choice.action)).toEqual(["correct-reference", "adjust-scope"]);
+  expect(result.next_preparation.command).toContain("--managed");
+  // Every returned command keeps the session's managed mode and explicit authority.
+  for (const command of [result.next_preparation.command, ...result.next_preparation.choices.map(choice => choice.command)]) {
+    expect(command).toContain("--workflow-authority");
+    expect(command).toMatch(/--managed|--workflow-managed/u);
+  }
+
+  const fresh = await fixture();
+  const accepted = await completeCurrentIndexerAction({ cwd: fresh.root, revision: fresh.revision, value: fresh.batch.submission, managed: true }) as unknown as
+    { outcome: string; next_preparation?: { outcome: string } };
+  expect(accepted.outcome).toBe("accepted");
+  expect(accepted.next_preparation?.outcome).not.toBe("paused");
+}, 180000);
+
+type BatchPreview = { pages: Array<{ changed: boolean; issues: Array<{ message: string; reason_code?: string }> }> };
+test("batch preview checks every issued page with submission rules and writes nothing", async () => {
+  const { root, batch, revision } = await fixture();
+  const { readdir } = await import("node:fs/promises");
+  const listing = async () => (await readdir(join(root, ".tmp"), { recursive: true })).sort();
+  const before = await listing();
+  const clean = await completeCurrentIndexerAction({ cwd: root, revision, value: batch.submission, managed: true, preview: true }) as unknown as BatchPreview;
+  expect(clean).toMatchObject({ protocol: "context.approved-revision-batch-preview/v1", written: false, ok_count: 2, issue_count: 0 });
+  expect(clean.pages.map((page: { changed: boolean }) => page.changed)).toEqual([true, true]);
+  const first = join(root, batch.agent_directory, batch.submission.tasks[0]!.edits);
+  const second = join(root, batch.agent_directory, batch.submission.tasks[1]!.edits);
+  const sectionOf = async (index: number) => /<!-- context:section id="([^"]+)"/u.exec(JSON.parse(await readFile(join(root, batch.tasks[index]!.task_input), "utf8")).target.markdown)![1]!;
+  const request = JSON.parse(await readFile(join(root, batch.tasks[0]!.task_input), "utf8"));
+  const sourceRef = request.target.source_refs[0];
+  const path = request.target.sections[0].references[0].locator.path;
+  await writeFile(first, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: await sectionOf(0),
+    references: [{ source_ref: sourceRef, locator: { path, start_line: 9000, end_line: 9001 } }] }] }));
+  await writeFile(second, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: await sectionOf(1),
+    references: [{ source_ref: "note:elsewhere.md", locator: { path: "elsewhere.md", start_line: 1, end_line: 1 } }] }] }));
+  const flagged = await completeCurrentIndexerAction({ cwd: root, revision, value: batch.submission, managed: true, preview: true }) as unknown as BatchPreview;
+  expect(flagged).toMatchObject({ ok_count: 0, issue_count: 2 });
+  expect(flagged.pages[1]!.issues[0]).toMatchObject({ reason_code: "source-outside-revision" });
+  expect(flagged.pages[0]!.issues[0]!.message.length).toBeGreaterThan(0);
+  expect(await readCandidateRecords(root)).toHaveLength(0);
+  expect(await listing()).toEqual(before);
+}, 120000);
+
+test("batch preview rejects inputs that no longer match the current Route", async () => {
+  const { registerKnowledgeMaintenance } = await import("../project/knowledgeMaintenance.js");
+  const joined = await fixture();
+  await registerKnowledgeMaintenance(joined.root, { id: "late-note", operation: "revise", targets: [{ path: "architecture/usage.md", instruction: "Also mention the note." }] });
+  const afterJoin = await completeCurrentIndexerAction({ cwd: joined.root, revision: joined.revision, value: joined.batch.submission, managed: true, preview: true }) as unknown as BatchPreview & { ok_count: number };
+  expect(afterJoin.ok_count).toBe(1);
+  expect(afterJoin.pages[1]!.issues[0]).toMatchObject({ reason_code: "task-input-stale" });
+  expect((afterJoin as unknown as { next_action: { command: string } }).next_action.command).toContain("action prepare-current");
+
+  const changed = await fixture();
+  await writeFile(join(changed.root, "src/index.ts"), (await readFile(join(changed.root, "src/index.ts"), "utf8")) + "\n// Input changed\n");
+  await expect(completeCurrentIndexerAction({ cwd: changed.root, revision: changed.revision, value: changed.batch.submission, managed: true, preview: true }))
+    .rejects.toMatchObject({ detail: { reason_code: "revision-batch-paused" } });
+
+  const ended = await fixture();
+  await completeCurrentIndexerAction({ cwd: ended.root, revision: ended.revision, value: ended.batch.submission, managed: true });
+  await expect(completeCurrentIndexerAction({ cwd: ended.root, revision: ended.revision, value: ended.batch.submission, managed: true, preview: true }))
+    .rejects.toMatchObject({ detail: { reason_code: "revision-batch-paused" } });
+}, 240000);
+
+test("a stale preview keeps explicit authority in its recovery command", async () => {
+  const { CONTEXT_WORKFLOW_AUTHORITIES } = await import("../project/workflow/workflowTypes.js");
+  const { root, batch, revision } = await fixture();
+  await writeFile(join(root, "src/index.ts"), (await readFile(join(root, "src/index.ts"), "utf8")) + "\n// Input changed\n");
+  await expect(completeCurrentIndexerAction({ cwd: root, revision, value: batch.submission, managed: true, preview: true,
+    authorities: [CONTEXT_WORKFLOW_AUTHORITIES.sourceRead] }))
+    .rejects.toMatchObject({ detail: { reason_code: "revision-batch-paused", next_action: { command: expect.stringContaining("--workflow-authority") } } });
 }, 120000);

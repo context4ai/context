@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -41,6 +42,8 @@ export interface SiteTranslationInspection {
   items: TranslationItem[];
   pending: number;
   orphans: string[];
+  /** Orphans whose approved page no longer exists at all; only these are removed automatically. */
+  removed: string[];
   source_set_digest: string | null;
   resolved_digest: string | null;
   route_satisfied: boolean;
@@ -160,9 +163,13 @@ async function readReceipt(projectRoot: string): Promise<z.infer<typeof receiptS
 export async function inspectSiteTranslations(projectRoot: string, packages: readonly PackageDefinition[]): Promise<SiteTranslationInspection> {
   const locales = translationLocales(packages);
   if (locales.length === 0) {
-    return { locales, items: [], pending: 0, orphans: [], source_set_digest: null, resolved_digest: null, route_satisfied: true };
+    return { locales, items: [], pending: 0, orphans: [], removed: [], source_set_digest: null, resolved_digest: null, route_satisfied: true };
   }
   const articles = await selectedArticles(projectRoot, packages);
+  // Approved pages that exist but no translating package selects are not
+  // removed pages; their translations are left alone.
+  const approvedPaths = new Set((await listApprovedKnowledge(projectRoot)).map(file => file.relPath));
+  const removed: string[] = [];
   const mapEntries = (await readKnowledgeMap(projectRoot))?.entries ?? [];
   const items: TranslationItem[] = [];
   const orphans: string[] = [];
@@ -185,16 +192,21 @@ export async function inspectSiteTranslations(projectRoot: string, packages: rea
     }
     const known = new Set(articles.map(file => file.relPath));
     for (const relPath of await listTranslationFiles(join(projectRoot, TRANSLATIONS_ROOT, locale))) {
-      if (!known.has(relPath)) orphans.push(translationArticlePath(locale, relPath));
+      if (known.has(relPath)) continue;
+      orphans.push(translationArticlePath(locale, relPath));
+      if (!approvedPaths.has(relPath)) removed.push(translationArticlePath(locale, relPath));
     }
   }
   const pending = items.filter(item => item.state !== "current").length;
-  const sourceSetDigest = sha256(JSON.stringify(items.map(item =>
-    [item.locale, item.kind, item.kind === "article" ? item.approved_path : item.key, item.source_digest])));
+  // Translations of removed pages are part of the set: a receipt for an earlier
+  // set (submitted or explicitly skipped) does not cover pages removed afterwards.
+  const itemsKey = items.map(item => [item.locale, item.kind, item.kind === "article" ? item.approved_path : item.key, item.source_digest]);
+  const sourceSetDigest = sha256(JSON.stringify(removed.length ? { items: itemsKey, orphans: [...removed].sort() } : itemsKey));
   const receipt = await readReceipt(projectRoot);
   const resolved = receipt?.source_set_digest ?? null;
-  return { locales, items, pending, orphans: orphans.sort(), source_set_digest: sourceSetDigest, resolved_digest: resolved,
-    route_satisfied: pending === 0 || resolved === sourceSetDigest };
+  return { locales, items, pending, orphans: orphans.sort(), removed: removed.sort(), source_set_digest: sourceSetDigest, resolved_digest: resolved,
+    // Translations of removed pages alone still need the step that removes them.
+    route_satisfied: (pending === 0 && removed.length === 0) || resolved === sourceSetDigest };
 }
 
 const DRAFT_ROOT = ".tmp/agent-payloads/translations";
@@ -202,9 +214,28 @@ const SOURCE_HISTORY_LIMIT = 50;
 
 /** Diff from the approved version a translation was made from. Missing or
  * partial-clone history yields undefined; never trigger a lazy fetch. */
+/** Source text a translation was made from, kept so later rounds can diff
+ * against uncommitted intermediate versions. Missing snapshots are not recovered. */
+function sourceSnapshotPath(digest: string): string {
+  return `${TRANSLATION_RUNTIME_ROOT}/sources/${digest}.md`;
+}
+
+function noIndexDiff(projectRoot: string, before: string, after: string): Promise<string | undefined> {
+  return new Promise(resolveDiff => execFile("git", ["diff", "--no-index", "--no-color", "--no-ext-diff", "--no-textconv", "--", before, after],
+    { cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+      // Exit status 1 means the files differ; anything else is unavailable.
+      const status = (error as { code?: unknown } | null)?.code;
+      resolveDiff(error === null || status === 1 ? stdout.trim() || undefined : undefined);
+    }));
+}
+
 async function sourceDiffSince(projectRoot: string, relPath: string, digest: string | undefined): Promise<string | undefined> {
-  if (digest === undefined || !await canReadRepoObjects(projectRoot)) return undefined;
+  if (digest === undefined) return undefined;
   const path = `knowledge/${relPath}`;
+  if (/^[a-f0-9]{64}$/u.test(digest) && existsSync(join(projectRoot, sourceSnapshotPath(digest)))) {
+    return noIndexDiff(projectRoot, sourceSnapshotPath(digest), path);
+  }
+  if (!await canReadRepoObjects(projectRoot)) return undefined;
   const commits = await optionalRepoGit(projectRoot, ["log", "--format=%H", "-n", String(SOURCE_HISTORY_LIMIT), "--", path]);
   for (const commit of commits?.split("\n").filter(Boolean) ?? []) {
     const content = await optionalRepoGit(projectRoot, ["show", `${commit}:./${path}`]);
@@ -217,6 +248,15 @@ async function sourceDiffSince(projectRoot: string, relPath: string, digest: str
 export async function prepareSiteTranslation(projectRoot: string, packages: readonly PackageDefinition[]) {
   return withProjectWriteLock(projectRoot, "translate-prepare", async () => {
     const inspection = await inspectSiteTranslations(projectRoot, packages);
+    // Nothing to translate, only translations whose source page is gone:
+    // removing them needs no judgement, so do it here instead of an empty submit.
+    if (inspection.pending === 0 && inspection.removed.length > 0) {
+      for (const orphan of inspection.removed) await rm(join(projectRoot, orphan), { force: true });
+      const after = await inspectSiteTranslations(projectRoot, packages);
+      if (after.source_set_digest !== null) await writeReceipt(projectRoot, after.source_set_digest, "submitted");
+      return { outcome: "orphans-removed" as const, removed: inspection.removed, expected_digest: after.source_set_digest,
+        locales: inspection.locales, items: [], orphans: after.orphans, next_action: { command: "context status --format json" } };
+    }
     const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
     const items = [];
     const articles = [];
@@ -248,7 +288,7 @@ export async function prepareSiteTranslation(projectRoot: string, packages: read
       items.push({ ...item, file, draft: kept ? "kept" as const : "generated" as const, source_diff: diff ? diffFile : null });
       articles.push({ locale: item.locale, approved_path: item.approved_path, file });
     }
-    const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans };
+    const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans, removed: inspection.removed };
     const taskPath = `${TRANSLATION_RUNTIME_ROOT}/${TASK_FILE}`;
     const submissionPath = `${TRANSLATION_RUNTIME_ROOT}/submission.yaml`;
     await atomicWrite(join(projectRoot, taskPath), JSON.stringify(task, null, 2) + "\n");
@@ -328,6 +368,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
     const digest = assertExpectedDigest(inspection, input.expected_digest);
     const approved = new Map((await selectedArticles(projectRoot, packages)).map(file => [`knowledge/${file.relPath}`, file]));
     const writes: Array<{ path: string; content: string }> = [];
+    const snapshots = new Map<string, string>();
     const issues: Array<{ locale: string; target: string; issues: string[] }> = [];
     const translatedAt = new Date().toISOString();
     const drafts: string[] = [];
@@ -352,6 +393,7 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
         translation: { locale: article.locale, ...(file.article?.article_id ? { artifact_ref: file.article.article_id } : {}),
           source_digest: approvedArticleDigest(file.content), translated_at: translatedAt } }).trimEnd();
       writes.push({ path: translationArticlePath(article.locale, file.relPath), content: `---\n${head}\n---\n\n${body.trimStart()}` });
+      snapshots.set(sourceSnapshotPath(approvedArticleDigest(file.content)), file.content);
     }
     const mapEntries = new Map(((await readKnowledgeMap(projectRoot))?.entries ?? []).map(entry => [entry.key, entry]));
     const mapUpdates = new Map<string, Array<{ key: string; title: string; digest: string }>>();
@@ -371,10 +413,13 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
       writes.push({ path: mapTranslationPath(locale), content: stringifyYaml({ locale, entries }) });
     }
     for (const write of writes) await atomicWrite(join(projectRoot, write.path), write.content);
+    for (const [path, content] of snapshots) await atomicWrite(join(projectRoot, path), content);
     for (const draft of drafts) for (const path of [draft, `${draft}.diff`]) await rm(join(projectRoot, path), { force: true });
-    for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
+    // Only translations whose page no longer exists; a page a package merely
+    // excludes keeps its translation.
+    for (const orphan of inspection.removed) await rm(join(projectRoot, orphan), { force: true });
     await writeReceipt(projectRoot, digest, "submitted");
-    return { written: writes.map(write => write.path), removed: inspection.orphans };
+    return { written: writes.map(write => write.path), removed: inspection.removed };
   });
 }
 

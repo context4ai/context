@@ -69,7 +69,7 @@ Markdown has reader-facing title and description frontmatter, followed by the
 complete article with stable `context:section` markers. References contain
 `sections`, each with its matching `id` and `references` list. A reference is
 `source_ref` plus `locator: {path, start_line, end_line}` from actual authorized
-text. CLI computes source digests. A fragment may cite at most three distinct
+text. CLI computes source digests. A fragment may cite at most five distinct
 source files and eight regions; an article may have multiple fragments.
 
 When prose names a file, directory or Skill from a cited repository, write its
@@ -115,5 +115,5 @@ same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The per-fragment limits (three source files, eight regions) apply after
+The per-fragment limits (five source files, eight regions) apply after
 resolving and deduplicating positions.

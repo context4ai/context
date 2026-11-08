@@ -344,7 +344,7 @@ changing structure, adding a page or when a section has no unambiguous ID.
 To change a fragment's citations, include `references` alongside its `section_id`:
 each entry supplies `source_ref` and `locator` (`path`, `start_line`, `end_line`).
 Context computes the region fingerprint. This uses the same revision submission,
-with at most three source files and eight regions per fragment. Full Markdown may include a
+with at most five source files and eight regions per fragment. Full Markdown may include a
 `sections` list of reference edits; local section edits may change content,
 references, or both. Omission preserves citations; an empty list removes them.
 
@@ -663,8 +663,17 @@ page-level incoming Markdown links to explicit replacements, and rebinds page
 navigation or removes retired navigation targets while retaining groups.
 Repair fragment links explicitly first: the CLI cannot infer where a split moved
 a paragraph. Without a replacement, repair incoming links before applying.
-Finish active drafts/revisions first; unfinished production targeting a selected
-page must be finished or amended rather than discarded.
+While a revision batch is active and not yet approved, the same command schedules
+the retirement in that batch instead. Its preview lists the follow-up by the entry
+that handles it: pages whose links to the retired page need updating (they join
+the batch), navigation entries that will point to the replacement and keep their
+label or be removed (adjust labels with `context task adjust` if needed), and
+translations that become orphaned (the translation step removes them). The
+retired page's own unfinished draft is dropped; the replacement may be a page new
+in this batch. Nothing is deleted until the batch's final Review apply, which
+computes the retirement on the final drafts in the same write as the approved
+pages. Once a batch is approved, finish its delivery first; unfinished production
+targeting a selected page must be finished or amended rather than discarded.
 
 Follow status and the normal close/version/build flow before delivery. Sources
 and shared assets are not deleted. The response provides a temporary restore
@@ -688,7 +697,11 @@ approved-page revision or source-update queue. Keep `scopes` and `instruction`
 explicit. First call without `refresh`; it authorizes replacing only those
 inputs and blocks page completion while acquisition is pending. Import the
 selected new material, then repeat with `refresh: true` to bind the actual local
-versions and obtain the new Route. Do not submit the old revision. Current
+versions and obtain the new Route. When every selected source is newly added to
+the task and its material is already local (an imported document, or a repository
+at the commit the delivered knowledge already uses), the first call completes the
+adjustment and returns `adjusted` with `acquisition: already-available`; do not
+repeat it. Do not submit the old revision. Current
 prose and queued pages remain; an affected draft returns to writing/review.
 An unrelated queued page does not revoke an unchanged current page's review.
 If a page has already been applied, finish its close/build before changing its
@@ -717,7 +730,7 @@ Revision section edits may supply `references` as `source_ref` plus a
 `locator` containing `path`, `start_line`, and `end_line`. Context computes the
 regional digest. Omitted references preserve the current fragment's citations;
 an explicit empty list removes them, and deleting a fragment removes its
-citations. Each fragment may cite at most three source files and eight regions. Register and
+citations. Each fragment may cite at most five source files and eight regions. Register and
 authorize new material before citing it, then follow normal Review, close and
 build. Article links alone do not authorize reading new sources or prove a claim.
 
@@ -731,5 +744,5 @@ same-level or higher-level heading. A quote is an exact, unique, nonempty
 substring (line endings are normalized). Ambiguous matches return candidate
 line ranges. Both forms resolve against authorized captured text before hashing;
 stored references still contain only `path`, `start_line` and `end_line`.
-The per-fragment limits (three source files, eight regions) apply after
+The per-fragment limits (five source files, eight regions) apply after
 resolving and deduplicating positions.

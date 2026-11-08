@@ -74,6 +74,22 @@ function workflowContextCommand(
   return [...prefix, command.slice("context ".length)].join(" ");
 }
 
+/** A failed command's follow-up keeps the caller's managed mode and explicit
+ * authorities. The revision is not carried over: a failure usually means it changed. */
+export function bindWorkflowFailureDetail(
+  detail: Record<string, unknown>,
+  context: Pick<ContextWorkflowExecutionContext, "managed" | "authorities">,
+): Record<string, unknown> {
+  const execution = { managed: context.managed, authorities: context.authorities };
+  const bound = bindWorkflowExecutionContext(detail, execution);
+  if (!Array.isArray(bound.choices)) return bound;
+  const bindCommand = (command: string) =>
+    (bindWorkflowExecutionContext({ next_action: { command } }, execution).next_action as { command: string }).command;
+  return { ...bound, choices: bound.choices.map(choice => choice !== null && typeof choice === "object" &&
+    typeof (choice as { command?: unknown }).command === "string"
+    ? { ...choice, command: bindCommand((choice as { command: string }).command) } : choice) };
+}
+
 export function bindWorkflowExecutionContext<T>(
   result: T,
   context: ContextWorkflowExecutionContext,

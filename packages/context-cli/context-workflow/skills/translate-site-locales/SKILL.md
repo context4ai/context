@@ -3,7 +3,9 @@ name: translate-site-locales
 description: Translate approved knowledge for the website locales declared in site.locales when the workspace Route selects this action.
 ---
 
-Run `context translate prepare --format json`. The task lists every article and
+Run `context translate prepare --format json`. When nothing needs translating
+and only translations of removed pages remain, it deletes them and returns
+`outcome: orphans-removed`; continue with the returned Route. Otherwise the task lists every article and
 knowledge map title that is missing or stale for each declared locale, with the
 `expected_digest` to submit. Approved knowledge in the primary language remains
 the only source of truth; translations never change it.

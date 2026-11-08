@@ -21,10 +21,10 @@ export const articleSourceReferenceSchema = z.object({
   content_digest: indexerDigestSchema,
 }).strict();
 
-/** A fragment cites at most three distinct source files. Several regions of one
+/** A fragment cites at most five distinct source files. Several regions of one
  * file are allowed, within a total region cap, so a long file does not force the
  * author to merge unrelated lines into one wide range. */
-export const ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT = 3;
+export const ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT = 5;
 export const ARTICLE_FRAGMENT_REGION_LIMIT = 8;
 
 export function articleFragmentReferenceListSchema<T extends z.ZodType<{ source_ref: string; locator: { path: string } }>>(item: T) {

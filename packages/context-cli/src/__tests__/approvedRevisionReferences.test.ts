@@ -94,3 +94,32 @@ test("reference-only section edits preserve Markdown bytes", () => {
   expect(() => prepareRevisionMarkdown(markdown, { markdown,
     sections: [{ section_id: "answer", content: [{ markdown: "Conflicting edit" }] }] }, [])).toThrow();
 });
+
+test("a resubmitted earlier citation keeps its evidence; quote selects the text now at that position", async () => {
+  const root = await mkdtemp(join(tmpdir(), "revision-kept-reference-"));
+  const sourceRef = "note:20260912/source.md";
+  const source = "# Note\nOld implementation\nOther text\n";
+  const reference = createArticleSourceReference(sourceRef, { path: "source.md", start_line: 2, end_line: 2 }, source);
+  const input = { projectRoot: root, sourceRefs: [sourceRef], sectionIds: ["answer"], previous: [{ id: "answer", references: [reference] }] };
+  const resubmit = { section_id: "answer", references: [{ source_ref: sourceRef, locator: { path: "source.md", start_line: 2, end_line: 2 } }] };
+  try {
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    const path = join(root, "sources/note/20260912/source.md");
+    rememberArticleRegion(root, reference, source);
+    // The old implementation moved away; new text now occupies line 2.
+    const changed = "# Note\nNew implementation\nOther text\nOld implementation\n";
+    await writeFile(path, changed);
+    const kept = await prepareRevisionReferences({ ...input, edits: [resubmit] });
+    expect(kept[0]!.references).toEqual([{ ...reference, locator: { ...reference.locator, start_line: 4, end_line: 4 } }]);
+    const reselected = await prepareRevisionReferences({ ...input, edits: [{ section_id: "answer", references: [
+      { source_ref: sourceRef, locator: { path: "source.md", quote: "New implementation" } }] }] });
+    expect(reselected[0]!.references).toEqual([createArticleSourceReference(sourceRef, { path: "source.md", start_line: 2, end_line: 2 }, changed)]);
+    // Without the earlier evidence the resubmission is rejected with both choices.
+    await writeFile(path, "# Note\nNew implementation\nOther text\n");
+    await expect(prepareRevisionReferences({ ...input, edits: [resubmit] })).rejects.toMatchObject({
+      reason: "kept-reference-unresolved", path: ["sections", 0, "references", 0, "locator"],
+      message: expect.stringContaining("use a quote or heading locator") });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

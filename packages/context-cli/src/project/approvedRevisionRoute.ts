@@ -7,6 +7,20 @@ import { readApprovedRevision, assertApprovedRevisionBase, resolveApprovedRevisi
 import { authorityCommandOptions, loadContextWorkflowProvider, projectWorkflowResourceLocation,
   projectWorkflowRouteAction } from "./workflow/workflowProvider.js";
 import type { ContextResolvedWorkflowRoute, ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { atomicWriteFile } from "../lib/atomicWrite.js";
+import type { KnowledgeUpdate } from "./knowledgeUpdate.js";
+
+/** Historical and current excerpts dominate a source update; the Route names
+ * the file and the Agent reads it only for references it is deciding. */
+async function sourceUpdateRouteInput(projectRoot: string, update: KnowledgeUpdate): Promise<Record<string, unknown>> {
+  const { reference_evidence: evidence, ...rest } = update;
+  if (!evidence?.length) return rest;
+  const file = `.tmp/context-runtime/source-update/evidence-${update.revision.replace(/^sha256:/u, "")}.json`;
+  if (!existsSync(join(projectRoot, file))) await atomicWriteFile(join(projectRoot, file), `${JSON.stringify(evidence, null, 2)}\n`);
+  return { ...rest, reference_evidence_file: file, reference_evidence_count: evidence.length };
+}
 
 export async function buildApprovedRevisionRoute(input: {
   projectRoot: string; authorities: readonly ContextWorkflowAuthority[]; managed: boolean;
@@ -40,7 +54,7 @@ export async function buildApprovedRevisionRoute(input: {
   const revision = (update ?? request)!.revision;
   const writingContext = request ? await approvedRevisionContext(input.projectRoot, request.target) : undefined;
   const action = projectWorkflowRouteAction({ action: { ...resolved.action,
-    input: (update ? { stage: "source-update", ...update } : { stage: "approved-revision", instruction: request!.instruction, writing_context: writingContext, program_blocks: request!.program_blocks ?? [],
+    input: (update ? { stage: "source-update", ...await sourceUpdateRouteInput(input.projectRoot, update) } : { stage: "approved-revision", instruction: request!.instruction, writing_context: writingContext, program_blocks: request!.program_blocks ?? [],
       target: request!.target, ...(recovery ? { merge_context: recovery.request.merge_context, recovery: "Merge the latest approved content with the prior draft. Preserve concurrent edits; ask the user when their intent conflicts. Submit the merged Markdown through this exact revision. Review still applies." } : {}), ...(request!.refresh_sources ? { refresh_sources: request!.refresh_sources, next: "Import these explicitly selected sources, then context task adjust --input <input-with-refresh-true> --format json; do not submit page content yet." } : {}), ...(request!.requirements === undefined ? {} : { requirements: request!.requirements }) }) as unknown as JsonValue }, revision, authorities: input.authorities });
   return { protocol: "context.workflow.route.v1", id: resolved.routeId, node: resolved.node,
     reason_code: resolved.reasonCode, revision, availability: resolved.availability,

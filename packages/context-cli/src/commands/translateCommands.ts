@@ -51,12 +51,18 @@ export function registerTranslateCommands(program: Command) {
       return { locale, current: items.filter(item => item.state === "current").length,
         stale: items.filter(item => item.state === "stale").length, missing: items.filter(item => item.state === "missing").length };
     });
-    write({ locales: counts, pending: inspection.pending, orphans: inspection.orphans, route_satisfied: inspection.route_satisfied,
-      ...(inspection.pending > 0 ? { next_action: { command: "context translate prepare --format json" } } : {}) });
+    write({ locales: counts, pending: inspection.pending, orphans: inspection.orphans, removed: inspection.removed, route_satisfied: inspection.route_satisfied,
+      ...(inspection.pending > 0 || inspection.removed.length > 0 ? { next_action: { command: "context translate prepare --format json" } } : {}) });
   });
   command.command("prepare").description("Write the pending translation task").option("--format <format>", "json", "json").action(async () => {
     const root = projectRoot();
     const task = await prepareSiteTranslation(root, await projectPackages(root));
+    if ("outcome" in task) {
+      // Follow-up keeps this session's managed mode and explicit authorities.
+      const execution = { managed: program.opts().workflowManaged === true, authorities: workflowAuthorities(program.opts().workflowAuthority) };
+      write({ ...await withWorkflow(root, task), next_action: { command: workflowStatusCommand(execution) } });
+      return;
+    }
     write({ ...task, next_action: { command: "context translate submit --input <file> --format json" },
       input_example: { expected_digest: task.expected_digest,
         articles: task.items.filter(item => item.kind === "article").slice(0, 1).map(item => ({ locale: item.locale,

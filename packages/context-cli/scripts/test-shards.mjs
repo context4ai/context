@@ -1,5 +1,8 @@
-/** Greedy longest-first assignment; missing observations use the measured median. */
-export function balancedTestShards(files, count, durations) {
+/**
+ * Greedy longest-first assignment; missing observations use the measured median.
+ * `initialMs` seeds each shard with work it already runs in the same job.
+ */
+export function balancedTestShards(files, count, durations, initialMs = []) {
   if (!Number.isSafeInteger(count) || count < 1) throw new Error('Invalid shard count');
   const observed = Object.values(durations);
   if (observed.some(value => !Number.isFinite(value) || value <= 0)) {
@@ -9,7 +12,7 @@ export function balancedTestShards(files, count, durations) {
   const fallback = orderedValues[Math.floor(orderedValues.length / 2)] ?? 1000;
   const weight = file => durations[file] ?? fallback;
   const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
-  const shards = Array.from({ length: count }, () => ({ files: [], durationMs: 0 }));
+  const shards = Array.from({ length: count }, (_, index) => ({ files: [], durationMs: initialMs[index] ?? 0 }));
   for (const file of [...files].sort((a, b) => weight(b) - weight(a) || compare(a, b))) {
     const target = shards.reduce((best, item) =>
       item.durationMs < best.durationMs ||

@@ -260,7 +260,11 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
       instruction: first.instruction, pending_targets: remaining, processed_scopes: request.scopes, requirements: request.requirements,
       ...(first.supporting_sources === undefined ? {} : { supporting_sources: first.supporting_sources }),
       ...(first.create === undefined ? {} : { create: first.create }) });
+    // Maintenance queued while the update was inspected joins its page batch.
+    const { drainQueuedMaintenance } = await import("./knowledgeMaintenance.js");
+    const joined = await drainQueuedMaintenance(input.projectRoot);
     return { outcome: "revisions-prepared" as const, page_count: revisions.length, ...receipt,
+      ...(joined.length ? { joined_maintenance: joined } : {}),
       ...(formatOnly.length ? { format_only: formatOnly, version_exempt: false } : {}) };
   });
 }

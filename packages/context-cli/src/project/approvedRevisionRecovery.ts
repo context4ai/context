@@ -1,7 +1,7 @@
 import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { hydrateApprovedKnowledgeMarkdown, readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
-import { approvedRevisionCandidateApplied } from "./approvedRevisionBatch.js";
+import { approvedRevisionCandidateDelivered } from "./approvedRevisionBatch.js";
 import { pendingAfterReopen, requestDigest, targetBytes, type ApprovedRevision } from "./approvedRevision.js";
 
 /** Observe changed approved bytes without writing or accepting them. A merge
@@ -25,7 +25,7 @@ export async function approvedRevisionRecovery(root: string, request: ApprovedRe
     const actual = bytes === undefined ? null : durableContentDigest(bytes);
     if (actual === target.base_digest) continue;
     if (candidate && !rows.some(row => row.candidate_id === candidate.candidate_id) &&
-      await approvedRevisionCandidateApplied(root, candidate, bytes)) continue;
+      await approvedRevisionCandidateDelivered(root, request, candidate, bytes)) continue;
     const markdown = bytes === undefined ? target.markdown : hydrateApprovedKnowledgeMarkdown({
       content: bytes, relPath: target.previous_path ?? target.path,
       metadata: await readApprovedKnowledgeMetadataIndex(root),
