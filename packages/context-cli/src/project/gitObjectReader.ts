@@ -17,6 +17,18 @@ export class SourceReadError extends ContextError {
   }
 }
 
+/** Git answers "missing" both for a path absent from the commit and for an object a
+ * partial clone has not downloaded. The local tree tells them apart without network. */
+async function missingReason(root: string, expression: string): Promise<SourceUnavailableError> {
+  const separator = expression.indexOf(":./");
+  const commit = expression.slice(0, separator), path = expression.slice(separator + 3);
+  const listed = await new Promise<string>(resolve => execFile("git", ["-C", root, "ls-tree", "-z", commit, "--", path],
+    { timeout: 10_000, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }, (error, stdout) => resolve(error ? "" : String(stdout))));
+  return listed.trim()
+    ? new SourceUnavailableError("The cited file exists in the fixed source commit, but its content is not downloaded to the local checkout", "source-content-missing")
+    : new SourceUnavailableError("The cited file does not exist in the fixed source commit", "source-file-missing");
+}
+
 type Pending = { expression: string; resolve: (bytes: Buffer) => void; reject: (error: Error) => void; attempts: number };
 /** A short-lived pipe per checkout, shared by all files in an observation. The
  * protocol is framed by byte length, never by newlines in a blob's contents. */
@@ -81,7 +93,8 @@ export function createGitObjectReader(options: { idleMs?: number; progressTimeou
           const line = bytes.subarray(0, end).toString("utf8");
           bytes = bytes.subarray(end + 1);
           if (line.endsWith(" missing")) {
-            pending.shift()!.reject(new SourceUnavailableError("The cited file does not exist in the fixed source commit", "source-file-missing"));
+            const item = pending.shift()!;
+            void missingReason(root, item.expression).then(error => item.reject(error));
             continue;
           }
           const match = /^[a-f0-9]+ (\w+) (\d+)$/u.exec(line);

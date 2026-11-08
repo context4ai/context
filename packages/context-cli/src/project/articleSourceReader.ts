@@ -39,6 +39,23 @@ function missingCommit(commit: string): SourceUnavailableError {
   return new SourceUnavailableError(`Commit ${commit} is not available in the registered checkout; fetch and check out the registered commit, then retry`, "source-history-missing");
 }
 
+/** Fetch commits the checkouts do not have yet (the registered one when omitted), one
+ * attempt each. Only `update --pending` calls this; every reader stays local. */
+export async function fetchSourceCommits(projectRoot: string, requests: ReadonlyArray<{ source_ref: string; commit?: string }>): Promise<void> {
+  const workspace = await realpath(projectRoot);
+  const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+  const available = commitAvailability(new Map(), true);
+  for (const request of requests) {
+    if (!request.source_ref.startsWith("repo:")) continue;
+    const name = request.source_ref.slice("repo:".length);
+    const entry = registry.repos.find(item => item.id === name || item.name === name);
+    const commit = request.commit ?? entry?.ref;
+    if (!entry || !commit || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(commit)) continue;
+    const root = await realpath(resolve(workspace, entry.materializedAt)).catch(() => undefined);
+    if (root) await available(root, commit);
+  }
+}
+
 /** Reads a registered repository file at an earlier commit; callers must verify
  * the result against a recorded digest before trusting it. */
 export async function registeredRepoHistoryReader(projectRoot: string) {
@@ -48,7 +65,8 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
   const fetched = new Map<string, Promise<boolean>>();
   const reads = new Map<string, Promise<string>>();
   const objects = commandGitObjectReader();
-  const available = commitAvailability(fetched);
+  // Local only: `update --pending` fetches the processed commits before reading history.
+  const available = commitAvailability(fetched, false);
   async function readAt(directory: string, path: string, commit: string): Promise<string> {
     if (!await available(directory, commit)) throw missingCommit(commit);
     return decodeSource(await objects.read(directory, commit, path));
@@ -83,12 +101,12 @@ function decodeSource(bytes: Uint8Array): string {
  * Repository citations always read the registered commit, never mutable files. */
 /** Only a source update may fetch a registered commit; status, verification and
  * production reads never touch the network or the source checkout. */
-export async function registeredArticleSourceReader(projectRoot: string, options: { fetchMissingCommits?: boolean } = {}) {
+export async function registeredArticleSourceReader(projectRoot: string) {
   let repoContentRead: ReturnType<typeof repoContentReferenceReader> | undefined;
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
   const objects = commandGitObjectReader();
-  const available = commitAvailability(new Map(), options.fetchMissingCommits === true);
+  const available = commitAvailability(new Map(), false);
   const sources = new Map<string, { kind: string; entry: SourcesRegistry["repos"][number]
     | SourcesRegistry["files"][number] | SourcesRegistry["larks"][number] | SourcesRegistry["notes"][number] }>();
   for (const [kind, entries] of [["repo", registry.repos], ["file", registry.files],

@@ -84,3 +84,24 @@ export async function prepareRevisionReferences(input: {
   }
   return result;
 }
+
+export interface RemovedCitation { section_id: string; source_ref: string; path: string; start_line: number; end_line: number }
+
+/** Earlier citations a revision no longer carries. A citation is kept when its section
+ * still cites the same source and file with the same content digest, so a line move in
+ * the same file is kept; the same text from another file or source is not. */
+export function removedCitations(previous: ArticleStructureEntry["sections"], next: ArticleStructureEntry["sections"]): RemovedCitation[] {
+  const removed: RemovedCitation[] = [];
+  for (const section of previous) {
+    const current = next.find(item => item.id === section.id)?.references ?? [];
+    for (const reference of section.references) {
+      const kept = current.some(item => item.source_ref === reference.source_ref &&
+        item.locator.path === reference.locator.path && item.content_digest === reference.content_digest);
+      if (!kept) removed.push({ section_id: section.id, source_ref: reference.source_ref, path: reference.locator.path,
+        start_line: reference.locator.start_line, end_line: reference.locator.end_line });
+    }
+  }
+  return removed;
+}
+
+export const REMOVED_CITATIONS_NOTE = "These earlier citations are no longer in their sections. If you meant to replace or remove them, nothing needs doing; otherwise repeat each with its earlier lines to keep that evidence.";

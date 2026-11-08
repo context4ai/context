@@ -32,8 +32,14 @@ Follow each changed reference's `evidence_ref` into the JSON array in
 digest-verified historical text and the current excerpt. Read only the entries
 for references you are deciding; the Route does not repeat them inline. Missing history is
 explicitly marked unavailable. The current excerpt is from the old position
-or nearby lines, not a claimed replacement; only a `format_only_proposals`
-entry supplies a mapped replacement for your decision.
+or nearby lines, not a claimed replacement. For documents, a
+`format_only_proposals` entry supplies mapped replacements. A repository
+citation's entry may carry `suggested`: where the source diff moves the old lines,
+with their current text and a ready `locator` to cite if that text still
+supports the section. It saves computing line numbers; it is not a semantic
+match, and submission checks it again. When the mapped lines are ones an
+earlier citation used, the suggested locator is a quote, because repeating
+those line numbers keeps the earlier evidence.
 
 When `format_only_proposals` is present, compare every proposed old/new region.
 Only if the document's changes preserve meaning, keep the affected page bodies
@@ -45,7 +51,13 @@ If any mapping is missing or uncertain, use normal revision. A format-only
 decision does not authorize publication or suppress unrelated version changes.
 
 Also inspect additions and shared dependencies in the source change. Existing
-page references cannot discover every new topic. List necessary new pages in `new_topics`, each with a readable `path` in an existing
+page references cannot discover every new topic. For repositories,
+`uncited_changes` lists the changed files no approved page cites, grouped by
+directory with added, modified and deleted counts; `new_directory` marks a
+directory the processed commit did not have. Lock files and generated output
+are left out. An entry with `unavailable` means those changes are unknown, not
+absent. Start from new directories and read the diff only for groups that look
+like lasting knowledge. List necessary new pages in `new_topics`, each with a readable `path` in an existing
 collection, `title`, registered `source_refs` and an `instruction` describing the
 reader task and material to use. Reuse the established purpose and page forms.
 Use an empty list only when existing pages cover the change or the additions

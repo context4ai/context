@@ -5,7 +5,7 @@ import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePag
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { validateArticleStructureEntries, indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
+import { type ArticleStructureEntry, validateArticleStructureEntries, indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
   processedVersionForScope, } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { prepareApprovedRevision, readApprovedRevision, targetBytes } from "./approvedRevision.js";
@@ -25,7 +25,10 @@ import { inspectPendingSourceUpdates } from "./pendingSourceUpdates.js";
 import { beginFormatOnlyUpdate } from "./formatOnlyUpdate.js";
 import { readMissingLarkResources } from "./larkCaptureFreshness.js";
 import { markSubmissionState } from "./submissionState.js";
+import { uncitedRepositoryChanges, type UncitedChanges } from "./uncitedRepositoryChanges.js";
 import { collectReferenceEvidence, referenceEvidenceKey, type ReferenceEvidence } from "./articleReferenceObservation.js";
+import { fetchSourceCommits } from "./articleSourceReader.js";
+import { prepareRepositoryContents, type RepositoryContentPreparation } from "./repoContentPrefetch.js";
 
 export const knowledgeUpdateInputSchema = z.object({
   scopes: z.array(z.object({ requirement_ref: z.string().min(1), source_ref: z.string().min(1),
@@ -46,6 +49,7 @@ const updateSchema = z.object({
   changed_references: z.array(z.object({ path: z.string(), section_id: z.string(), state: z.enum(["changed", "unavailable", "not-found", "ambiguous"]),
     source_ref: z.string(), locator: z.unknown(), reason: z.string().optional(), evidence_ref: z.string().optional() }).strict()).optional(),
   reference_evidence: z.array(z.custom<ReferenceEvidence>()).optional(),
+  uncited_changes: z.array(z.custom<UncitedChanges>()).optional(),
   reference_groups: z.object({ automatic: z.array(z.string()), needs_decision: z.array(z.string()), unavailable: z.array(z.string()) }).strict().optional(),
   outside_scope: z.array(z.object({ path: z.string(), section_id: z.string(), source_ref: z.string(), state: z.string(), reason: z.string().optional() }).strict()).optional(),
   expand_scope: z.object({ command: z.string(), source_refs: z.array(z.string()) }).strict().optional(),
@@ -63,6 +67,34 @@ export async function readKnowledgeUpdate(projectRoot: string): Promise<Knowledg
   const { revision, ...payload } = update;
   if (indexerProtocolDigest(payload) !== revision) throw new TypeError("Source update request digest is invalid");
   return update;
+}
+
+/** A registered commit or current contents the checkout cannot provide would make every
+ * affected citation a candidate; stop and report the facts. How to restore them depends
+ * on the environment, so no fixed remedy is prescribed. */
+function stopOnUnreadableSources(unresolved: Awaited<ReturnType<typeof inspectSettledReferences>>["unresolved"],
+  prepared: readonly RepositoryContentPreparation[], network: boolean): void {
+  const missingCommits = [...new Set(unresolved.filter(item => item.reason === "source-history-missing")
+    .map(item => item.reference.source_ref))];
+  if (missingCommits.length) {
+    throw new TypeError(`The registered commit of ${missingCommits.join(", ")} is not in its source checkout${network ? " and could not be fetched" : ""}. ` +
+      "Check that the registered commit SHA exists in the remote repository. " + (network
+        ? "If it does, fetch and check out the registered commit in the source checkout (see context source list --format json), then rerun context update --pending --format json."
+        : "context update --pending fetches it; an explicit update reads only what the checkout has, so fetch and check out the commit first, then rerun this update."));
+  }
+  const contentMissing = [...new Set(unresolved.filter(item => item.reason === "source-content-missing")
+    .map(item => item.reference.source_ref))];
+  if (contentMissing.length) {
+    const facts = contentMissing.map(source => {
+      const result = prepared.find(item => item.source_ref === source);
+      const count = unresolved.filter(item => item.reason === "source-content-missing" && item.reference.source_ref === source)
+        .map(item => item.reference.locator.path).filter((path, index, all) => all.indexOf(path) === index).length;
+      return `${source}${result ? ` at ${result.commit.slice(0, 12)}` : ""}: ${count} cited file(s) exist in the commit but their contents are not downloaded` +
+        (result?.reason ? ` (download failed: ${result.reason})` : "");
+    });
+    throw new TypeError(`${facts.join("; ")}. Make these contents available in the source checkout as suits this environment, then rerun ` +
+      (network ? "context update --pending --format json." : "this update (an explicit update does not download; context update --pending does)."));
+  }
 }
 
 /** `pending` processes registered repository commits that moved past their
@@ -100,16 +132,38 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const articles = validateArticleStructureEntries(structure.parsed.articles ?? []);
     const cited = articles.filter(article => article.sections.some(section => section.references.some(reference =>
       scopes.some(scope => repoContentScopeMatches(scope.source_ref, reference.source_ref)))));
-    const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled,
-      { fetchMissingCommits: true });
-    // A registered commit the checkout cannot provide makes every citation unreadable;
-    // stop before turning all of them into candidates.
-    const missingCommits = [...new Set(inspected.unresolved.filter(item => item.reason === "source-history-missing")
-      .map(item => item.reference.source_ref))];
-    if (missingCommits.length) {
-      throw new TypeError(`The registered commit of ${missingCommits.join(", ")} is not available in its checkout and could not be fetched. ` +
-        "Fetch and check out the registered commit in the source checkout (see context source list --format json), then rerun context update --pending --format json.");
+    const citedPaths = (sourceRef: string, from: readonly ArticleStructureEntry[]) => [...new Set(from.flatMap(article =>
+      article.sections.flatMap(section => section.references.filter(reference => reference.source_ref === sourceRef)
+        .map(reference => reference.locator.path))))];
+    const repoScopes = [...new Set(scopes.map(scope => scope.source_ref).filter(source => source.startsWith("repo:")))];
+    // Uncited changes compare the processed commit with the new one.
+    const comparisons = repoScopes.flatMap(source => {
+      const scope = scopes.find(item => item.source_ref === source);
+      const from = scope ? processedVersionForScope(settled, scope) : undefined;
+      return scope && typeof from === "string"
+        ? [{ source_ref: source, from, to: scope.processed_version, cited: new Set(citedPaths(source, articles)) }] : [];
+    });
+    // Only `update --pending` uses the network, once and before any read: the new and
+    // processed commits (one shared attempt each), then the cited files' contents that a
+    // partial clone lacks. An explicit update reads what the checkouts already have.
+    const network = options.pending === true;
+    let prepared: Awaited<ReturnType<typeof prepareRepositoryContents>> = [];
+    if (network) {
+      await fetchSourceCommits(projectRoot, [...repoScopes.map(source_ref => ({ source_ref })),
+        ...comparisons.map(item => ({ source_ref: item.source_ref, commit: item.from }))]);
+      prepared = await prepareRepositoryContents(projectRoot, repoScopes.map(source => ({ source_ref: source, paths: citedPaths(source, cited) })));
     }
+    const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled);
+    stopOnUnreadableSources(inspected.unresolved, prepared, network);
+    // History is optional evidence: prepare old contents only for citations that need it,
+    // and continue without it when it cannot be downloaded.
+    if (network) await prepareRepositoryContents(projectRoot, repoScopes.flatMap(source => {
+      const scope = scopes.find(item => item.source_ref === source);
+      const previous = scope ? processedVersionForScope(settled, scope) : undefined;
+      const paths = [...new Set(inspected.unresolved.filter(item => item.reference.source_ref === source && item.state !== "unavailable")
+        .map(item => item.reference.locator.path))];
+      return typeof previous === "string" && paths.length ? [{ source_ref: source, commit: previous, paths }] : [];
+    })).catch(() => []);
     const changedPaths = new Set(inspected.unresolved.map(item => item.path));
     const candidates = await Promise.all(cited.filter(article => changedPaths.has(article.path) || article.sections.some(section => section.references.some(reference => reference.source_ref.startsWith("repo-content:"))))
       .map(async article => {
@@ -141,8 +195,13 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const unavailable = new Set(inspected.unresolved.filter(item => item.state === "unavailable").map(item => item.path));
     const groups = { automatic: scopePages, needs_decision: candidates.filter(item => !unavailable.has(item.path)).map(item => item.path),
       unavailable: [...unavailable].sort() };
+    // Changes no approved page cites can still be new knowledge; list them for the scope decision.
+    const uncited = await uncitedRepositoryChanges(projectRoot, comparisons).catch(() => []);
     const payload = { protocol: "context.source-update/v1" as const, scopes, requirements, candidates,
-      reference_evidence: await collectReferenceEvidence(projectRoot, inspected.unresolved.map(item => item.reference), settled),
+      ...(uncited.length ? { uncited_changes: uncited } : {}),
+      reference_evidence: await collectReferenceEvidence(projectRoot, inspected.unresolved.map(item => item.reference), settled,
+        cited.flatMap(article => article.sections.flatMap(section => section.references.map(reference => ({ source_ref: reference.source_ref,
+          path: reference.locator.path, start_line: reference.locator.start_line, end_line: reference.locator.end_line }))))),
       format_only_proposals: await proposeFormatOnlyReferences(projectRoot, cited, scopes, settled),
       reference_groups: groups,
       ...(missingResources.length ? { missing_resources: missingResources } : {}),

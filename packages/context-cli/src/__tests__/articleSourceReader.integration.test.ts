@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import YAML from "yaml";
 import { join } from "node:path";
-import { registeredArticleSourceReader } from "../project/articleSourceReader.js";
+import { fetchSourceCommits, registeredArticleSourceReader } from "../project/articleSourceReader.js";
 import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
 
 test("code citation and diagnostic reads both use the fixed commit despite local changes", async () => {
@@ -55,12 +55,15 @@ test("only a source update fetches a registered commit missing from the checkout
     const local = await registeredArticleSourceReader(root);
     await expect(local(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts")).rejects.toMatchObject({ detail: { reason_code: "source-history-missing" } });
     expect(() => git(checkout, "cat-file", "-e", `${next}^{commit}`)).toThrow();
-    const reader = await registeredArticleSourceReader(root, { fetchMissingCommits: true });
+    // Only the update's explicit preparation fetches; the reader then reads locally.
+    await fetchSourceCommits(root, [{ source_ref: DOCUMENT_REVISION_SOURCE_REF }]);
+    const reader = await registeredArticleSourceReader(root);
     expect(await reader(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts", true)).toBe("export const answer = 43;\n");
 
     registry.sources[0].modules[0].git.ref = "0".repeat(40);
     await writeFile(path, YAML.stringify(registry));
-    const missing = await registeredArticleSourceReader(root, { fetchMissingCommits: true });
+    await fetchSourceCommits(root, [{ source_ref: DOCUMENT_REVISION_SOURCE_REF }]);
+    const missing = await registeredArticleSourceReader(root);
     await expect(missing(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts")).rejects.toMatchObject({ detail: { reason_code: "source-history-missing" } });
   } finally {
     await rm(root, { recursive: true, force: true });

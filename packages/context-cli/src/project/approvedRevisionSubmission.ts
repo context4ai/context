@@ -1,3 +1,4 @@
+import { removedCitations, REMOVED_CITATIONS_NOTE } from "./approvedRevisionReferences.js";
 import { join } from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
@@ -139,9 +140,11 @@ export async function completeApprovedRevisionSubmission(input: {
         const { completeCurrentIndexerAction } = await import("./indexerCurrentAction.js");
         return completeCurrentIndexerAction({ cwd: input.projectRoot, revision, value: semantic, managed: input.managed === true, authorities });
       }), { fresh: true, managed: input.managed === true });
-      const receipt = result as { outcome?: string; submission_state?: SubmissionState; workflow?: typeof workflow; next_preparation_error?: string };
+      const receipt = result as { outcome?: string; submission_state?: SubmissionState; workflow?: typeof workflow; next_preparation_error?: string;
+        removed_citations?: unknown[]; removed_citations_note?: string };
       state = receipt.submission_state ?? "committed";
-      outcomes.push({ task_key: task.task, input: task.input, outcome: receipt.outcome ?? "candidate-prepared", committed: state === "committed" });
+      outcomes.push({ task_key: task.task, input: task.input, outcome: receipt.outcome ?? "candidate-prepared", committed: state === "committed",
+        ...(receipt.removed_citations?.length ? { removed_citations: receipt.removed_citations, removed_citations_note: receipt.removed_citations_note } : {}) });
       workflow = receipt.workflow;
       const next = workflow?.current;
       if (receipt.next_preparation_error || !next || next.action?.id !== "author-approved-revision" || next.availability !== "immediate") {
@@ -235,8 +238,10 @@ async function previewApprovedRevisionSubmission(input: { projectRoot: string; r
       const content = "markdown" in semantic ? { markdown: semantic.markdown, ...(semantic.sections === undefined ? {} : { sections: semantic.sections }) }
         : { sections: semantic.sections };
       const { markdown, references } = await composeRevisionCandidate(input.projectRoot, request, content, { remember: false });
+      const removed = removedCitations(request.target.sections, references);
       pages.push({ task: task.task, path: request.target.path, ok: true, issues: [],
-        changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections) });
+        changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections),
+        ...(removed.length ? { removed_citations: removed, removed_citations_note: REMOVED_CITATIONS_NOTE } : {}) });
     } catch (error) {
       pages.push({ task: task.task, ok: false, issues: [issue(error)] });
     }
