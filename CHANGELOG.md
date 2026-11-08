@@ -11,6 +11,7 @@ All notable changes to Context are documented here.
 - A fragment may cite up to five distinct source files (previously three); the eight-region limit is unchanged. Earlier CLI versions reject such fragments.
 - The Review report lists every navigation change, including entries for pages outside the batch, and the command output includes the same list. Source-update evidence moves out of the Route into a file. Translation tasks diff against the source text that was last translated, even when it was never committed.
 - Clearer next steps: rejected batch submissions offer correcting an out-of-scope citation or adjusting scope; fully accepted batches are no longer labelled paused; `task adjust` completes in one call when newly added material is already local; `review html --open` without a graphical session returns the path to open instead of calling `xdg-open`; YAML errors from unquoted `: ` suggest quoting.
+- Routine updates: a scheduled "routine update" request follows one documented procedure (resume earlier work, check sources for changes before fetching, one batch at a time within a time budget, merge per batch, publish once), configured by the host's `ROUTINE_POLICY`; the trigger only narrows the scope. Routine runs keep the top-level navigation and report proposed changes instead of waiting. When the host allows upgrading to a minimum version, a missing CLI is installed once instead of stopping.
 
 ## 0.7.92 - 2026-11-07
 
