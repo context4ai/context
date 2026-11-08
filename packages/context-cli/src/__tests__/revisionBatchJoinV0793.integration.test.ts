@@ -313,3 +313,27 @@ test("an interrupted rollback settles joined requests on retry", async () => {
   expect(await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: preview.revision })).toMatchObject({ action: "already-applied" });
   expect((await readMaintenance(root)).joined).toBeUndefined();
 }, 120_000);
+
+test("retirement blockers get a fix that matches their kind", async () => {
+  const { writeFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { retireArticles } = await import("../project/articleRetirement.js");
+  const { writeReviewHtml } = await import("../project/reviewHtml.js");
+  const root = await linkedKnowledge();
+  await writeFile(join(root, "src/package-templates/kb/extra.md"), "See [the legacy guide](knowledge:architecture/legacy).\n");
+  await prepareApprovedRevision({ projectRoot: root, selector: "architecture/usage.md", instruction: "Absorb the legacy guide." });
+  const value = { reason: "Merged into usage", targets: [{ path: "architecture/legacy.md" }] };
+  const preview = await retireArticles({ projectRoot: root, value }) as unknown as { revision: string };
+  await retireArticles({ projectRoot: root, value, apply: true, plan_digest: preview.revision });
+  for (let page = 0; page < 2; page++) {
+    const current = (await readApprovedRevision(root))!;
+    await completeApprovedRevision({ projectRoot: root, revision: current.revision, markdown: current.target.markdown.replace("value 42.", `value 42. Page ${page}.`) });
+  }
+  const report = await writeReviewHtml({ projectRoot: root, all: true }) as unknown as
+    { retirement: { blockers: Array<{ path: string; fix: { command: string; instruction: string } }> } };
+  const byPath = new Map(report.retirement.blockers.map(blocker => [blocker.path, blocker.fix]));
+  expect(byPath.get("knowledge/architecture/overview.md")?.command).toContain("context revise 'architecture/overview.md'");
+  expect(byPath.get("knowledge/architecture/overview.md")?.command).toContain("otherwise remove or reword");
+  expect(byPath.get("src/package-templates/kb/extra.md")?.instruction).toContain("by hand");
+  expect(byPath.get("src/package-templates/kb/extra.md")?.command).not.toContain("revise");
+}, 180_000);

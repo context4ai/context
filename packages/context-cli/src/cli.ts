@@ -14,6 +14,8 @@ import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js"
 import { registerProjectActionCommands } from "./commands/actionCommands.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
 import { ContextError } from "./lib/errors.js";
+import { bindWorkflowFailureDetail } from "./project/workflow/workflowExecutionContext.js";
+import type { ContextWorkflowAuthority } from "./project/workflow/workflowTypes.js";
 import { ErrorCategory } from "./lib/cliFeedback.js";
 import { ExitCode } from "./types/exitCode.js";
 import { readPackageVersion } from "./lib/packageVersion.js";
@@ -116,6 +118,10 @@ function assertKnownTopLevelCommand(argv: string[], program: Command): void {
   }
 }
 
+/** Root workflow options of the running command, so a failure's follow-up
+ * command keeps the same managed mode and authorities as a success would. */
+let failureExecution: { managed: boolean; authorities: ContextWorkflowAuthority[] } | undefined;
+
 export function handleCliFailure(
   err: unknown,
   options: {
@@ -131,7 +137,7 @@ export function handleCliFailure(
   // category token. ContextError carries a `category` in its detail object;
   // fall back to inferred/unknown for errors without structured detail.
   if (err instanceof ContextError) {
-    const detail = err.detail ?? {};
+    const detail = failureExecution && err.detail ? bindWorkflowFailureDetail(err.detail, failureExecution) : err.detail ?? {};
     const category = typeof detail.category === "string" ? detail.category : inferErrorCategory(err.message);
     // Strip `category` from the rest so we don't print it twice.
     const rest = { ...detail };
@@ -155,6 +161,7 @@ export function handleCliFailure(
 }
 
 export function createCliProgram(): Command {
+  failureExecution = undefined;
   const program = new Command();
   program
     .name("context")
@@ -180,6 +187,10 @@ export function createCliProgram(): Command {
     );
   program.hook("preAction", async (rootCommand) => {
     const options = rootCommand.opts() as Record<string, unknown>;
+    const rootAuthorities = workflowAuthorities(options.workflowAuthority);
+    if (options.workflowManaged === true || rootAuthorities.length > 0) {
+      failureExecution = { managed: options.workflowManaged === true, authorities: rootAuthorities };
+    }
     if (typeof options.workflowRevision === "string") {
       const authorities = contextWorkflowAuthorities({
         managed: options.workflowManaged === true,

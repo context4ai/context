@@ -61,3 +61,15 @@ test("queued maintenance defers translation and version recording until the queu
   expect(deferred.translation.route_satisfied).toBe(true);
   expect(deferred.version.recording_satisfied).toBe(true);
 });
+
+test("a failed command's follow-up keeps the caller's root workflow options", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const cwd = await tempRoot();
+  const run = (args: string[]) => spawnSync(process.execPath, [join(import.meta.dir, "../cli.ts"), ...args],
+    { cwd, encoding: "utf8", env: { ...process.env, CONTEXT_RUNTIME_EVENTS_DISABLED: "1" } });
+  const withContext = run(["--workflow-managed", "--workflow-authority", "context.repository-restore", "task", "maintain"]);
+  expect(withContext.status).not.toBe(0);
+  expect(withContext.stderr).toContain("context --workflow-managed --workflow-authority 'context.repository-restore' task maintain --schema --format json");
+  const plain = run(["task", "maintain"]);
+  expect(plain.stderr).toContain('"command": "context task maintain --schema --format json"');
+});

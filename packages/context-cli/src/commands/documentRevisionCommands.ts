@@ -132,7 +132,11 @@ export function registerDocumentRevisionCommand(program: Command): void {
         missingNext: "Provide path (approved page) and reason (why the change is mechanical).",
         readFailureNext: "Use an input file in this workspace.", parseFailureNext: "Provide valid YAML or JSON." });
       const { recordMechanicalFix } = await import("../project/mechanicalFixes.js");
-      process.stdout.write(`${JSON.stringify(await recordMechanicalFix(requireProjectRoot(), value))}\n`);
+      const { bindWorkflowExecutionContext } = await import("../project/workflow/workflowExecutionContext.js");
+      const { workflowAuthorities } = await import("../project/workflow/workflowCommandOptions.js");
+      const root = program.opts() as { workflowManaged?: boolean; workflowAuthority?: unknown };
+      process.stdout.write(`${JSON.stringify(bindWorkflowExecutionContext(await recordMechanicalFix(requireProjectRoot(), value),
+        { managed: root.workflowManaged === true, authorities: workflowAuthorities(root.workflowAuthority) }))}\n`);
     });
   task.command("advance-maintenance").description("Execute the current Graph-selected maintenance transition")
     .requiredOption("--revision <digest>", "current maintenance Route revision")

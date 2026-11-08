@@ -72,6 +72,20 @@ function resolveOutputPath(projectRoot: string, outPath: string | undefined, rev
   return isAbsolute(outPath) ? outPath : resolve(projectRoot, outPath);
 }
 
+/** Each blocker kind has its own fix: an article draft is revised, a navigation
+ * entry is adjusted, a package template is edited by hand. */
+function retirementBlockerFix(path: string): { command: string; instruction: string } {
+  if (path.startsWith("knowledge/") && path.endsWith(".md")) {
+    const page = path.slice("knowledge/".length).replace(/'/gu, "'\\''");
+    return { command: `context revise '${page}' --instruction "Update links to the retired page: point them at its replacement when there is one, otherwise remove or reword them, and update their link text." --format json`,
+      instruction: "Revise this draft in the current batch." };
+  }
+  if (path === KNOWLEDGE_MAP_PATH) return { command: "context task adjust --inspect --format json",
+    instruction: "Rebind or remove this navigation entry, which points into the retired page, through the returned adjustment input." };
+  return { command: "context status --format json",
+    instruction: `Edit the link in ${path} by hand (it is a package template, not an article), then regenerate the report.` };
+}
+
 export async function writeReviewHtml(input: {
   projectRoot: string;
   collection?: KnowledgeCollection;
@@ -113,16 +127,16 @@ export async function writeReviewHtml(input: {
   const unplaced = model.pages.filter(page => page.candidate_id && !menu.has(page.id) &&
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));
+  const retirementFixes = model.retirement?.blockers.map(blocker => ({ ...blocker, fix: retirementBlockerFix(blocker.path) }));
   return {
     navigation: { current_revision: (await readKnowledgeMap(input.projectRoot))?.revision ?? null,
       structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced,
       changes: model.navigationChanges },
-    ...(model.retirement ? { retirement: model.retirement } : {}),
     ...(unplaced.length ? { next_action: { command: "context task adjust --input - --format json",
       message: "Bind the listed drafts to suitable existing categories before requesting review, then regenerate this report. Content approval is not required for navigation." } } : {}),
-    ...(!unplaced.length && model.retirement?.blockers.length ? { next_action: {
-      command: `context revise '${model.retirement.blockers[0]!.path.replace(/^knowledge\//u, "").replace(/'/gu, "'\\''")}' --instruction "Point links to the retired page at its replacement and update their link text." --format json`,
-      message: "Drafts in this batch still link to a page retired with it. Revise each listed draft (this command is for the first) before requesting approval; approval cannot apply while they remain." } } : {}),
+    ...(retirementFixes ? { retirement: { ...model.retirement!, blockers: retirementFixes } } : {}),
+    ...(!unplaced.length && retirementFixes?.length ? { next_action: { ...retirementFixes[0]!.fix,
+      message: "Some links still point to a page retired in this batch. Fix each item in retirement.blockers as its fix says before requesting approval; approval cannot apply while they remain." } } : {}),
     path: outPath,
     candidates: candidates.length,
     candidate_set_digest: candidateSetHash(candidates.map(({ record }) => record)),

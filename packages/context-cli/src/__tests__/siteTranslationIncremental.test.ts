@@ -153,3 +153,22 @@ test("a receipt for an earlier translation set does not hide translations orphan
     expect((await inspectSiteTranslations(root, [pkg])).route_satisfied).toBe(true);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a translation whose page is only excluded from the package is not removed", async () => {
+  const { root, original, destination } = await workspace("translation-excluded-");
+  try {
+    const { inspectSiteTranslations } = await import("../project/siteTranslation.js");
+    const other = join(root, "knowledge/codeindex/b.md");
+    const otherTranslation = join(root, "translations/zh-CN/codeindex/b.md");
+    await writeFile(original, source);
+    await writeFile(destination, stored(approvedArticleDigest(source)));
+    await writeFile(other, source);
+    await writeFile(otherTranslation, stored(approvedArticleDigest(source)));
+    const excluding = { ...pkg, select: { exclude: ["codeindex/b.md"] } } as unknown as PackageDefinition;
+    const inspection = await inspectSiteTranslations(root, [excluding]);
+    expect(inspection).toMatchObject({ pending: 0, orphans: ["translations/zh-CN/codeindex/b.md"], removed: [], route_satisfied: true });
+    const task = await prepareSiteTranslation(root, [excluding]);
+    expect("outcome" in task).toBe(false);
+    expect(existsSync(otherTranslation)).toBe(true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
