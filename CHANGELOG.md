@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.94 - 2026-11-08
 
 - Routine updates revise affected articles as the current state of the knowledge, without patch notes or change remarks in the article text.
 - After `context source add repo --ref <commit>`, `context update --pending` fetches a registered commit that the source checkout does not have yet; `status` and `verify` stay local and report it as missing. When it cannot be fetched, `context update --pending` stops with instructions to check out that commit, instead of reporting every citation as a missing file.
@@ -222,7 +222,7 @@ All notable changes to Context are documented here.
 - Keep capture-only requests out of article production, reuse URL registration and capture receipts, and retain string diagnostics in compact output.
 - Keep source baseline details in provenance and citations rather than reader-facing article prose.
 
-## Unreleased
+## 0.7.94 - 2026-11-08
 
 ## 0.7.34 - 2026-09-22
 
