@@ -7,18 +7,20 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 import { candidateIdsHash, candidateSetHash, type ReviewCandidateView, type ReviewPayloadScope } from "./reviewShared.js";
 
-interface ReportScope { scope: ReviewPayloadScope; baseline_hash: string }
+/** `report_path` is the file this scope was rendered to, which a confirmed approval archives. */
+interface ReportScope { scope: ReviewPayloadScope; baseline_hash: string; report_path?: string }
 
 const scopePath = (root: string, scope: KnowledgeCollection | "all") =>
   join(root, ".tmp/context-runtime/review", `${scope}.scope.json`);
 
 /** Generated alongside the report; it is a scope snapshot, never a read receipt. */
 export async function saveReviewReportScope(
-  root: string, scope: KnowledgeCollection | "all", candidates: readonly ReviewCandidateView[], baselineHash: string,
+  root: string, scope: KnowledgeCollection | "all", candidates: readonly ReviewCandidateView[], baselineHash: string, reportPath?: string,
 ): Promise<void> {
   const ids = candidates.map(candidate => candidate.record.candidate_id).sort();
   const value: ReportScope = {
     baseline_hash: baselineHash,
+    ...(reportPath === undefined ? {} : { report_path: reportPath }),
     scope: {
       kind: scope === "all" ? "all" : "collection",
       ...(scope === "all" ? {} : { collection: scope }),

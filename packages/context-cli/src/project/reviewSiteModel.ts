@@ -27,7 +27,9 @@ export interface ReviewNavigationTarget { id: string; title: string; path?: stri
  * page is in this batch. */
 export interface ReviewNavigationChange { key: string; title: string; changes: Array<"added" | "removed" | "renamed" | "retargeted" | "moved">;
   old_title?: string; old_target?: ReviewNavigationTarget | null; new_target?: ReviewNavigationTarget | null }
-export interface ReviewSiteModel { storageScope: string; themeCss?: string; title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
+export interface ReviewSiteModel { storageScope: string; themeCss?: string; title: string;
+  /** Interface language until the reader picks one; follows the workspace language. */
+  language: "zh" | "en"; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
   navigationBaseline: "git-head" | "current" | "empty"; navigationChanges: ReviewNavigationChange[];
   /** Retirements scheduled in this batch, with links still blocking them. */
   retirement?: { retired: Array<{ path: string; title: string; replacement?: string }>; blockers: Array<{ path: string; target: string; reason: string }> } }
@@ -141,12 +143,13 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
     for (const [i, p] of unplaced.entries()) nodes.push({ key: `review-page-${p.id}`, parent: "review-unplaced", title: p.title, order: i, page: p.id, change: p.change }); }
   const navigationChanges = navigationBaseline === "empty" ? [] : reviewNavigationChanges(baseline?.entries ?? [], current?.entries ?? [], pages);
   const pkgText = await optional(join(root, "package.json"));
-  const pkg = pkgText ? JSON.parse(pkgText) as { name?: string } : {};
+  const pkg = pkgText ? JSON.parse(pkgText) as { name?: string; context?: { language?: unknown } } : {};
   const project = await optional(join(root, "src/index.ts")) === undefined ? undefined : await loadContextProjectModule(root);
   const siteTitle = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site?.title ? [p.site.title] : [])[0];
   const sitePackages = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site ? [p.site] : []) ?? [];
   const themeCss = siteThemeVariables(await resolveSiteTheme(root, sitePackages.length === 1 ? sitePackages[0]?.theme : undefined));
-  return { storageScope: hash(root), themeCss, title: siteTitle ?? pkg.name ?? "Knowledge reading report", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline, navigationChanges,
+  return { storageScope: hash(root), themeCss, title: siteTitle ?? pkg.name ?? "Knowledge reading report",
+    language: pkg.context?.language === "en" ? "en" : "zh", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline, navigationChanges,
     ...(planned ? { retirement: { blockers: planned.blockers, retired: planned.retired.map(target => ({ path: target.path,
       title: pages.find(page => page.path === target.path)?.title ?? target.path, ...(target.replacement ? { replacement: target.replacement } : {}) })) } } : {}) };
 }

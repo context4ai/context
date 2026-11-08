@@ -27,9 +27,13 @@ fingerprints, so changing one rebuilds the website.
 Each translation records the digest of the approved title, description and
 body it was written from. A translation is `current` when the digest matches,
 `stale` when the approved article changed, and `missing` when no file exists.
-Runtime metadata changes do not make a translation stale. Files whose approved
-article no longer exists are reported as orphans and removed by the next
-submission.
+Runtime metadata changes do not make a translation stale.
+
+Translation files that no translating package selects are listed as `orphans`.
+Only those whose approved article no longer exists at all are also listed as
+`removed`; the next submission deletes them, and `prepare` deletes them at once
+when nothing else is pending. Translations of pages that still exist but are
+excluded from every translating package are kept.
 
 When a package declares locales and any item is not current, the workspace Route
 selects `translate-site-locales` after package template approval and before the
@@ -66,6 +70,12 @@ and placeholders such as `<repository>` unchanged. Mermaid labels may change.
 All other blocks, including blocks without a language marker, keep their content
 unchanged. Submission validates all items first and saves nothing when
 any item fails. A digest from before an approved content change is rejected.
+
+Link to a section of another page with its section ID (`guide.md#<section-id>`).
+Every language keeps the same section IDs, while heading anchors are generated
+from each language's own heading text, so a heading anchor in the original does
+not exist in its translations. Translate such links unchanged, then correct
+the original links with `context revise <path> --instruction <correction>`.
 
 `skip` records that the current pending items are published in the primary
 language. Use it only when the user declines translation for this iteration;

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -72,6 +72,18 @@ function resolveOutputPath(projectRoot: string, outPath: string | undefined, rev
   return isAbsolute(outPath) ? outPath : resolve(projectRoot, outPath);
 }
 
+/** Applied batches keep their own copy outside the runtime directory, which
+ * lifecycle cleanup removes; the scope report is rewritten by the next batch. */
+export const APPLIED_REVIEW_REPORT_ROOT = join(".tmp", "review-reports");
+
+export async function archiveAppliedReviewReport(projectRoot: string, reportPath: string, scope: KnowledgeCollection | "all"): Promise<string> {
+  const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
+  const target = join(projectRoot, APPLIED_REVIEW_REPORT_ROOT, `${stamp}-${scope}.html`);
+  await mkdir(dirname(target), { recursive: true });
+  await copyFile(reportPath, target);
+  return target;
+}
+
 /** Each blocker kind has its own fix: an article draft is revised, a navigation
  * entry is adjusted, a package template is edited by hand. */
 function retirementBlockerFix(path: string): { command: string; instruction: string } {
@@ -122,7 +134,7 @@ export async function writeReviewHtml(input: {
     }
   }
   await writeFile(outPath, renderReviewHtml(model, diagramScript), "utf8");
-  await saveReviewReportScope(input.projectRoot, reviewScope, candidates, model.baselineHash);
+  await saveReviewReportScope(input.projectRoot, reviewScope, candidates, model.baselineHash, outPath);
   const menu = await projectMenuTargets(input.projectRoot);
   const unplaced = model.pages.filter(page => page.candidate_id && !menu.has(page.id) &&
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))

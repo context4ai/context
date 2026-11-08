@@ -17,6 +17,28 @@ function inside(root: string, path: string): void {
   }
 }
 
+/** Checkouts may be shallow or behind the registered commit. With `fetch`, a missing
+ * commit is fetched once; otherwise reads stay local. A missing commit fails every
+ * path at once instead of per read. */
+function commitAvailability(fetched: Map<string, Promise<boolean>>, fetch = true) {
+  return (directory: string, commit: string) => {
+    const key = `${directory}\0${commit}`;
+    let result = fetched.get(key);
+    if (!result) {
+      result = execute("git", ["-C", directory, "cat-file", "-e", `${commit}^{commit}`],
+        { timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).then(() => true, () => !fetch ? false :
+        execute("git", ["-C", directory, "fetch", "--quiet", "--depth=1", "origin", commit], { timeout: 120_000 })
+          .then(() => true, () => false));
+      fetched.set(key, result);
+    }
+    return result;
+  };
+}
+
+function missingCommit(commit: string): SourceUnavailableError {
+  return new SourceUnavailableError(`Commit ${commit} is not available in the registered checkout; fetch and check out the registered commit, then retry`, "source-history-missing");
+}
+
 /** Reads a registered repository file at an earlier commit; callers must verify
  * the result against a recorded digest before trusting it. */
 export async function registeredRepoHistoryReader(projectRoot: string) {
@@ -26,22 +48,9 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
   const fetched = new Map<string, Promise<boolean>>();
   const reads = new Map<string, Promise<string>>();
   const objects = commandGitObjectReader();
-  // Recovered checkouts are shallow; fetch a missing settled commit once. A commit
-  // the remote no longer has fails every path at once instead of per read.
-  const available = (directory: string, commit: string) => {
-    const key = `${directory}\0${commit}`;
-    let result = fetched.get(key);
-    if (!result) {
-      result = execute("git", ["-C", directory, "cat-file", "-e", `${commit}^{commit}`],
-        { timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).then(() => true, () =>
-        execute("git", ["-C", directory, "fetch", "--quiet", "--depth=1", "origin", commit], { timeout: 120_000 })
-          .then(() => true, () => false));
-      fetched.set(key, result);
-    }
-    return result;
-  };
+  const available = commitAvailability(fetched);
   async function readAt(directory: string, path: string, commit: string): Promise<string> {
-    if (!await available(directory, commit)) throw new SourceUnavailableError(`Commit ${commit} is not available in the registered checkout`, "source-history-missing");
+    if (!await available(directory, commit)) throw missingCommit(commit);
     return decodeSource(await objects.read(directory, commit, path));
   }
   return async (sourceRef: string, path: string, commit: string): Promise<string> => {
@@ -72,11 +81,14 @@ function decodeSource(bytes: Uint8Array): string {
 
 /** An observation shares reads, manifest parsing and one object pipe per repo.
  * Repository citations always read the registered commit, never mutable files. */
-export async function registeredArticleSourceReader(projectRoot: string) {
+/** Only a source update may fetch a registered commit; status, verification and
+ * production reads never touch the network or the source checkout. */
+export async function registeredArticleSourceReader(projectRoot: string, options: { fetchMissingCommits?: boolean } = {}) {
   let repoContentRead: ReturnType<typeof repoContentReferenceReader> | undefined;
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
   const objects = commandGitObjectReader();
+  const available = commitAvailability(new Map(), options.fetchMissingCommits === true);
   const sources = new Map<string, { kind: string; entry: SourcesRegistry["repos"][number]
     | SourcesRegistry["files"][number] | SourcesRegistry["larks"][number] | SourcesRegistry["notes"][number] }>();
   for (const [kind, entries] of [["repo", registry.repos], ["file", registry.files],
@@ -105,6 +117,7 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       if (!("ref" in entry) || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(entry.ref)) {
         throw new SourceUnavailableError("Article source requires a captured fixed commit, not a moving ref", "source-ref-unpinned");
       }
+      if (!await available(root, entry.ref)) throw missingCommit(entry.ref);
       return { root, commit: entry.ref };
     }
     const manifestPath = resolve(workspace, ("snapshot" in entry ? entry.snapshot?.manifest : undefined)

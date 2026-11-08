@@ -84,3 +84,24 @@ test("an independent workspace ignored by its parent Git still versions formal c
     expect((await inspectWorkspaceVersion(root)).changed).toBe(true);
   } finally { await rm(outer, { recursive: true, force: true }); }
 });
+
+test("a workspace tracked inside a larger repository compares only its own directory", async () => {
+  const outer = await mkdtemp(join(tmpdir(), "context-embedded-version-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: outer, encoding: "utf8" });
+  try {
+    git("init", "-q"); git("config", "user.name", "Author"); git("config", "user.email", "author@example.test");
+    const root = join(outer, "docs-kb");
+    await mkdir(join(root, "knowledge"), { recursive: true });
+    await writeFile(join(root, "package.json"), JSON.stringify({ version: "0.0.0" }));
+    await writeFile(join(root, "knowledge/guide.md"), "Old"); await writeFile(join(outer, "app.ts"), "export {};");
+    git("add", "."); git("commit", "-qm", "Initial"); git("tag", "v0.1.0");
+    await writeFile(join(root, "knowledge/guide.md"), "Updated"); await writeFile(join(root, "knowledge/new.md"), "New");
+    await writeFile(join(outer, "app.ts"), "export const changed = true;");
+    const inspected = await inspectWorkspaceVersion(root, "HEAD");
+    expect(inspected.base_ref).toBe("HEAD");
+    expect(inspected.updated).toEqual(["knowledge/guide.md"]);
+    expect(inspected.added).toEqual(["knowledge/new.md"]);
+    // The repository's own release tag is not a workspace version.
+    expect((await inspectWorkspaceVersion(root)).base_ref).toBe("HEAD");
+  } finally { await rm(outer, { recursive: true, force: true }); }
+});

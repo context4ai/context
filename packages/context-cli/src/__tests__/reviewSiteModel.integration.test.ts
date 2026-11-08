@@ -43,3 +43,16 @@ test("body review retains removed and replaced evidence separately from unchange
   expect(removed).not.toContain("New fact.");
   expect(html).toContain("New fact.");
 });
+
+test("the reading report starts in the workspace language", async () => {
+  const root = await prepareRevisionKnowledge([]);
+  try {
+    const candidates = await collectAllReviewCandidates(root);
+    const packagePath = join(root, "package.json");
+    const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+    await writeFile(packagePath, JSON.stringify({ ...pkg, context: { ...pkg.context, language: "en" } }));
+    expect((await collectReviewSiteModel(root, candidates)).language).toBe("en");
+    await writeFile(packagePath, JSON.stringify({ ...pkg, context: { ...pkg.context, language: "zh-CN" } }));
+    expect((await collectReviewSiteModel(root, candidates)).language).toBe("zh");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 45000);

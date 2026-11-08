@@ -142,6 +142,28 @@ test("history reads fetch one missing settled commit into a shallow recovered ch
 });
 
 
+test("status stays local while a pending update fetches a newly registered commit the checkout lacks", async () => {
+  const root = await settledKnowledge();
+  const source = join(root, "fixture-source");
+  const checkout = join(root, "sources/repo/20260903/revision-fixture");
+  await rm(checkout, { recursive: true, force: true });
+  execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
+  const version = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  const trace = join(root, ".tmp/git-trace.log");
+  const fetches = async () => (await readFile(trace, "utf8").catch(() => "")).split("\n").filter(line => line.includes("built-in: git fetch")).length;
+  process.env.GIT_TRACE = trace;
+  try {
+    await collectProjectStatus(root, { managed: true });
+    expect(await fetches()).toBe(0);
+    expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+    expect(await fetches()).toBe(1);
+  } finally { delete process.env.GIT_TRACE; }
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.scopes[0]?.processed_version).toBe(version);
+  expect(update.changed_references?.some(reference => reference.state === "unavailable")).toBe(false);
+  expect(update.changed_references?.length).toBeGreaterThan(0);
+});
+
 test("missing processed versions and malformed structures report unknown rather than current", async () => {
   const { createDocumentRevisionWorkspace } = await import("./projectDocumentRevisionV074.fixture.js");
   const root = await createDocumentRevisionWorkspace(); roots.push(root);

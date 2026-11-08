@@ -17,9 +17,9 @@ export type ObservedArticleReference = ReferenceObservation & { path: string; se
 /** Only uniquely matching digests relocate; settlement is a separate write.
  * The optional previous scopes are retained for callers that display history. */
 export async function inspectSettledReferences(root: string, articles: readonly ArticleStructureEntry[], scopes: readonly string[],
-  _previous: readonly ProcessedScope[] = [], options: { advisory?: boolean } = {}) {
+  _previous: readonly ProcessedScope[] = [], options: { advisory?: boolean; fetchMissingCommits?: boolean } = {}) {
   void _previous;
-  const read = await registeredArticleSourceReader(root);
+  const read = await registeredArticleSourceReader(root, { fetchMissingCommits: options.fetchMissingCommits === true });
   const observe = createArticleReferenceObserver(read);
   const observations: ObservedArticleReference[] = [];
   const fileDigests: Record<string, string> = {};

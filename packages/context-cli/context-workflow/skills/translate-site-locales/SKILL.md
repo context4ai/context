@@ -23,7 +23,11 @@ approved article before submitting. Keep the translation's structure exactly:
   `txt`, and `plaintext` blocks, preserving commands, paths and placeholders such
   as `<repository>`. Mermaid labels may be translated. Keep content unchanged
   in every other block, including blocks without a language marker;
-- keep every link target unchanged; translate link labels only;
+- keep every link target unchanged; translate link labels only. A link to a
+  heading anchor (for example `guide.md#install-the-cli`) does not exist in
+  other languages; keep it unchanged here, and after this step correct the
+  original link to the target's section ID with
+  `context revise <path> --instruction <correction>`;
 - keep product names, commands, file paths, identifiers and API names as written.
 
 Translate knowledge map titles as short navigation labels. Submit with
