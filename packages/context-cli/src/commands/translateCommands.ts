@@ -51,7 +51,7 @@ export function registerTranslateCommands(program: Command) {
       return { locale, current: items.filter(item => item.state === "current").length,
         stale: items.filter(item => item.state === "stale").length, missing: items.filter(item => item.state === "missing").length };
     });
-    write({ locales: counts, pending: inspection.pending, orphans: inspection.orphans, route_satisfied: inspection.route_satisfied,
+    write({ locales: counts, pending: inspection.pending, orphans: inspection.orphans, removed: inspection.removed, route_satisfied: inspection.route_satisfied,
       ...(inspection.pending > 0 || inspection.removed.length > 0 ? { next_action: { command: "context translate prepare --format json" } } : {}) });
   });
   command.command("prepare").description("Write the pending translation task").option("--format <format>", "json", "json").action(async () => {

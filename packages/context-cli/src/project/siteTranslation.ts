@@ -288,7 +288,7 @@ export async function prepareSiteTranslation(projectRoot: string, packages: read
       items.push({ ...item, file, draft: kept ? "kept" as const : "generated" as const, source_diff: diff ? diffFile : null });
       articles.push({ locale: item.locale, approved_path: item.approved_path, file });
     }
-    const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans };
+    const task = { expected_digest: inspection.source_set_digest, locales: inspection.locales, items, orphans: inspection.orphans, removed: inspection.removed };
     const taskPath = `${TRANSLATION_RUNTIME_ROOT}/${TASK_FILE}`;
     const submissionPath = `${TRANSLATION_RUNTIME_ROOT}/submission.yaml`;
     await atomicWrite(join(projectRoot, taskPath), JSON.stringify(task, null, 2) + "\n");
@@ -415,9 +415,11 @@ export async function submitSiteTranslation(projectRoot: string, packages: reado
     for (const write of writes) await atomicWrite(join(projectRoot, write.path), write.content);
     for (const [path, content] of snapshots) await atomicWrite(join(projectRoot, path), content);
     for (const draft of drafts) for (const path of [draft, `${draft}.diff`]) await rm(join(projectRoot, path), { force: true });
-    for (const orphan of inspection.orphans) await rm(join(projectRoot, orphan), { force: true });
+    // Only translations whose page no longer exists; a page a package merely
+    // excludes keeps its translation.
+    for (const orphan of inspection.removed) await rm(join(projectRoot, orphan), { force: true });
     await writeReceipt(projectRoot, digest, "submitted");
-    return { written: writes.map(write => write.path), removed: inspection.orphans };
+    return { written: writes.map(write => write.path), removed: inspection.removed };
   });
 }
 

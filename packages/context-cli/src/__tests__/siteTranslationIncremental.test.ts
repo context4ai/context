@@ -172,3 +172,28 @@ test("a translation whose page is only excluded from the package is not removed"
     expect(existsSync(otherTranslation)).toBe(true);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("submit removes only translations of removed pages, not of pages a package excludes", async () => {
+  const { root, original, destination } = await workspace("translation-excluded-submit-");
+  try {
+    const other = join(root, "knowledge/codeindex/b.md");
+    const otherTranslation = join(root, "translations/zh-CN/codeindex/b.md");
+    const removedTranslation = join(root, "translations/zh-CN/codeindex/gone.md");
+    await writeFile(original, source.replace("Second", "Changed"));
+    await writeFile(destination, stored(approvedArticleDigest(source)));
+    await writeFile(other, source);
+    await writeFile(otherTranslation, stored(approvedArticleDigest(source)));
+    await writeFile(removedTranslation, stored("gone"));
+    const excluding = { ...pkg, select: { exclude: ["codeindex/b.md"] } } as unknown as PackageDefinition;
+    const task = await prepareSiteTranslation(root, [excluding]);
+    if ("outcome" in task) throw new Error("A still needs translation");
+    expect(task.removed).toEqual(["translations/zh-CN/codeindex/gone.md"]);
+    const item = task.items.find(entry => entry.kind === "article")!;
+    if (item.kind !== "article") throw new Error("Missing article");
+    const saved = await submitSiteTranslation(root, [excluding], { expected_digest: task.expected_digest!, map_entries: [],
+      articles: [{ locale: "zh-CN", approved_path: item.approved_path, file: item.file }] }, file => join(root, file));
+    expect(saved.removed).toEqual(["translations/zh-CN/codeindex/gone.md"]);
+    expect(existsSync(otherTranslation)).toBe(true);
+    expect(existsSync(removedTranslation)).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
