@@ -526,8 +526,16 @@ async function inspectRepoCheckout(input: {
     gitTreeHash({ gitRoot, ref: head, subpath: input.subpath }),
   ]);
   if (pinnedScopeHash === undefined) {
-    input.diagnostics.push(`source boundary ${input.subpath ?? "."} is missing at pinned ref ${input.source.git.ref}`);
-    input.agentHints.push("repo-pinned-boundary-invalid");
+    // Offline: a registered commit is often not fetched yet; that is not a wrong boundary.
+    const commitLocal = await execFileAsync("git", ["-C", gitRoot, "cat-file", "-e", `${input.source.git.ref}^{commit}`],
+      { env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).then(() => true, () => false);
+    if (!commitLocal) {
+      input.diagnostics.push(`pinned commit ${input.source.git.ref} is not in the local checkout yet; ` +
+        "context update --pending fetches it (if that fetch fails, check that the commit SHA exists)");
+    } else {
+      input.diagnostics.push(`source boundary ${input.subpath ?? "."} is missing at pinned ref ${input.source.git.ref}`);
+      input.agentHints.push("repo-pinned-boundary-invalid");
+    }
   }
   if (scopeHash === undefined) {
     input.diagnostics.push(`source boundary ${input.subpath ?? "."} is missing at HEAD ${head ?? "<unknown>"}`);

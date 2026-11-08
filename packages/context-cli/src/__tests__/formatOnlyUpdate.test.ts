@@ -6,7 +6,7 @@ import YAML from "yaml";
 import { createDocumentSnapshotManifest } from "@c4a/extract";
 import { beginFormatOnlyUpdate, approveFormatOnlyUpdate, recordFormatOnlyCapture, settleFormatOnlyUpdate } from "../project/formatOnlyUpdate.js";
 import { inspectWorkspaceVersion, writeWorkspaceVersionCheckpoint } from "../project/workspaceChangelog.js";
-import { mapReferenceRange } from "../project/formatOnlyReferences.js";
+import { mapReferenceRange } from "../project/referenceRangeMap.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });

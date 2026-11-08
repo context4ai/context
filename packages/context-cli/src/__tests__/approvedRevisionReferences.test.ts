@@ -3,9 +3,10 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createArticleSourceReference } from "@c4a/context";
-import { prepareRevisionReferences } from "../project/approvedRevisionReferences.js";
+import { prepareRevisionReferences, removedCitations } from "../project/approvedRevisionReferences.js";
 import { prepareRevisionMarkdown } from "../project/approvedRevisionEdits.js";
 import { rememberArticleRegion } from "../project/articleRegionBaselines.js";
+import { suggestedRange } from "../project/articleReferenceObservation.js";
 
 test("revision resolves exact regions, retains untouched citations and removes deleted fragments", async () => {
   const root = await mkdtemp(join(tmpdir(), "revision-references-"));
@@ -122,4 +123,56 @@ test("a resubmitted earlier citation keeps its evidence; quote selects the text 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("removed citations match by source, file and content, not by text alone", () => {
+  const text = "# Note\nShared behavior\nOther\n";
+  const moved = "# Note\nIntro\nShared behavior\nOther\n";
+  const a = createArticleSourceReference("note:20260912/a", { path: "a.md", start_line: 2, end_line: 2 }, text);
+  const b = createArticleSourceReference("note:20260912/a", { path: "b.md", start_line: 2, end_line: 2 }, text);
+  const other = createArticleSourceReference("note:20260913/c", { path: "a.md", start_line: 2, end_line: 2 }, text);
+  const aMoved = createArticleSourceReference("note:20260912/a", { path: "a.md", start_line: 3, end_line: 3 }, moved);
+  expect(a.content_digest).toBe(b.content_digest);
+  const previous = [{ id: "s", references: [a, b] }];
+  // A and B cite identical text; dropping B still lists B.
+  expect(removedCitations(previous, [{ id: "s", references: [a] }]))
+    .toEqual([{ section_id: "s", source_ref: "note:20260912/a", path: "b.md", start_line: 2, end_line: 2 }]);
+  // A line move in the same file is kept.
+  expect(removedCitations(previous, [{ id: "s", references: [aMoved, b] }])).toEqual([]);
+  // The same text from another source is a replacement and is listed.
+  expect(removedCitations([{ id: "s", references: [a] }], [{ id: "s", references: [other] }]).map(item => item.path)).toEqual(["a.md"]);
+  // Citations of a removed section are listed too.
+  expect(removedCitations(previous, [])).toHaveLength(2);
+});
+
+test("suggested locators submit as new citations, never as another earlier citation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "revision-suggested-"));
+  const sourceRef = "note:20260912/source.md";
+  const before = "one\ntwo\nA\nfour\n";
+  const after = "A2\nfour\n";
+  const first = createArticleSourceReference(sourceRef, { path: "source.md", start_line: 1, end_line: 1 }, before);
+  const third = createArticleSourceReference(sourceRef, { path: "source.md", start_line: 3, end_line: 3 }, before);
+  const cited = [first, third].map(item => ({ source_ref: item.source_ref, path: item.locator.path,
+    start_line: item.locator.start_line, end_line: item.locator.end_line }));
+  try {
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    await writeFile(join(root, "sources/note/20260912/source.md"), after);
+    const input = { projectRoot: root, sourceRefs: [sourceRef], previous: [{ id: "s", references: [first, third] }], sectionIds: ["s"] };
+    // Line 3's new text maps onto line 1, which the same section already cites.
+    const suggested = (await suggestedRange(root, third, before, after, cited))!;
+    expect(suggested).toMatchObject({ start_line: 1, end_line: 1, text: "A2", locator: { path: "source.md", quote: "A2" } });
+    await expect(prepareRevisionReferences({ ...input, edits: [{ section_id: "s", references: [
+      { source_ref: sourceRef, locator: { path: "source.md", start_line: 1, end_line: 1 } }] }] })).rejects.toThrow("repeats an earlier citation");
+    expect(await prepareRevisionReferences({ ...input, edits: [{ section_id: "s", references: [{ source_ref: sourceRef, locator: suggested.locator }] }] }))
+      .toEqual([{ id: "s", references: [createArticleSourceReference(sourceRef, { path: "source.md", start_line: 1, end_line: 1 }, after)] }]);
+    // Without a collision the numeric suggestion submits as written.
+    const moved = "x\ny\nA2\n";
+    await writeFile(join(root, "sources/note/20260912/source.md"), moved);
+    const second = createArticleSourceReference(sourceRef, { path: "source.md", start_line: 2, end_line: 2 }, "x\nA\n");
+    const numeric = (await suggestedRange(root, second, "x\nA\n", moved, []))! as { locator: { path: string; start_line: number; end_line: number } };
+    expect(numeric.locator).toEqual({ path: "source.md", start_line: 2, end_line: 3 });
+    expect(await prepareRevisionReferences({ ...input, previous: [{ id: "s", references: [second] }],
+      edits: [{ section_id: "s", references: [{ source_ref: sourceRef, locator: numeric.locator }] }] }))
+      .toEqual([{ id: "s", references: [createArticleSourceReference(sourceRef, numeric.locator, moved)] }]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -4,7 +4,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readProductionRequirements, productionRequirementsSchema, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
-import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
+import { prepareRevisionReferences, removedCitations, REMOVED_CITATIONS_NOTE, type RemovedCitation } from "./approvedRevisionReferences.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile, realpath, rm } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
@@ -352,8 +352,11 @@ export async function composeRevisionCandidate(projectRoot: string,
   return { markdown, metadata, title, references, projectedSections };
 }
 
-interface RevisionSubmission extends RevisionContentInput { projectRoot: string; revision: string; preview?: boolean }
-export interface RevisionPreview { protocol: "context.approved-revision-preview/v1"; revision: string; path: string; before: string; markdown: string; changed: boolean }
+interface RevisionSubmission extends RevisionContentInput { projectRoot: string; revision: string; preview?: boolean;
+  /** Receives earlier citations the submitted page no longer carries. */
+  onRemovedCitations?: (removed: RemovedCitation[]) => void }
+export interface RevisionPreview { protocol: "context.approved-revision-preview/v1"; revision: string; path: string; before: string; markdown: string; changed: boolean;
+  removed_citations?: RemovedCitation[]; removed_citations_note?: string }
 export function completeApprovedRevision(input: RevisionSubmission & { preview: true }): Promise<RevisionPreview>;
 export function completeApprovedRevision(input: RevisionSubmission & { preview?: false }): Promise<CandidateRecord | undefined>;
 export async function completeApprovedRevision(input: RevisionSubmission): Promise<RevisionPreview | CandidateRecord | undefined> {
@@ -388,9 +391,12 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
       review: { title, summary: z.string().trim().min(1).parse(metadata.description ?? title),
         signals: ["approved-page-revision"], reason: request.instruction }, updated: new Date().toISOString(),
     }, 1);
+    const removed = removedCitations(request.target.sections, references);
     if (input.preview) return { protocol: "context.approved-revision-preview/v1", revision: request.revision,
       path: request.target.path, before: request.target.markdown, markdown,
-      changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections) };
+      changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections),
+      ...(removed.length ? { removed_citations: removed, removed_citations_note: REMOVED_CITATIONS_NOTE } : {}) };
+    if (removed.length) input.onRemovedCitations?.(removed);
     if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
     const approvedSections = validateArticleStructureEntries((await readKnowledgeStructure(input.projectRoot)).parsed?.articles ?? [])
       .find(article => article.article_id === request.target.article_id)?.sections;

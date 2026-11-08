@@ -141,7 +141,7 @@ export async function repositoryRecoveryPlan(input: {
   groups: RepositoryRecoveryGroup[];
   pending_groups: number;
   decision_schema: typeof RECOVERY_SCHEMA;
-  next_action: { command: string; input: string } | null;
+  next_action: { command: string; input: string; input_example: RepositoryRecoveryPayload; input_note: string } | null;
 }> {
   const registry = await readRepoRegistry(input.projectRoot);
   const selected = selectRepoSources(registry.repos, input.source);
@@ -191,6 +191,11 @@ export async function repositoryRecoveryPlan(input: {
       : {
           command: "context source restore --input .tmp/agent-payloads/repository-source-recovery.json --format json",
           input: ".tmp/agent-payloads/repository-source-recovery.json",
+          // A fill-in payload: one decision per pending group, cloning by default.
+          input_example: { schema: RECOVERY_SCHEMA, repositories: groups.filter(group => !group.ready)
+            .map(group => ({ source: group.sources[0]!, mode: "clone" as const })) },
+          input_note: "Save input_example as the input file. Each entry restores every source of its group. " +
+            "To reuse an existing checkout instead of cloning, set mode to local and add path.",
         },
   };
 }

@@ -1,7 +1,7 @@
 import { initialRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { readProcessedScopes } from "@c4a/context";
@@ -9,7 +9,7 @@ import { DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixt
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { inspectPendingSourceUpdates, pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
-import { registeredRepoHistoryReader } from "../project/articleSourceReader.js";
+import { verifyProjectWorkspace } from "../project/verify.js";
 import { collectProjectStatus } from "../project/status.js";
 import { readApprovedRevision } from "../project/approvedRevision.js";
 
@@ -93,6 +93,7 @@ test("the scope decision can revise an existing page whose citations are unchang
 test("digest relocation in a shallow checkout confirms moved citations without fetching history", async () => {
   const root = await settledKnowledge();
   const source = join(root, "fixture-source");
+  const processed = (await baseline(root))[0]!.processed_version;
   await moveCitedTextAndAddExport(root);
   const checkout = join(root, "sources/repo/20260903/revision-fixture");
   await rm(checkout, { recursive: true, force: true });
@@ -105,8 +106,12 @@ test("digest relocation in a shallow checkout confirms moved citations without f
   const update = (await readKnowledgeUpdate(root))!;
   expect(update.changed_references).toBeUndefined();
   expect(update.candidates).toEqual([]);
+  // File history is not read; only the processed commit's trees are fetched, to list uncited changes.
   const fetches = (await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch --quiet"));
-  expect(fetches).toHaveLength(0);
+  expect(fetches).toHaveLength(1);
+  expect(fetches[0]).toContain(processed);
+  // Only the cited file changed; an incomparable checkout would report an unavailable entry instead.
+  expect(update.uncited_changes).toBeUndefined();
 });
 
 test("a pending update asks only about pages whose cited text changed and keeps the old baseline until decided", async () => {
@@ -126,21 +131,117 @@ test("a pending update asks only about pages whose cited text changed and keeps 
   expect(input.reference_evidence).toBeUndefined();
   expect(input.reference_evidence_count).toBe(update.reference_evidence!.length);
   expect(JSON.parse(await readFile(join(root, input.reference_evidence_file as string), "utf8"))).toEqual(update.reference_evidence);
+  // Same lines, new text: repeating the line numbers would keep the old evidence, so a quote is suggested.
+  expect(update.reference_evidence!.map(item => item.suggested)).toEqual(update.reference_evidence!.map(() => expect.objectContaining({
+    start_line: 1, end_line: 1, text: "export const answer = 43;",
+    locator: { path: "src/index.ts", quote: "export const answer = 43;" } })));
 });
 
-test("history reads fetch one missing settled commit into a shallow recovered checkout", async () => {
-  const root = await initialRevisionKnowledge(roots);
+test("the update request lists uncited changes by directory, with new directories first", async () => {
+  const root = await settledKnowledge();
   const source = join(root, "fixture-source");
-  const first = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
-  const original = await readFile(join(source, "src/index.ts"), "utf8");
-  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  const write = async (path: string, text: string) => {
+    await mkdir(join(source, path, ".."), { recursive: true });
+    await writeFile(join(source, path), text);
+  };
+  await write("src/plugins/goals/index.ts", "export const goals = [];\n");
+  await write("src/plugins/goals/view.ts", "export const view = 1;\n");
+  await write("pnpm-lock.yaml", "lockfileVersion: 9\n");
+  await write("dist/index.js", "export {};\n");
+  await write("src/build/compiler.ts", "export const compile = () => 1;\n");
+  await write("README.md", "# changed\n");
+  execFileSync("git", ["add", "-A"], { cwd: source });
+  const from = (await baseline(root))[0]!.processed_version;
+  const to = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  await beginKnowledgeUpdate(root, undefined, { pending: true });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.uncited_changes).toEqual([{ source_ref: DOCUMENT_REVISION_SOURCE_REF, from, to, excluded_files: 2, groups: [
+    { directory: "src/plugins", added: 2, modified: 0, deleted: 0, new_directory: true },
+    // A hand-written build/ directory is not taken as generated output.
+    { directory: "src/build", added: 1, modified: 0, deleted: 0, new_directory: true },
+    expect.objectContaining({ directory: "." }),
+  ] }]);
+  // The cited file is a changed reference, never an uncited change.
+  expect(update.uncited_changes![0]!.groups.some(group => group.directory === "src")).toBe(false);
+  const input = (await collectProjectStatus(root, { managed: true })).workflow.current!.action!.input as Record<string, unknown>;
+  expect(input.uncited_changes).toEqual(update.uncited_changes);
+});
+
+test("uncited changes are reported unknown, not absent, when the processed commit cannot be fetched", async () => {
+  const root = await settledKnowledge();
+  const source = join(root, "fixture-source");
+  await writeFile(join(source, "README.md"), "# changed\n");
+  execFileSync("git", ["add", "-A"], { cwd: source });
+  await moveCitedTextAndAddExport(root);
   const checkout = join(root, "sources/repo/20260903/revision-fixture");
   await rm(checkout, { recursive: true, force: true });
   execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
-  const read = await registeredRepoHistoryReader(root);
-  expect(await read(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts", first)).toBe(original);
+  execFileSync("git", ["remote", "set-url", "origin", join(root, "missing-remote")], { cwd: checkout });
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  expect((await readKnowledgeUpdate(root))!.uncited_changes).toEqual([expect.objectContaining({
+    groups: [], unavailable: expect.stringContaining("uncited changes are unknown") })]);
 });
 
+test("source-update evidence suggests the mapped lines of a rewritten repository citation", async () => {
+  const root = await settledKnowledge();
+  await moveRegistration(root, "src/index.ts", "// header\nexport const answer = 43;\n");
+  await beginKnowledgeUpdate(root, undefined, { pending: true });
+  const evidence = (await readKnowledgeUpdate(root))!.reference_evidence!;
+  expect(evidence.length).toBeGreaterThan(0);
+  for (const item of evidence) expect(item.suggested).toMatchObject({ start_line: 1, end_line: 2,
+    text: "// header\nexport const answer = 43;", locator: { path: "src/index.ts", start_line: 1, end_line: 2 } });
+});
+
+test("a pending update prepares a missing processed commit and its old contents before reading history", async () => {
+  const root = await settledKnowledge();
+  const version = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  // A partial clone of only the new commit: the processed commit and its contents are absent.
+  const { checkout } = await partialCloneCheckout(root);
+  const processed = (await baseline(root))[0]!.processed_version;
+  expect(() => execFileSync("git", ["-C", checkout, "cat-file", "-e", `${processed}^{commit}`], { stdio: "ignore", env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } })).toThrow();
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.scopes[0]?.processed_version).toBe(version);
+  expect(update.reference_evidence!.length).toBeGreaterThan(0);
+  for (const item of update.reference_evidence!) {
+    expect(item.history).toMatchObject({ status: "available", text: "export const answer = 42;", commit: processed });
+    expect(item.suggested?.locator).toEqual({ path: "src/index.ts", quote: "export const answer = 43;" });
+  }
+  expect(update.uncited_changes).toBeUndefined();
+});
+
+test("a registered commit that cannot be fetched is tried once per update", async () => {
+  const root = await settledKnowledge();
+  const source = join(root, "fixture-source");
+  const checkout = join(root, "sources/repo/20260903/revision-fixture");
+  await rm(checkout, { recursive: true, force: true });
+  execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  execFileSync("git", ["-C", checkout, "remote", "set-url", "origin", join(root, "missing-remote")]);
+  const trace = join(root, ".tmp/git-trace.log");
+  process.env.GIT_TRACE = trace;
+  try {
+    await expect(beginKnowledgeUpdate(root, undefined, { pending: true })).rejects.toThrow(/could not be fetched\. Check that the registered commit SHA exists/u);
+  } finally { delete process.env.GIT_TRACE; }
+  expect((await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch"))).toHaveLength(1);
+  expect(await readKnowledgeUpdate(root)).toBeUndefined();
+});
+
+test("an explicit update reads only what the checkouts have", async () => {
+  const root = await settledKnowledge();
+  const source = join(root, "fixture-source");
+  const checkout = join(root, "sources/repo/20260903/revision-fixture");
+  await rm(checkout, { recursive: true, force: true });
+  execFileSync("git", ["clone", "-q", "--depth=1", `file://${source}`, checkout]);
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  const trace = join(root, ".tmp/git-trace.log");
+  process.env.GIT_TRACE = trace;
+  try {
+    await expect(beginKnowledgeUpdate(root, { scopes: [scope] })).rejects.toThrow(/context update --pending fetches it; an explicit update reads only what the checkout has/u);
+  } finally { delete process.env.GIT_TRACE; }
+  expect((await readFile(trace, "utf8").catch(() => "")).split("\n").filter(line => line.includes("built-in: git fetch"))).toHaveLength(0);
+  expect(await readKnowledgeUpdate(root)).toBeUndefined();
+});
 
 test("status stays local while a pending update fetches a newly registered commit the checkout lacks", async () => {
   const root = await settledKnowledge();
@@ -193,4 +294,76 @@ test("unreadable registries produce an unknown diagnostic rather than throwing",
   await writeFile(join(root, "sources/repo/index.yaml"), "sources: [invalid");
   expect(await inspectPendingSourceUpdates(root)).toMatchObject({ state: "unknown", scopes: [],
     issues: [{ reason_code: "source-registry-unreadable" }] });
+});
+
+// A real partial clone, as `git clone --filter=blob:none` writes it: only what was
+// checked out has contents; the promisor remote is `remote.origin.promisor`.
+async function partialCloneCheckout(root: string, options: { checkout?: boolean } = {}) {
+  const source = join(root, "fixture-source");
+  execFileSync("git", ["config", "uploadpack.allowFilter", "true"], { cwd: source });
+  execFileSync("git", ["config", "uploadpack.allowAnySHA1InWant", "true"], { cwd: source });
+  const checkout = join(root, "sources/repo/20260903/revision-fixture");
+  await rm(checkout, { recursive: true, force: true });
+  execFileSync("git", ["clone", "-q", "--depth=1", "--filter=blob:none", ...(options.checkout === false ? ["--no-checkout"] : []), `file://${source}`, checkout]);
+  const config = execFileSync("git", ["-C", checkout, "config", "--local", "-l"], { encoding: "utf8" });
+  expect(config).toContain("remote.origin.promisor=true");
+  expect(config).not.toContain("extensions.partialclone");
+  return { source, checkout };
+}
+
+test("a partial clone downloads only the missing cited contents in the update; status stays local", async () => {
+  const root = await settledKnowledge();
+  const { checkout } = await partialCloneCheckout(root, { checkout: false });
+  const version = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  const before = execFileSync("git", ["-C", checkout, "status", "--porcelain"], { encoding: "utf8" });
+  const trace = join(root, ".tmp/git-trace.log");
+  const fetches = async () => (await readFile(trace, "utf8").catch(() => "")).split("\n").filter(line => line.includes("built-in: git fetch")).length;
+  process.env.GIT_TRACE = trace;
+  try {
+    await collectProjectStatus(root, { managed: true });
+    await verifyProjectWorkspace(root, { checkSourceRegions: true });
+    expect(await fetches()).toBe(0);
+    expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  } finally { delete process.env.GIT_TRACE; }
+  // One commit fetch and one batch of current contents; old contents only for changed citations.
+  expect(await fetches()).toBeLessThanOrEqual(3);
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.scopes[0]?.processed_version).toBe(version);
+  expect(update.changed_references?.length).toBeGreaterThan(0);
+  expect(update.changed_references?.some(reference => reference.state === "unavailable")).toBe(false);
+  // Only objects were added: the checkout's files are untouched.
+  expect(execFileSync("git", ["-C", checkout, "status", "--porcelain"], { encoding: "utf8" })).toBe(before);
+});
+
+test("current contents that cannot be downloaded stop the update with the facts", async () => {
+  const root = await settledKnowledge();
+  const { checkout } = await partialCloneCheckout(root, { checkout: false });
+  const version = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  execFileSync("git", ["-C", checkout, "fetch", "-q", "--depth=1", "--filter=blob:none", "origin", version]);
+  execFileSync("git", ["-C", checkout, "remote", "set-url", "origin", `file://${join(root, "missing-remote")}`]);
+  await expect(beginKnowledgeUpdate(root, undefined, { pending: true })).rejects.toThrow(/not downloaded \(download failed: /u);
+  expect(await readKnowledgeUpdate(root)).toBeUndefined();
+});
+
+test("old contents that cannot be downloaded do not block the update", async () => {
+  const root = await settledKnowledge();
+  const { checkout } = await partialCloneCheckout(root, { checkout: false });
+  const version = await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  // The new commit and its cited contents are local; the old commit's contents are not reachable.
+  execFileSync("git", ["-C", checkout, "fetch", "-q", "--depth=1", "--filter=blob:none", "origin", version]);
+  execFileSync("git", ["-C", checkout, "-c", "core.sparseCheckout=false", "checkout", "-q", "--detach", version]);
+  execFileSync("git", ["-C", checkout, "remote", "set-url", "origin", `file://${join(root, "missing-remote")}`]);
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.changed_references?.some(reference => reference.state === "unavailable")).toBe(false);
+});
+
+test("status tells contents not downloaded apart from a missing path, offline", async () => {
+  const root = await settledKnowledge();
+  await partialCloneCheckout(root, { checkout: false });
+  const { registeredArticleSourceReader } = await import("../project/articleSourceReader.js");
+  const read = await registeredArticleSourceReader(root);
+  await expect(read(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts")).rejects.toMatchObject({ detail: { reason_code: "source-content-missing" } });
+  const fresh = await registeredArticleSourceReader(root);
+  await expect(fresh(DOCUMENT_REVISION_SOURCE_REF, "src/no-such-file.ts")).rejects.toMatchObject({ detail: { reason_code: "source-file-missing" } });
 });

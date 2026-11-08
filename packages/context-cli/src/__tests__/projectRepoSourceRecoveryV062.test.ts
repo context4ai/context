@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readlink, rm, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  parseRepositoryRecoveryPayload,
   repositoryRecoveryPlan,
   restoreRepositorySources,
 } from "../project/repoSourceRecovery.js";
@@ -199,12 +200,13 @@ describe("repository source recovery", () => {
       }],
     });
 
+    // The plan's fill-in example restores as written.
+    const plan = await repositoryRecoveryPlan({ projectRoot: input.project });
+    expect(plan.next_action?.input_example).toEqual({ schema: "context.repository-source-recovery.v1",
+      repositories: [{ source: "20260813/alpha", mode: "clone" }] });
     const result = await restoreRepositorySources({
       projectRoot: input.project,
-      payload: {
-        schema: "context.repository-source-recovery.v1",
-        repositories: [{ source: "20260813/alpha", mode: "clone" }],
-      },
+      payload: parseRepositoryRecoveryPayload(JSON.parse(JSON.stringify(plan.next_action!.input_example))),
     });
 
     expect(result.restored[0]).toEqual(expect.objectContaining({ mode: "clone", ready: true }));

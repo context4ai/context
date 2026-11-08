@@ -8,6 +8,7 @@ import { readArticleRegionBaseline } from "./articleRegionBaselines.js";
 import { registeredRepoHistoryReader } from "./articleSourceReader.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import { commandGitObjectReader, SourceReadError, SourceUnavailableError } from "./gitObjectReader.js";
+import { hunks, mapReferenceRange } from "./referenceRangeMap.js";
 
 export type ReferenceState = "current" | "moved" | "ambiguous" | "not-found" | "unavailable";
 export type SourceRead = ((sourceRef: string, path: string, captured: boolean) => Promise<string>) & {
@@ -63,10 +64,38 @@ export interface ReferenceEvidence {
     | { status: "unavailable"; message: string };
   current: { status: "available" | "original-range-unavailable"; text: string; start_line: number; end_line: number;
     message: string; truncated?: true } | { status: "unavailable"; reason: string };
+  /** Repository citations only: where the diff between the processed and the new commit moves the old lines. */
+  suggested?: { start_line: number; end_line: number; text: string; truncated?: true;
+    locator: { path: string; start_line: number; end_line: number } | { path: string; quote: string }; message: string };
 }
+
+export interface CitedRange { source_ref: string; path: string; start_line: number; end_line: number }
+
+/** A diff mapping, never a semantic match. Submitting the line numbers of an earlier
+ * citation means "keep that earlier evidence", so when the mapped lines equal any
+ * earlier citation's lines in this file (its own included), suggest a unique quote
+ * instead, or nothing when no unambiguous locator exists. */
+export async function suggestedRange(root: string, reference: ArticleSourceReference, before: string, current: string,
+  cited: readonly CitedRange[], clip: (text: string) => { text: string; truncated?: true } = text => ({ text })): Promise<ReferenceEvidence["suggested"]> {
+  const mapped = mapReferenceRange(reference.locator, await hunks(root, before, current));
+  if (!mapped) return undefined;
+  const region = articleSourceRegion(current, mapped);
+  const normalized = current.replace(/\r\n/gu, "\n");
+  const collides = [reference.locator, ...cited.filter(item => item.source_ref === reference.source_ref && item.path === reference.locator.path)]
+    .some(item => item.start_line === mapped.start_line && item.end_line === mapped.end_line);
+  if (!collides) return { start_line: mapped.start_line, end_line: mapped.end_line, ...clip(region),
+    locator: { path: mapped.path, start_line: mapped.start_line, end_line: mapped.end_line },
+    message: "The source diff maps the old lines here. If this text still supports the section, cite this locator; it is checked again on submit." };
+  const unique = region.trim() !== "" && normalized.indexOf(region) === normalized.lastIndexOf(region);
+  if (!unique || region.length > 4_000) return undefined;
+  return { start_line: mapped.start_line, end_line: mapped.end_line, ...clip(region), locator: { path: mapped.path, quote: region },
+    message: "An earlier citation used these line numbers, and repeating them keeps that earlier evidence; to cite the new text here, use this quote locator." };
+}
+
 /** Deduplicated, bounded excerpts for semantic decisions. The current excerpt
  * is explicitly positional: only the separate diff proposal establishes a mapping. */
-export async function collectReferenceEvidence(root: string, references: readonly ArticleSourceReference[], previous: readonly ProcessedScope[] = []): Promise<ReferenceEvidence[]> {
+export async function collectReferenceEvidence(root: string, references: readonly ArticleSourceReference[], previous: readonly ProcessedScope[] = [],
+  cited: readonly CitedRange[] = []): Promise<ReferenceEvidence[]> {
   const history = articleReferenceHistoryReader(root, previous);
   const read = await registeredArticleSourceReader(root);
   const clip = (text: string) => text.length <= 16_000 ? { text } : { text: text.slice(0, 16_000), truncated: true as const };
@@ -76,8 +105,12 @@ export async function collectReferenceEvidence(root: string, references: readonl
       ? { status: "available", ...clip(before.region), ...(before.commit ? { commit: before.commit } : {}) }
       : { status: "unavailable", message: "Historical evidence is unavailable: no local or bounded Git-history text matched the signed digest." };
     let current: ReferenceEvidence["current"];
+    let suggested: ReferenceEvidence["suggested"];
     try {
       const text = await read(reference.source_ref, reference.locator.path, true);
+      if (reference.source_ref.startsWith("repo:") && before?.text !== undefined) {
+        suggested = await suggestedRange(root, reference, before.text, text, cited, clip).catch(() => undefined);
+      }
       const lines = text.replace(/\r\n/gu, "\n").split("\n");
       const rangeExists = reference.locator.end_line <= lines.length;
       const length = reference.locator.end_line - reference.locator.start_line + 1;
@@ -91,7 +124,7 @@ export async function collectReferenceEvidence(root: string, references: readonl
       if (!(error instanceof SourceUnavailableError)) throw error;
       current = { status: "unavailable", reason: String(error.detail?.reason_code ?? "source-unavailable") };
     }
-    return { id, source_ref: reference.source_ref, path: reference.locator.path, history: old, current };
+    return { id, source_ref: reference.source_ref, path: reference.locator.path, history: old, current, ...(suggested ? { suggested } : {}) };
   }));
 }
 const exec = promisify(execFile);

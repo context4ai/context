@@ -132,6 +132,39 @@ test("an out-of-scope citation offers correcting it or adjusting scope; full acc
 }, 180000);
 
 type BatchPreview = { pages: Array<{ changed: boolean; issues: Array<{ message: string; reason_code?: string }> }> };
+test("the compact batch summary keeps each page's removed citations", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { resolve } = await import("node:path");
+  const execute = promisify(execFile);
+  const { root, revision } = await fixture();
+  const cli = resolve(import.meta.dir, "../../dist/cli.js");
+  const options = { cwd: root, env: { ...process.env, CONTEXT_RUNTIME_EVENTS_DISABLED: "1" }, maxBuffer: 8 * 1024 * 1024, timeout: 60000 };
+  const prepared = JSON.parse((await execute("node", [cli, "action", "prepare-current", "--managed", "--revision", revision], options)).stdout);
+  const removed = [];
+  for (const [index, task] of prepared.tasks.entries()) {
+    const request = JSON.parse(await readFile(join(root, task.task_input), "utf8"));
+    const section = request.target.sections[0];
+    // The first page drops its only citation; the second keeps its own.
+    if (index === 0) removed.push({ section_id: section.id, source_ref: section.references[0].source_ref, path: section.references[0].locator.path,
+      start_line: section.references[0].locator.start_line, end_line: section.references[0].locator.end_line });
+    await writeFile(join(root, prepared.agent_directory, `${task.task}.edits.json`), JSON.stringify(index === 0
+      ? { stage: "approved-revision", sections: [{ section_id: section.id, references: [] }] }
+      : { stage: "approved-revision", markdown: request.target.markdown.replace("value 42.", "value 42. Use this constant.") }));
+  }
+  const manifest = join(root, prepared.agent_directory, "submission.json");
+  await writeFile(manifest, JSON.stringify(prepared.submission));
+  const args = [cli, "action", "complete-current", "--managed", "--revision", revision, "--input", manifest];
+  const preview = JSON.parse((await execute("node", [...args, "--preview"], options)).stdout);
+  expect(preview.pages[0].removed_citations).toEqual(removed);
+  expect(preview.pages[1].removed_citations ?? []).toEqual([]);
+  const summary = JSON.parse((await execute("node", args, options)).stdout);
+  expect(summary).toMatchObject({ outcome: "accepted", committed_count: 2 });
+  expect(summary.outcomes[0].removed_citations).toEqual(removed);
+  expect(summary.outcomes[1]).not.toHaveProperty("removed_citations");
+  expect(summary.removed_citations_note).toContain("repeat each with its earlier lines");
+}, 120000);
+
 test("batch preview checks every issued page with submission rules and writes nothing", async () => {
   const { root, batch, revision } = await fixture();
   const { readdir } = await import("node:fs/promises");

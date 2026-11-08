@@ -53,6 +53,29 @@ function initGitRepo(path: string): string {
 }
 
 describe("0.6.0 repo source validation", () => {
+  test("source ensure tells a missing folder at a local pinned commit from a commit not fetched yet", async () => {
+    const root = makeTmp();
+    const repo = join(root, "sample-lib");
+    const project = join(root, "kb");
+    try {
+      await mkdir(join(repo, "lib"), { recursive: true });
+      const first = initGitRepo(repo);
+      writeFileSync(join(repo, "lib", "index.ts"), "export const x = 1;\n", "utf8");
+      execFileSync("git", ["add", "lib"], { cwd: repo });
+      execFileSync("git", ["commit", "-qm", "lib"], { cwd: repo });
+      await runCliInDir(root, ["init", "kb"]);
+      await addRepoSource({ projectRoot: project, namespace: REPO_NAMESPACE, module: "sample-lib", local: "../sample-lib",
+        remote: "https://git.example.com/sample-lib.git", ref: first, subpath: "lib" });
+      const status = (await ensureRepoSources({ projectRoot: project, name: "20260712/sample-lib" }))[0];
+      expect(status?.ready).toBe(false);
+      expect(status?.diagnostics.join("\n")).toContain(`source boundary lib is missing at pinned ref ${first}`);
+      expect(status?.diagnostics.join("\n")).not.toContain("is not in the local checkout yet");
+      expect(status?.agent_hints).toContain("repo-pinned-boundary-invalid");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("source ensure reports missing or mismatched repos without git write operations", async () => {
     const root = makeTmp();
     const repo = join(root, "sample-lib");
@@ -81,8 +104,8 @@ describe("0.6.0 repo source validation", () => {
       const status = statuses[0];
       expect(status).toBeDefined();
       expect(status?.ready).toBe(false);
-      expect(status?.diagnostics.join("\n")).toContain("source boundary . is missing at pinned ref");
-      expect(status?.agent_hints).toContain("repo-pinned-boundary-invalid");
+      expect(status?.diagnostics.join("\n")).toContain(`pinned commit ${differentHead} is not in the local checkout yet`);
+      expect(status?.agent_hints).not.toContain("repo-pinned-boundary-invalid");
       const afterHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
       expect(afterHead).toBe(beforeHead);
 

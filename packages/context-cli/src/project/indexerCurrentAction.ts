@@ -1,3 +1,4 @@
+import { REMOVED_CITATIONS_NOTE, type RemovedCitation } from "./approvedRevisionReferences.js";
 import { parseIndexerCurrentActionSubmission } from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -77,11 +78,13 @@ async function completeCurrentIndexerActionInternal(input: {
       ...(semantic.sections === undefined ? {} : { sections: semantic.sections }) } : { sections: semantic.sections };
     if (input.preview) return completeApprovedRevision({ projectRoot: found.projectRoot,
       revision: input.revision, ...content, preview: true });
+    let removed: RemovedCitation[] = [];
     const candidate = await completeApprovedRevision({ projectRoot: found.projectRoot,
-      revision: input.revision, ...content });
+      revision: input.revision, ...content, onRemovedCitations: items => { removed = items; } });
     return completedRevisionReceipt(found.projectRoot, semantic.stage,
       { outcome: candidate === undefined ? "unchanged" : "candidate-prepared",
-        ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id }) }, input.managed === true, authorities);
+        ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id }),
+        ...(removed.length ? { removed_citations: removed, removed_citations_note: REMOVED_CITATIONS_NOTE } : {}) }, input.managed === true, authorities);
   }
   if (semantic.stage === "structure-review") {
     const { readKnowledgeUpdate, completeUpdateStructureReview } = await import("./knowledgeUpdate.js");

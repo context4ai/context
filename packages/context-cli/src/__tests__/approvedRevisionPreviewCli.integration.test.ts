@@ -62,7 +62,8 @@ test.each(["direct", "source-update", "regenerate"] as const)("Node CLI %s previ
     const inputPath = join(root, ".tmp/edit.json");
     await writeFile(inputPath, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: section.id,
       content: mode === "regenerate" ? [{ program: request.program_blocks![0]!.token }]
-        : [{ markdown: section.readerVisibleBody + "\n\nRead the exported constant directly." }] }] }));
+        : [{ markdown: section.readerVisibleBody + "\n\nRead the exported constant directly." }],
+      ...(mode === "direct" ? { references: [] } : {}) }] }));
     const route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
     const writing = route.action?.input as { writing_context: { requirements: unknown[]; indexer_usage: unknown[] } };
     expect(writing.writing_context.requirements.length).toBeGreaterThan(0);
@@ -74,10 +75,17 @@ test.each(["direct", "source-update", "regenerate"] as const)("Node CLI %s previ
     const preview = JSON.parse((await execute("node", [...args, "--preview"], options)).stdout);
     expect(preview.protocol).toBe("context.approved-revision-preview/v1");
     expect(preview.changed).toBe(true);
+    const removed = [{ section_id: section.id, source_ref: DOCUMENT_REVISION_SOURCE_REF, path: "src/index.ts", start_line: 1, end_line: 1 }];
+    if (mode === "direct") expect(preview.removed_citations).toEqual(removed);
+    else expect(preview.removed_citations ?? []).toEqual([]);
     expect(await readApprovedRevision(root)).toEqual(request);
     expect(await readCandidateRecords(root)).toEqual([]);
     const submitted = JSON.parse((await execute("node", args, options)).stdout);
     expect(submitted).toBeDefined();
+    if (mode === "direct") {
+      expect(submitted.removed_citations).toEqual(removed);
+      expect(submitted.removed_citations_note).toContain("repeat each with its earlier lines");
+    } else expect(submitted).not.toHaveProperty("removed_citations");
     expect((await readCandidateRecords(root))[0]!.body).toBe(preview.markdown);
     await expect(execute("node", [...args, "--preview"], options)).rejects.toThrow();
   } finally { await rm(root, { recursive: true, force: true }); }
