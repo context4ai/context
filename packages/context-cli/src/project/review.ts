@@ -1,6 +1,7 @@
 import { recoverDurableMultiFileTransactions } from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { readLegacyReviewPayload, warnLegacyReview } from "./reviewLegacy.js";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -8,7 +9,7 @@ import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { applyReviewDecisions } from "./reviewApply.js";
-import { collectAllReviewCandidates, collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
+import { collectAllReviewCandidates, collectReviewCandidates, writeReviewHtml, archiveAppliedReviewReport } from "./reviewHtml.js";
 import {
   deprecateApprovedPage,
 } from "./reviewMaintenance.js";
@@ -463,7 +464,7 @@ export async function runReviewApplyCommand(input: {
     await recoverDurableMultiFileTransactions(projectRoot);
     const report = await writeReviewHtml({ projectRoot, ...(payload.collection ? { collection: payload.collection } : { all: true }) });
     const applied = await applyReviewDecisions({ projectRoot, payload });
-    return { ...applied, report_path: report.path };
+    return { ...applied, report_path: await archiveAppliedReviewReport(projectRoot, report.path, payload.collection ?? "all") };
   });
   const continuation = await input.afterApply?.(projectRoot);
   process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
@@ -499,7 +500,7 @@ export async function runReviewApproveAllCommand(input: {
     ? "managed-session"
     : "explicit-user-confirmation";
   const projectRoot = projectRootFromCwd(input.cwd);
-  const { scoped, report, result } = await withProjectWriteLock(projectRoot, "review-with-report", async () => {
+  const { scoped, reportPath, result } = await withProjectWriteLock(projectRoot, "review-with-report", async () => {
     await recoverDurableMultiFileTransactions(projectRoot);
     const scoped = await reviewCommandScope({
       projectRoot,
@@ -527,7 +528,12 @@ export async function runReviewApproveAllCommand(input: {
         scope: appliedScope?.scope ?? scoped.scope,
       },
     });
-    return { scoped, report, result };
+    // A confirmed batch keeps the report the user confirmed; a managed batch, the one rendered above.
+    const scope = scoped.collection ?? "all";
+    const confirmedReport = typeof confirmedScope?.report_path === "string" && existsSync(confirmedScope.report_path) ? confirmedScope.report_path : undefined;
+    const shown = report?.path ?? confirmedReport;
+    const reportPath = shown ? await archiveAppliedReviewReport(projectRoot, shown, scope) : undefined;
+    return { scoped, reportPath, result };
   });
   const continuation = await input.afterApply?.(projectRoot);
   if ((input.format ?? "text") === "json") {
@@ -535,7 +541,7 @@ export async function runReviewApproveAllCommand(input: {
     process.stdout.write(`${JSON.stringify({
       kind: "review.approve-all.result",
       decision_source: decisionSource,
-      ...(report ? { report_path: report.path } : {}),
+      ...(reportPath ? { report_path: reportPath } : {}),
       scope: compactScope,
       applied: result.applied,
       approved: result.approved,
@@ -566,7 +572,7 @@ export async function runReviewApproveAllCommand(input: {
     headline: `${result.approved} candidate(s) approved`,
     body: [
       `decision source: ${decisionSource}`,
-      ...(report ? [`review report: ${report.path}`] : []),
+      ...(reportPath ? [`review report: ${reportPath}`] : []),
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,

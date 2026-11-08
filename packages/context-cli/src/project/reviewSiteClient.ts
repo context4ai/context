@@ -24,7 +24,7 @@ const words = {
   previousPage: ['上一页 −', 'Previous −'], nextPage: ['下一页 +', 'Next +'],
   previousHint: ['上一页（快捷键 -）', 'Previous article (key -)'], nextHint: ['下一页（快捷键 +）', 'Next article (key +)'],
 };
-let language = 'zh';
+let language = DATA.language === 'en' ? 'en' : 'zh';
 const t = key => words[key]?.[language === 'zh' ? 0 : 1] || key;
 const candidates = DATA.pages.filter(page => page.candidate_id);
 const pagesById = new Map(DATA.pages.map(page => [page.id, page]));
@@ -44,7 +44,7 @@ function restore() {
   }
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    language = saved.language === 'en' ? 'en' : 'zh';
+    if (saved.language === 'en' || saved.language === 'zh') language = saved.language;
     document.body.classList.toggle('dark', saved.dark === true);
     for (const page of candidates) {
       const entry = saved.pages?.[page.id];

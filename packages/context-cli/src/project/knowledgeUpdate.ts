@@ -100,7 +100,16 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const articles = validateArticleStructureEntries(structure.parsed.articles ?? []);
     const cited = articles.filter(article => article.sections.some(section => section.references.some(reference =>
       scopes.some(scope => repoContentScopeMatches(scope.source_ref, reference.source_ref)))));
-    const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled);
+    const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled,
+      { fetchMissingCommits: true });
+    // A registered commit the checkout cannot provide makes every citation unreadable;
+    // stop before turning all of them into candidates.
+    const missingCommits = [...new Set(inspected.unresolved.filter(item => item.reason === "source-history-missing")
+      .map(item => item.reference.source_ref))];
+    if (missingCommits.length) {
+      throw new TypeError(`The registered commit of ${missingCommits.join(", ")} is not available in its checkout and could not be fetched. ` +
+        "Fetch and check out the registered commit in the source checkout (see context source list --format json), then rerun context update --pending --format json.");
+    }
     const changedPaths = new Set(inspected.unresolved.map(item => item.path));
     const candidates = await Promise.all(cited.filter(article => changedPaths.has(article.path) || article.sections.some(section => section.references.some(reference => reference.source_ref.startsWith("repo-content:"))))
       .map(async article => {

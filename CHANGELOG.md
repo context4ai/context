@@ -5,6 +5,11 @@ All notable changes to Context are documented here.
 ## Unreleased
 
 - Routine updates revise affected articles as the current state of the knowledge, without patch notes or change remarks in the article text.
+- After `context source add repo --ref <commit>`, `context update --pending` fetches a registered commit that the source checkout does not have yet; `status` and `verify` stay local and report it as missing. When it cannot be fetched, `context update --pending` stops with instructions to check out that commit, instead of reporting every citation as a missing file.
+- The HTML review report starts in the workspace language (`context.language`); a language chosen in the report is still remembered.
+- Each applied Review batch, managed or confirmed by the user, keeps its own copy of the report under `.tmp/review-reports/`, which delivery cleanup does not remove, and `report_path` points to it; the scope report (`all.html`) is still rewritten by the next batch.
+- `context version inspect` in a workspace kept in a subdirectory of a larger Git repository compares only that directory, and `--base` works there; the repository's own tags are not taken as workspace versions.
+- Links to another page's section use its section ID, which every language keeps; heading anchors differ per language. The site translation guide and the translation step say so, and the guide now separates `removed` translations (deleted) from other `orphans` (kept).
 
 ## 0.7.93 - 2026-11-08
 

@@ -1,4 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,9 @@ import { registerKnowledgeMaintenance } from "../project/knowledgeMaintenance.js
 import { readMaintenance, saveMaintenance } from "../project/maintenanceStorage.js";
 import { knowledgeMaintenanceRoute } from "../project/knowledgeMaintenanceRoute.js";
 import type { ContextResolvedWorkflowRoute } from "../project/workflow/workflowTypes.js";
+import { closeProjectWorkspace } from "../project/close.js";
+import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
+import { writeReviewHtml } from "../project/reviewHtml.js";
 import { collectProjectStatus } from "../project/status.js";
 import { formatProjectStatus } from "../project/statusRender.js";
 
@@ -97,5 +101,26 @@ test("the managed Route apply entry preserves the pre-approval HTML report", asy
   const report = await readFile(result.report_path, "utf8");
   for (const row of rows) expect(report).toContain(row.candidate_id);
   expect(report).toContain("value 42");
+  // Each applied batch keeps its own copy, through delivery cleanup and later batches.
+  expect(result.report_path).toMatch(/[\\/]\.tmp[\\/]review-reports[\\/][^\\/]+-all\.html$/u);
+  await writeFile(join(root, ".tmp/context-runtime/review/all.html"), "next batch");
+  await closeProjectWorkspace(root); await buildProjectPackages(root);
+  expect(existsSync(join(root, ".tmp/context-runtime/review"))).toBe(false);
+  expect(await readFile(result.report_path, "utf8")).toBe(report);
   expect((await readCandidateRecords(root)).filter(row => row.status === "draft")).toEqual([]);
+}, 60_000);
+
+test.each([false, true])("a user-confirmed approval keeps the report that was confirmed (custom output: %p)", async (custom) => {
+  const root = await prepareRevisionKnowledge(roots);
+  const defaultReport = join(root, ".tmp/context-runtime/review/all.html");
+  const shown = await writeReviewHtml({ projectRoot: root, all: true, ...(custom ? { out: "custom-review.html" } : {}) });
+  const confirmed = await readFile(shown.path, "utf8");
+  // A leftover default report from an earlier batch is never archived for this one.
+  if (custom) await writeFile(defaultReport, "stale earlier report");
+  let output = ""; const stdout = spyOn(process.stdout, "write").mockImplementation(chunk => { output += String(chunk); return true; });
+  try { await runReviewApproveAllCommand({ cwd: root, all: true, confirmed: true, format: "json" }); } finally { stdout.mockRestore(); }
+  const result = JSON.parse(output);
+  expect(result.report_path).toMatch(/[\\/]\.tmp[\\/]review-reports[\\/][^\\/]+-all\.html$/u);
+  await writeFile(shown.path, "next batch");
+  expect(await readFile(result.report_path, "utf8")).toBe(confirmed);
 }, 60_000);

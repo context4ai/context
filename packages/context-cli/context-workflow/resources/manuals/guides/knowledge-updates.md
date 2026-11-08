@@ -176,7 +176,9 @@ The CLI updates `package.json`, `changelog.yaml` and generated `CHANGELOG.md` to
 `context version inspect --base <commit-or-tag> --format json` compares the actual
 workspace files with Git, including untracked files. Without an explicit base it
 uses the current version's `v<version>` tag when available, otherwise HEAD; HEAD
-is not proof of publication. Review article bodies, assets, structure, navigation
+is not proof of publication. A workspace kept in a subdirectory of a larger
+repository compares only that directory and defaults to HEAD, because the
+repository's tags are not workspace versions. Review article bodies, assets, structure, navigation
 and templates, not structure alone. Without Git, inspection reports local files.
 A disposable `.tmp` checkpoint suppresses repeated recording in an uncommitted
 iteration. Losing it does not lose knowledge or prove a new publication.
