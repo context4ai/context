@@ -74,18 +74,24 @@ delivery configuration; one or two sentences of team-specific guidance are enoug
    pending set is exactly this stage's repository. Re-capture changed documents
    through their normal capture Route. Do not start a new batch after the time
    budget; finish or checkpoint the current one.
-7. **Review.** With `knowledge_review: delegate`, read the full report. Fix
+7. **Write the current state.** Revise each affected article so it reads as the
+   current knowledge, one coherent article: work the change into the existing
+   text instead of appending patch notes, "updated", "new" or "no longer"
+   remarks, dates or change history. Mention earlier behavior only when readers
+   still need it, such as a migration step. Leave articles the change does not
+   affect untouched; change history belongs in the changelog.
+8. **Review.** With `knowledge_review: delegate`, read the full report. Fix
    problems before approval through the draft revision Route and review again;
    then approve. After approval and before delivery ends, record purely
    mechanical corrections with `context task record-fix`. Unresolved blockers are
    reported, never force-approved.
-8. **Keep the top-level navigation.** Do not add, remove, rename or repurpose a
+9. **Keep the top-level navigation.** Do not add, remove, rename or repurpose a
    top-level category in a routine run, because a batch waiting for a human
    would block every later batch. Place revised pages in the existing structure,
    deliver the batch, and record the proposal (structure before and after, and
    why) in the PLAN and the result. Apply it only after a human confirms, as a
    separate knowledge-map change.
-9. **Merge each batch.** Record the increasing version and changelog as the
+10. **Merge each batch.** Record the increasing version and changelog as the
    workspace requires, then commit only that batch's files and PLAN progress.
    Fetch the remote first. If it moved, note the remote commit, rebase, and when
    only the version or changelog conflicts, take the remote's files; then run
@@ -93,10 +99,10 @@ delivery configuration; one or two sentences of team-specific guidance are enoug
    the version again with `base_ref` set to that commit and the new digest. Any
    other conflict stops that batch: keep its branch and report it. Use the
    host's delivery tool.
-10. **Publish.** With `publish: end`, publish once after every change in scope is
+11. **Publish.** With `publish: end`, publish once after every change in scope is
     delivered, including the PLAN's last stage; with `each-batch`, after each
     merge. Read back the live version. Intermediate batches only merge.
-11. **Finish.** When the PLAN is complete, check each stage's merge record and the
+12. **Finish.** When the PLAN is complete, check each stage's merge record and the
     publication, delete the PLAN and remove its pointer from `AGENTS.md` in the
     last commit. Otherwise write the exact position and next stage into the PLAN
     so the next run continues from it.

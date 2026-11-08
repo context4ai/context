@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- Routine updates revise affected articles as the current state of the knowledge, without patch notes or change remarks in the article text.
+
 ## 0.7.93 - 2026-11-08
 
 - Changes requested while a revision batch is unapproved join that batch, including the pages of a source update: `context task maintain` and `context revise` add the page to the current Review instead of queueing behind delivery or failing as busy. A page already drafted in the batch restarts from its latest draft. Approval closes the batch; later requests queue for the next one. Translation and version recording wait until no maintenance is queued.
