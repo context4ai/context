@@ -33,7 +33,8 @@ ROUTINE_POLICY:
 
 ## Run
 
-1. **Prepare.** Check the CLI as the entry Skill requires. Clone a missing
+1. **Prepare.** Check the CLI as the entry Skill requires and align versions
+   with [version alignment](version-alignment.md). Clone a missing
    workspace or registered repository (shallow or partial for large ones), then
    update the workspace branch from its remote. Never discard local work.
 2. **Resume first.** If `context status` shows an unfinished task, finish it (use

@@ -218,3 +218,10 @@ describe("plugin prompt and workflow resource contract", () => {
     }
   });
 });
+
+test("entry Skill states the Context version it ships with", async () => {
+  const { version } = JSON.parse(await read(PACKAGE_ROOT, "package.json")) as { version: string };
+  const entry = await read(PLUGIN_ROOT, ...ENTRY_PATH);
+  expect(entry).toContain(`This Skill ships with Context ${version}.`);
+  expect(entry).toContain("references/version-alignment.md");
+});

@@ -138,6 +138,13 @@ without the user's authorization.
 
 ### Check the CLI first
 
+This Skill ships with Context 0.7.93.
+
+When entering production in a workspace, align the CLI, this Skill and the
+workspace SDK once per session with [version alignment](references/version-alignment.md):
+it upgrades to the latest release of the current major version automatically and
+asks the user before moving to a new major version.
+
 If the host requires a minimum CLI version, resolve that requirement before
 obtaining a workflow Route. Run the version check separately: do not chain
 `context --version && context status` before deciding whether an upgrade is needed.
