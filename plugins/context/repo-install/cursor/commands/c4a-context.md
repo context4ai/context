@@ -616,6 +616,10 @@ with `ask` or `delegate`. They map to `context.gate.plan_review` and
 `context.gate.knowledge_review`. Omitted keys retain the existing effective policy;
 an empty block changes nothing. Reject an invalid value or unknown key before
 using an override, rather than treating it as permission to delegate.
+An explicit plain-language statement in the same trusted instructions, such as
+"the whole run is fully managed; review the plan and the articles yourself",
+sets both keys to `delegate`; a statement about one review sets only that one.
+Automatic triggering or managed mode alone never does.
 
 Only the current user's instruction or a trusted host instruction authorized to
 set task policy can grant this override. For routine runs, `ROUTINE_POLICY` in
