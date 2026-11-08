@@ -23,7 +23,8 @@ ROUTINE_POLICY:
   Skill. Without them, the existing policy applies and the run waits at those
   reviews. Reject an unknown key or invalid value and report it before working.
 - `publish` defaults to `end`: publish once after all changes are delivered.
-  `time_budget_minutes` defaults to 90. Keep it shorter than the schedule interval.
+  `time_budget_minutes` defaults to 90. Use the scheduler's serial or
+  skip-if-running option so runs never overlap; a budget alone does not prevent it.
 - Scope: no scope in the trigger means every registered repository at its
   default branch's latest commit and every registered document. A trigger may
   only narrow it by source name. A routine run never registers new sources.
@@ -49,19 +50,26 @@ ROUTINE_POLICY:
 4. **No change.** If nothing in scope changed, report "no knowledge changes this
    run" and stop without commits or publication.
 5. **Size the work.** One repository with at most 30 affected articles: update it
-   directly. Otherwise use `context-plan` with its stage limits (one repository and
-   at most 30 revised articles per stage); split a large repository by
-   `module_refs` with `context update --input`. Above 500 source documents, the
-   `context-plan` human scope gate applies: save progress and stop.
+   directly. Otherwise use `context-plan` with one repository per stage. One
+   source update always covers all affected articles of that repository; to keep
+   a large one in groups of about 30, approve and deliver checked pages early
+   with the Route's `context run --deliver` while the rest stay pending. Above 500
+   source documents, the `context-plan` human scope gate applies: save progress
+   and stop.
 6. **Run one batch at a time.** Context keeps one active update; finish its
-   review and delivery before the next. For each repository: move the ref with
-   `context source add repo --ref <sha>`, then `context update --pending --format json`,
-   revise the affected pages and follow the Route. Re-capture changed documents
+   review and delivery before the next. For each repository, move only its
+   existing registration: rerun `context source add repo` with the registered
+   namespace, `--module`, remote or local path and subpath, changing only
+   `--ref <sha>`. Then start the update with `context update --input` naming that
+   repository's scopes. Use `context update --pending --format json` only when its
+   pending set is exactly this stage's repository. Re-capture changed documents
    through their normal capture Route. Do not start a new batch after the time
    budget; finish or checkpoint the current one.
-7. **Review.** With `knowledge_review: delegate`, read the full report, fix the
-   problems (record mechanical fixes with `context task record-fix`) and approve.
-   Unresolved blockers are reported, never force-approved.
+7. **Review.** With `knowledge_review: delegate`, read the full report. Fix
+   problems before approval through the draft revision Route and review again;
+   then approve. After approval and before delivery ends, record purely
+   mechanical corrections with `context task record-fix`. Unresolved blockers are
+   reported, never force-approved.
 8. **Keep the top-level navigation.** Do not add, remove, rename or repurpose a
    top-level category in a routine run, because a batch waiting for a human
    would block every later batch. Place revised pages in the existing structure,
@@ -70,9 +78,12 @@ ROUTINE_POLICY:
    separate knowledge-map change.
 9. **Merge each batch.** Record the increasing version and changelog as the
    workspace requires, then commit only that batch's files and PLAN progress.
-   Fetch the remote first. If it moved, rebase; when only the version or changelog
-   conflicts, take the remote and record the version again. Any other conflict
-   stops that batch: keep its branch and report it. Use the host's delivery tool.
+   Fetch the remote first. If it moved, note the remote commit, rebase, and when
+   only the version or changelog conflicts, take the remote's files; then run
+   `context version inspect --base <that remote commit> --format json` and record
+   the version again with `base_ref` set to that commit and the new digest. Any
+   other conflict stops that batch: keep its branch and report it. Use the
+   host's delivery tool.
 10. **Publish.** With `publish: end`, publish once after every change in scope is
     delivered, including the PLAN's last stage; with `each-batch`, after each
     merge. Read back the live version. Intermediate batches only merge.
@@ -88,8 +99,8 @@ ROUTINE_POLICY:
 | CLI missing or below the host minimum | Install or upgrade once as the entry Skill describes |
 | Previous run left a task or PLAN | Resume it; never reset or plan again |
 | Repository or document unreadable | Record a gap, continue with the rest |
-| Review finds fixable problems | Fix and review again under delegation |
-| Remote moved during merge | Rebase; regenerate version/changelog conflicts only |
+| Review finds fixable problems | Fix the drafts and review again under delegation |
+| Remote moved during merge | Rebase; re-inspect against the remote commit and record the version again |
 | Push, merge or publication fails | Retry once, then report the exact step |
 | Time budget used up | Checkpoint in the PLAN and stop |
 
