@@ -17,3 +17,9 @@ test('new files use median, selected scopes stay separate and empty shards are v
   assert.throws(() => balancedTestShards(['a'], 0, {}));
   assert.throws(() => balancedTestShards(['a'], 1, { a: -1 }));
 });
+test('initial loads seed shards so combined work stays even', () => {
+  const durations = { a: 40, b: 30, c: 20, d: 10 };
+  const result = balancedTestShards(['a', 'b', 'c', 'd'], 2, durations, [50, 0]);
+  assert.deepEqual(result.map(x => x.durationMs), [80, 70]);
+  assert.deepEqual(result.flatMap(x => x.files).sort(), ['a', 'b', 'c', 'd']);
+});
