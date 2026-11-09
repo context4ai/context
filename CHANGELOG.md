@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.96 - 2026-11-09
 
 - `context plugin install --local` for Claude and Cursor also installs the `resources/` folders that the installed commands link to (for example the routine update and version alignment references); previously those links were broken in local installs. Global installs were not affected. Like skills, an existing folder is replaced only if an earlier local install wrote it unchanged.
 - Local installs keep each command's bundled front matter, as global installs do; the local `context` command is no longer marked `disable-model-invocation`. The entry description says Context may start when the user asks in the conversation to produce, update, revise, publish or recover Context knowledge, and not for ordinary planning, design or coding.
