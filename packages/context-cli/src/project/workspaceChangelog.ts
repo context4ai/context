@@ -60,6 +60,24 @@ async function migrateCheckpoint(root: string, original: string | undefined, val
     });
   } catch { /* Checkpoints are disposable; inspection can use its verified result. */ }
 }
+/** The remote default branch (as last fetched) when its changelog already records
+ * this version: a merged version may already be published, so it is not reused.
+ * Reads only local remote-tracking refs; no network. */
+async function versionMergedTo(root: string, version: string): Promise<string | undefined> {
+  const git = (args: string[]) => exec("git", args, { cwd: root, timeout: 10_000, maxBuffer: 16 * 1024 * 1024 })
+    .then(value => value.stdout.trim(), () => undefined);
+  const prefix = await git(["rev-parse", "--show-prefix"]);
+  if (prefix === undefined) return undefined;
+  const head = await git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
+  for (const ref of [...(head ? [head] : []), "origin/main", "origin/master"]) {
+    const text = await git(["show", `${ref}:${prefix}changelog.yaml`]);
+    if (text === undefined) continue;
+    try { if (ledgerSchema.parse(parse(text)).entries.some(entry => entry.version === version)) return ref; }
+    catch { /* An unreadable remote changelog proves nothing. */ }
+    return undefined;
+  }
+  return undefined;
+}
 export async function inspectWorkspaceVersion(root: string, baseRef?: string) {
   const snapshot = await observeWorkspaceContent(root);
   const { files } = snapshot;
@@ -89,8 +107,10 @@ export async function inspectWorkspaceVersion(root: string, baseRef?: string) {
   const matches = checkpoint?.version === version && checkpoint.digest === digest;
   const changed = checkpoint?.version === version ? !matches
     : comparison.added.length + comparison.updated.length + comparison.removed.length > 0 || !recorded;
+  const mergedTo = recorded && !comparison.tagged ? await versionMergedTo(root, version) : undefined;
   return { version, previous_version: version, changed,
-    reusable_version: recorded && !comparison.tagged ? version : null,
+    reusable_version: recorded && !comparison.tagged && !mergedTo ? version : null,
+    ...(mergedTo ? { merged_to: mergedTo } : {}),
     // Reconstruct from Git when the cache is missing; non-Git workspaces retain their recorded version.
     current: recorded && (matches || checkpoint?.version !== version && (comparison.base_commit === null || !changed)),
     expected_digest: hash({ files, version, entries, base: comparison.base_commit }),
@@ -128,7 +148,7 @@ export async function recordWorkspaceVersion(root: string, value: unknown) {
     const previous = status.previous_version ?? status.version;
     const a = previous.split(".").map(Number), b = input.version.split(".").map(Number);
     const amend = status.reusable_version === input.version;
-    if (!amend && !(b[0]! > a[0]! || b[0] === a[0] && (b[1]! > a[1]! || b[1] === a[1] && b[2]! > a[2]!))) throw new TypeError("The new SemVer must be greater than the previous workspace version; only an untagged current entry may be amended after checking the publication target.");
+    if (!amend && !(b[0]! > a[0]! || b[0] === a[0] && (b[1]! > a[1]! || b[1] === a[1] && b[2]! > a[2]!))) throw new TypeError("The new SemVer must be greater than the previous workspace version; only an untagged current entry that is not yet on the remote default branch may be amended.");
     let actor = input.actor ?? (amend ? previousEntries[0]?.actor : undefined);
     if (!actor) { try { const name = (await exec("git", ["config", "user.name"], { cwd: root })).stdout.trim(); if (name) actor = { name, kind: "git" }; } catch { /* Identity is optional. */ } }
     const { expected_digest: _, base_ref: _base, ...fields } = input;

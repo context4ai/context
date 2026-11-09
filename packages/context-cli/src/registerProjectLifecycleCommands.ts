@@ -179,10 +179,14 @@ export function registerProjectCloseAndBuildCommands(program: Command): void {
           category: ErrorCategory.UserInputInvalid,
         });
       }
+      // The next Route keeps this session's managed mode and explicit authorities.
+      const { workflowAuthorities } = await import("./project/workflow/workflowCommandOptions.js");
+      const root = program.opts() as { workflowManaged?: boolean; workflowAuthority?: unknown };
       if (await runProjectBuildCommand({
         cwd: process.cwd(),
         format: options.format === "json" ? "json" : "text",
         verbose: options.verbose === true,
+        execution: { managed: root.workflowManaged === true, authorities: workflowAuthorities(root.workflowAuthority) },
       })) {
         return;
       }

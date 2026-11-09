@@ -1,6 +1,6 @@
 ---
 name: context
-description: Use when the user explicitly invokes Context, asks to reorganize an existing Context knowledge map or website navigation, or continues a Context workflow to build, inspect, update, recover or package knowledge. Do not auto-start for ordinary planning, design or coding.
+description: Use when the user explicitly invokes Context, or asks in this conversation to produce, update, revise, publish or recover Context knowledge, including reorganizing a knowledge map or website navigation and continuing a Context workflow to build, inspect or package knowledge. Do not auto-start for ordinary planning, design or coding.
 allowed-tools:
   - Bash
 ---
@@ -143,7 +143,8 @@ This Skill ships with Context 0.7.95.
 When entering production in a workspace, align the CLI, this Skill and the
 workspace SDK once per session with [version alignment](references/version-alignment.md):
 it upgrades to the latest release of the current major version automatically and
-asks the user before moving to a new major version.
+asks the user before moving to a new major version. When the workspace pins its own
+CLI, run Route commands with `./node_modules/.bin/context` instead of `context`.
 
 If the host requires a minimum CLI version, resolve that requirement before
 obtaining a workflow Route. Run the version check separately: do not chain
@@ -440,6 +441,11 @@ The CLI loop returns when Agent work, configuration, a Gate, host execution or
 a blocker needs handling. A return for Agent work hands execution to you; it
 does not end the authorized task. Follow the returned Route within existing
 authority; do not reconstruct commands from earlier steps.
+
+After each piece of Agent work (an edit, a Review decision, a translation or the
+version text), continue with this loop instead of running the mechanical steps
+or `context status` one at a time. A small revision then needs only that Agent
+work; every Gate still applies.
 
 ### Read required resources
 

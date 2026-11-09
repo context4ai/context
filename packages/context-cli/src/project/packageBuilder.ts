@@ -741,6 +741,8 @@ export async function runProjectBuildCommand(input: {
   cwd: string;
   format?: "text" | "json";
   verbose?: boolean;
+  /** Session options used to compute the next Route in JSON output. */
+  execution?: { managed: boolean; authorities: ReturnType<typeof import("./workflow/workflowCommandOptions.js").workflowAuthorities> };
 }): Promise<boolean> {
   const found = findContextProjectRoot(input.cwd);
   if (found === null) return false;
@@ -750,10 +752,17 @@ export async function runProjectBuildCommand(input: {
     await flushQueuedContextRuntimeEvents(result.projectRoot),
   );
   if (deliveryHint !== undefined) result.agent_hints.push(deliveryHint);
+  // JSON output carries the next Route, so the Agent need not check status after a build.
+  let extra: Record<string, unknown> = {};
+  if (input.format === "json") {
+    try { extra = { workflow: (await (await import("./status.js")).collectProjectStatus(found.projectRoot, input.execution ?? {})).workflow }; }
+    catch { /* The build result stands on its own; status can be checked separately. */ }
+  }
   process.stdout.write(formatProjectBuildResult(
     result,
     input.format ?? "text",
     input.verbose === true,
+    extra,
   ));
   return true;
 }

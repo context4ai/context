@@ -34,6 +34,14 @@ async function approveOne(root: string, path: string) {
     decisions: [{ candidate_id: selected.candidate_id, status: "approved" }] } });
 }
 
+/** A revision of the processed source re-cites the text that changed (0.7.96 blocks stale citations). */
+function recited(target: { sections: Array<{ id: string; references: Array<{ source_ref: string }> }> }, markdown: string) {
+  return { stage: "approved-revision", markdown, sections: target.sections
+    .filter(section => section.references.some(reference => reference.source_ref === scope.source_ref))
+    .map(section => ({ section_id: section.id, references: [{ source_ref: scope.source_ref,
+      locator: { path: "src/index.ts", quote: "export const answer = 43;" } }] })) };
+}
+
 async function complete(root: string, value: unknown) {
   const status = await collectProjectStatus(root, { managed: true });
   const route = status.workflow.current!;
@@ -81,10 +89,10 @@ test("source update preserves old baseline until every revised page is built and
   await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Explain the changed answer." })),
     scope_summary: "Both pages explain the changed relationship.", new_topics: [] });
   const request = (await readApprovedRevision(root))!;
-  await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "updated public entry point") });
+  await complete(root, recited(request.target, request.target.markdown.replace("public entry point", "updated public entry point")));
   const nextAuthor = (await readApprovedRevision(root))!;
   expect(nextAuthor.target.path).not.toBe(request.target.path);
-  await complete(root, { stage: "approved-revision", markdown: nextAuthor.target.markdown.replace("public entry point", "updated public entry point") });
+  await complete(root, recited(nextAuthor.target, nextAuthor.target.markdown.replace("public entry point", "updated public entry point")));
   expect(await readCandidateRecords(root)).toHaveLength(2);
   await approveOne(root, request.target.path);
   await expect(closeProjectWorkspace(root)).rejects.toThrow("draft candidates");
@@ -102,7 +110,7 @@ test("source update preserves old baseline until every revised page is built and
     path === completedPath ? { path } : { path, instruction: "Explain the changed answer." }),
     scope_summary: "The first page already incorporates this change; finish the other page.", new_topics: [] });
   const last = (await readApprovedRevision(root))!;
-  await complete(root, { stage: "approved-revision", markdown: last.target.markdown.replace("public entry point", "updated public entry point") });
+  await complete(root, recited(last.target, last.target.markdown.replace("public entry point", "updated public entry point")));
   await approveCandidates(root, await readCandidateRecords(root)); await closeProjectWorkspace(root);
   expect(await baseline(root)).toEqual(before);
   await buildProjectPackages(root);
@@ -396,7 +404,7 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
   const reopened = (await readApprovedRevision(root))!;
   expect(reopened.target.sections).toEqual(revisedSections);
   expect(reopened.pending_targets?.[0]).toMatchObject({ target: interrupted.target, instruction: interrupted.instruction });
-  await complete(root, { stage: "approved-revision", markdown: reopened.target.markdown + "\nMissing detail.\n" });
+  await complete(root, recited(reopened.target, reopened.target.markdown + "\nMissing detail.\n"));
   const resumed = (await readApprovedRevision(root))!;
   expect(resumed.target).toEqual(interrupted.target);
   expect(resumed.instruction).toBe(interrupted.instruction);
@@ -404,7 +412,7 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
   const markdown = newPage ? resumed.target.markdown +
     `\n<!-- context:section id="usage" -->\n\nUse the changed constant for this task.\n\n<!-- /context:section -->\n`
     : resumed.target.markdown.replace("public entry point", "updated public entry point");
-  await complete(root, { stage: "approved-revision", markdown });
+  await complete(root, recited(resumed.target, markdown));
   expect((await readCandidateRecords(root)).map((item) => item.path).sort()).toEqual([first.target.path, interrupted.target.path].sort());
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root); await buildProjectPackages(root);
@@ -473,7 +481,7 @@ test("ordinary source revision exposes current requirements without restoring Pr
   expect(request.program_blocks ?? []).toEqual([]);
   const { expandRevisionProgramBlocks } = await import("../project/approvedRevisionPrograms.js");
   expect(() => expandRevisionProgramBlocks("{{context:program:foreign}}", [])).toThrow();
-  await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("value 42", "value 43") });
+  await complete(root, recited(request.target, request.target.markdown.replace("value 42", "value 43")));
   const candidates = await readCandidateRecords(root);
   expect(candidates[0]!.body).toContain("value 43");
 }, 30_000);

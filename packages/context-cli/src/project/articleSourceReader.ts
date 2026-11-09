@@ -126,7 +126,7 @@ export async function registeredArticleSourceReader(projectRoot: string) {
     const { kind, entry } = source;
     const managed = kind === "note" || kind === "sessions";
     const root = await realpath(resolve(workspace, managed ? dirname(entry.materializedAt) : entry.materializedAt)).catch(error => {
-      if (kind === "repo") throw new SourceReadError("The registered source checkout is not accessible. Restore the source before checking citations.", "context source recovery-plan --format json");
+      if (kind === "repo") throw new SourceReadError(`The registered source checkout of ${sourceRef} is not accessible. Restore the source before checking citations.`, "context source recovery-plan --format json");
       throw error;
     });
     inside(workspace, root);

@@ -25,7 +25,9 @@ updates and `context update --pending`, pages whose citations
 are unchanged or only moved are not candidates, so an empty list is possible;
 still check the change for additions before submitting the scope decision.
 Those pages are listed in `scope_pages`: they need no decision, but include one
-with an `instruction` when an addition or shared change affects it.
+with an `instruction` when an addition or shared change affects it. When the
+pages you revise are written by other Agents, give each writer its page's
+`changed_references` entries and their evidence.
 
 Follow each changed reference's `evidence_ref` into the JSON array in
 `reference_evidence_file` (`reference_evidence_count` entries) for

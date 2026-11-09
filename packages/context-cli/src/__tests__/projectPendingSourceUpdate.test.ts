@@ -10,8 +10,9 @@ import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { inspectPendingSourceUpdates, pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
+import { suggestedCitation } from "../project/approvedRevisionReferences.js";
 import { collectProjectStatus } from "../project/status.js";
-import { readApprovedRevision } from "../project/approvedRevision.js";
+import { completeApprovedRevision, readApprovedRevision } from "../project/approvedRevision.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -366,4 +367,63 @@ test("status tells contents not downloaded apart from a missing path, offline", 
   await expect(read(DOCUMENT_REVISION_SOURCE_REF, "src/index.ts")).rejects.toMatchObject({ detail: { reason_code: "source-content-missing" } });
   const fresh = await registeredArticleSourceReader(root);
   await expect(fresh(DOCUMENT_REVISION_SOURCE_REF, "src/no-such-file.ts")).rejects.toMatchObject({ detail: { reason_code: "source-file-missing" } });
+});
+
+test("a blocked citation names where its old lines now are, from local history", async () => {
+  const root = await settledKnowledge();
+  const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
+  await moveRegistration(root, "src/index.ts", "// header\nexport const answer = 43;\n");
+  expect(await suggestedCitation(root, structure.articles[0].sections[0].references[0], structure.articles[0].sections))
+    .toBe("the old text now maps to lines 1-2");
+});
+
+test("a source-update revision cannot keep a citation the processed version no longer has", async () => {
+  const root = await settledKnowledge();
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  await beginKnowledgeUpdate(root, undefined, { pending: true });
+  const status = await collectProjectStatus(root, { managed: true });
+  await completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision, managed: true,
+    value: { stage: "source-update", decisions: [{ path: "architecture/overview.md", instruction: "Describe the new value." },
+      { path: "architecture/usage.md", instruction: "Describe the new value." }],
+      scope_summary: "The value changed.", new_topics: [] } });
+  const request = (await readApprovedRevision(root))!;
+  expect(request.processed_scopes?.length).toBeGreaterThan(0);
+  const section = request.target.sections[0]!.id;
+  // The writer changes the prose but does not re-cite: the stale citation blocks with the facts.
+  const markdown = request.target.markdown.replace("value 42.", "value 43.");
+  const error = await completeApprovedRevision({ projectRoot: root, revision: request.revision, markdown, preview: true }).catch(value => value);
+  expect(error).toMatchObject({ reason: "processed-reference-stale" });
+  expect(error.message).toContain(`Fragment ${section}: ${DOCUMENT_REVISION_SOURCE_REF} src/index.ts:1-1 is not-found`);
+  // Re-citing the current text passes.
+  const preview = await completeApprovedRevision({ projectRoot: root, revision: request.revision, preview: true,
+    markdown, sections: [{ section_id: section, references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF, locator: { path: "src/index.ts", quote: "export const answer = 43;" } }] }] });
+  expect(preview.changed).toBe(true);
+});
+
+test("verify reports missing local downloads and commits as unchecked, and a deleted file as a change", async () => {
+  const root = await settledKnowledge();
+  const codes = async () => (await verifyProjectWorkspace(root, { checkSourceRegions: true })).issues
+    .filter(issue => issue.code.startsWith("approved-source-region") || issue.code === "source-read-failed");
+  // Contents not downloaded in a partial clone.
+  await partialCloneCheckout(root, { checkout: false });
+  const missingContents = await codes();
+  expect(missingContents.map(issue => issue.code)).toEqual(["source-read-failed"]);
+  expect(missingContents[0]!.message).toContain("not downloaded");
+  // A registered commit the checkout does not have yet.
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  const missingCommit = await codes();
+  expect(missingCommit.map(issue => issue.code)).toEqual(["source-read-failed"]);
+  expect(missingCommit[0]!.message).toContain("registered commit is not in the source checkout");
+  // A file the registered commit really no longer has is a citation change.
+  const source = join(root, "fixture-source");
+  execFileSync("git", ["rm", "-q", "src/index.ts"], { cwd: source });
+  execFileSync("git", ["commit", "-qm", "remove"], { cwd: source });
+  const registry = join(root, "sources/repo/index.yaml");
+  const parsed = YAML.parse(await readFile(registry, "utf8"));
+  parsed.sources[0].modules[0].git.ref = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
+  await writeFile(registry, YAML.stringify(parsed));
+  execFileSync("git", ["-C", join(root, "sources/repo/20260903/revision-fixture"), "fetch", "-q", "origin", parsed.sources[0].modules[0].git.ref]);
+  const deleted = await codes();
+  expect(deleted.map(issue => issue.code)).toContain("approved-source-region-changed");
+  expect(deleted.find(issue => issue.code === "approved-source-region-changed")!.message).toContain("source-file-missing");
 });

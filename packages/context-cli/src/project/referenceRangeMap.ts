@@ -2,13 +2,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { ArticleSourceReference } from "@c4a/context";
 
 const exec = promisify(execFile);
 export interface Hunk { old: number; oldCount: number; next: number; nextCount: number }
 
-export async function hunks(root: string, before: string, after: string): Promise<Hunk[]> {
-  const parent = join(root, ".tmp/context-runtime/reference-diff");
+export async function hunks(_root: string, before: string, after: string): Promise<Hunk[]> {
+  // System temp: previews must not write into the workspace.
+  const parent = join(tmpdir(), "context-reference-diff");
   await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(join(parent, "compare-"));
   try {

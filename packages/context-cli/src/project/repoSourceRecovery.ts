@@ -195,6 +195,7 @@ export async function repositoryRecoveryPlan(input: {
           input_example: { schema: RECOVERY_SCHEMA, repositories: groups.filter(group => !group.ready)
             .map(group => ({ source: group.sources[0]!, mode: "clone" as const })) },
           input_note: "Save input_example as the input file. Each entry restores every source of its group. " +
+            "mode clone is already small: a shallow, partial clone of the registered commit that checks out only the group's required_subpaths. " +
             "To reuse an existing checkout instead of cloning, set mode to local and add path.",
         },
   };

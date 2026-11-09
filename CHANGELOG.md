@@ -2,6 +2,20 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- `context plugin install --local` for Claude and Cursor also installs the `resources/` folders that the installed commands link to (for example the routine update and version alignment references); previously those links were broken in local installs. Global installs were not affected. Like skills, an existing folder is replaced only if an earlier local install wrote it unchanged.
+- Local installs keep each command's bundled front matter, as global installs do; the local `context` command is no longer marked `disable-model-invocation`. The entry description says Context may start when the user asks in the conversation to produce, update, revise, publish or recover Context knowledge, and not for ordinary planning, design or coding.
+- Revision submissions and batch previews report every citation problem of a page at once instead of one per attempt, including citations whose source cannot be read. A line range beyond the end of the cited file is reported with the paragraph, the citation and the file's line count.
+- A paragraph whose text and citations are both unchanged keeps its citations when the checkout of a source it cites is missing, so a revision of other paragraphs is no longer blocked. A paragraph whose text changed is still checked; when its source cannot be checked, the error names the source.
+- A revision that processes a source version (for example the pages of a source update) can no longer keep a citation of that source that the processed version no longer confirms, including in paragraphs it does not rewrite. Preview and submission list each such citation with its paragraph and lines and, when the earlier text is available locally, where it now maps. Stale citations of other sources are kept and returned as `reference_warnings`, also in the compact completion summary. Citations that only moved are still relocated automatically, and sources that cannot be checked on this machine block only paragraphs whose text changed.
+- The "source checkout is not accessible" error names the source.
+- `context verify` reports an unreadable source once, with the number of citations and pages it leaves unchecked, instead of one warning per citation. Contents not downloaded and registered commits not yet fetched on this machine are reported the same way, not as changed citations. A page's changed-citation warning lists every failing citation with its source, file and lines, not only the first fragment that failed.
+- `context task maintain`, `context task advance-maintenance` and `context build --format json` return the next Route in `workflow`, as `context version record` does, so no separate status check is needed. The Route keeps the session's managed mode and explicit authorities, also when `context run` executes the build.
+- `context version inspect` offers `reusable_version` only for a version that is not yet on the remote default branch (as last fetched); a merged version is reported as `merged_to`. When the remote branch cannot be read, the earlier rule applies, and tagged versions are never reused. Its `input_example` suggests the version to record: the reusable one, otherwise the next patch.
+- `context source recovery-plan` says that `mode: clone` makes a shallow, partial clone that checks out only the required directories.
+- Skills: run Route commands with the workspace's own CLI when it pins one; after each piece of Agent work continue with `context run --until blocked-or-complete`; do not copy a `translation` record into translated front matter, because the CLI writes it.
+
 ## 0.7.95 - 2026-11-08
 
 - The entry Skill enters the existing workspace named by the host or the user before running the entry, cloning it when the current directory does not have it. Requests about existing knowledge (routine updates, revisions, source updates, recovery, progress checks) never create a new workspace; a missing configured workspace is reported instead. Routine update triggers start with a short paragraph naming the knowledge base and the goal of the run.

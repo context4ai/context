@@ -254,10 +254,12 @@ export function formatProjectBuildResult(
   result: ProjectBuildResult,
   format: "text" | "json" = "text",
   verbose = false,
+  extra: Record<string, unknown> = {},
 ): string {
   if (format === "json") {
-    if (verbose) return `${JSON.stringify(result, null, 2)}\n`;
+    if (verbose) return `${JSON.stringify({ ...result, ...extra }, null, 2)}\n`;
     return `${JSON.stringify({
+      ...extra,
       agent_hints: result.agent_hints,
       packages: result.packages.map((pkg) => ({
         name: pkg.name,

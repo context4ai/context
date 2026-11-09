@@ -101,6 +101,13 @@ field and source location; do not rewrite the token's table by hand. The final
 Candidate still needs Review: a token or accepted submission does not establish
 that the requested correction reached the page.
 
+A revision that processes a source version (the source update's pages) must
+resolve the page's citations of that source that no longer match it, including
+those in paragraphs you do not rewrite: preview and submission list each one with
+its paragraph and lines. Rewrite the paragraph, cite the current text, or remove
+the citation. Stale citations of other sources are kept and returned as
+`reference_warnings` for a later update or revision.
+
 Context collects complete pages into a delivery batch. An Author completion can
 therefore lead to another Author before Review. Follow that Route; do not close
 or build after each page. Review, close and build operate on the assembled batch.

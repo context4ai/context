@@ -14,8 +14,13 @@ export function registerVersionCommands(program: Command) {
     if (!root) throw new TypeError("Run inside a Context workspace");
     const { files: _, content_digest: _digest, snapshot_format: _format, ...status } = await inspectWorkspaceVersion(root, options.base);
     void _; void _digest; void _format;
+    // Suggest the version to record: the reusable one, else the next patch; 0.1.0 only for a first version.
+    const first = status.version === "0.0.0";
+    const [major, minor, patch] = status.version.split(".").map(Number);
+    const suggested = status.reusable_version ?? (first ? "0.1.0" : `${major}.${minor}.${patch! + 1}`);
     process.stdout.write(JSON.stringify({ ...status, next_action: { command: "context version record --input <file> --format json" },
-      input_example: { expected_digest: status.expected_digest, ...(options.base ? { base_ref: options.base } : {}), version: "0.1.0", title: "Summary", changes: ["Reader-visible changes"], triggers: [{ kind: "initial", description: "User requested initial knowledge production" }] } }, null, 2) + "\n");
+      input_example: { expected_digest: status.expected_digest, ...(options.base ? { base_ref: options.base } : {}), version: suggested, title: "Summary", changes: ["Reader-visible changes"],
+        triggers: [first ? { kind: "initial", description: "User requested initial knowledge production" } : { kind: "other", description: "What caused this change" }] } }, null, 2) + "\n");
   });
   command.command("record").requiredOption("--input <file>", "YAML/JSON file or -").option("--format <format>", "json", "json")
     .action(async (options: { input: string }) => {

@@ -218,18 +218,21 @@ async function executeClose(
 
 async function executeBuild(
   cwd: string,
-  command: readonly string[],
+  invocation: ParsedWorkflowInvocation,
 ): Promise<void> {
+  const command = invocation.command;
   const options = parseOptions(
     command.slice(1),
     new Set(["--format"]),
     new Set(["--verbose"]),
   );
   if (options === undefined || options.positionals.length > 0) throw new Error("unsupported build command");
+  // Same session options as the CLI entry, so the build's next Route matches.
   await runProjectBuildCommand({
     cwd,
     format: outputFormat(options) ?? "text",
     verbose: options.flags.has("--verbose"),
+    execution: { managed: invocation.managed, authorities: invocation.authorities },
   });
 }
 
@@ -301,7 +304,7 @@ async function executeCommand(
     return;
   }
   if (command === "build") {
-    await executeBuild(cwd, invocation.command);
+    await executeBuild(cwd, invocation);
     return;
   }
   if (command === "review" && subcommand === "approve-all") {
