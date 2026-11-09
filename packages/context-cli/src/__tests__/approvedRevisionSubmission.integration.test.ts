@@ -180,13 +180,16 @@ test("batch preview checks every issued page with submission rules and writes no
   const sourceRef = request.target.source_refs[0];
   const path = request.target.sections[0].references[0].locator.path;
   await writeFile(first, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: await sectionOf(0),
-    references: [{ source_ref: sourceRef, locator: { path, start_line: 9000, end_line: 9001 } }] }] }));
+    references: [{ source_ref: sourceRef, locator: { path, start_line: 9000, end_line: 9001 } },
+      { source_ref: sourceRef, locator: { path, quote: "text that is not in the source" } }] }] }));
   await writeFile(second, JSON.stringify({ stage: "approved-revision", sections: [{ section_id: await sectionOf(1),
     references: [{ source_ref: "note:elsewhere.md", locator: { path: "elsewhere.md", start_line: 1, end_line: 1 } }] }] }));
   const flagged = await completeCurrentIndexerAction({ cwd: root, revision, value: batch.submission, managed: true, preview: true }) as unknown as BatchPreview;
   expect(flagged).toMatchObject({ ok_count: 0, issue_count: 2 });
   expect(flagged.pages[1]!.issues[0]).toMatchObject({ reason_code: "source-outside-revision" });
-  expect(flagged.pages[0]!.issues[0]!.message.length).toBeGreaterThan(0);
+  // Both problems of the first page appear in one preview.
+  expect(flagged.pages[0]!.issues.map((item: { reason_code?: string; path?: unknown }) => [item.reason_code, item.path])).toEqual([
+    ["locator-out-of-range", ["sections", 0, "references", 0, "locator"]], [undefined, ["sections", 0, "references", 1, "locator"]]]);
   expect(await readCandidateRecords(root)).toHaveLength(0);
   expect(await listing()).toEqual(before);
 }, 120000);

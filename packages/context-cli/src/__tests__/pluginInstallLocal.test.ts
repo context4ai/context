@@ -222,3 +222,50 @@ test("directory detection rejects files and symlinks before writing", async () =
   await expect(installAutoLocalSkills(source, repo, false)).rejects.toThrow("regular directory");
   expect(existsSync(join(repo, ".agents"))).toBe(false);
 });
+
+test("Claude and Cursor install the resources their commands link to; unmanaged resources are protected", async () => {
+  for (const host of ["claude", "cursor"]) {
+    await mkdir(join(source, host, "resources/context"), { recursive: true });
+    await writeFile(join(source, host, "resources/context/routine-update.md"), `${host} routine`);
+  }
+  for (const agent of ["claude", "cursor"] as const) {
+    const root = join(dir, `resources-${agent}`);
+    const output = await installLocalSkills(source, root, false, agent);
+    expect(output).toContain("resources/context");
+    expect(await readFile(join(root, "resources/context/routine-update.md"), "utf8")).toBe(`${agent} routine`);
+    expect(JSON.parse(await readFile(join(root, "resources/context/.context-skill-install.json"), "utf8")).owner).toBe("context-plugin-local");
+    // A refresh replaces the managed folder.
+    await writeFile(join(source, agent, "resources/context/routine-update.md"), `${agent} routine v2`);
+    await installLocalSkills(source, root, false, agent);
+    expect(await readFile(join(root, "resources/context/routine-update.md"), "utf8")).toBe(`${agent} routine v2`);
+  }
+  const codex = join(dir, "resources-codex");
+  await installLocalSkills(source, codex, false, "codex");
+  expect(existsSync(join(codex, "resources"))).toBe(false);
+  // A folder the installer did not write is never replaced, and nothing else is written first.
+  const unmanaged = join(dir, "resources-unmanaged");
+  await mkdir(join(unmanaged, "resources/context"), { recursive: true });
+  await writeFile(join(unmanaged, "resources/context/routine-update.md"), "hand copy");
+  await expect(installLocalSkills(source, unmanaged, false, "claude")).rejects.toThrow("resources/context");
+  expect(existsSync(join(unmanaged, "skills"))).toBe(false);
+  expect(existsSync(join(unmanaged, "commands"))).toBe(false);
+});
+
+test.each(["claude", "cursor"] as const)("every resource link in the generated %s commands resolves after a local install", async agent => {
+  const generated = join(import.meta.dir, "../../../../plugins/context/repo-install");
+  const root = join(dir, `generated-${agent}`);
+  await installLocalSkills(generated, root, false, agent);
+  const commands = await readdir(join(root, "commands"));
+  const links = new Set<string>();
+  for (const name of commands.filter(name => name.endsWith(".md"))) {
+    for (const match of (await readFile(join(root, "commands", name), "utf8")).matchAll(/\]\((\.\.\/resources\/[^)#\s]+)/gu)) links.add(match[1]!);
+  }
+  expect(links.size).toBeGreaterThan(0);
+  for (const link of links) expect(existsSync(join(root, "commands", link))).toBe(true);
+  // Commands keep their bundled front matter, as in a global install.
+  const prefix = agent === "cursor" ? "c4a-" : "";
+  for (const name of [`${prefix}context.md`, `${prefix}context-inspect-search.md`]) {
+    expect(await readFile(join(root, "commands", name), "utf8")).toBe(await readFile(join(generated, agent, "commands", name), "utf8"));
+  }
+  if (agent === "claude") expect(await readFile(join(root, "commands/context.md"), "utf8")).not.toContain("disable-model-invocation");
+});

@@ -1,9 +1,14 @@
-import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createArticleSourceReference } from "@c4a/context";
+import { createArticleSourceReference, type ArticleStructureEntry } from "@c4a/context";
 import { prepareRevisionReferences, removedCitations } from "../project/approvedRevisionReferences.js";
+import { SubmissionInputErrors } from "../project/productionFeedback.js";
+import { initialRevisionKnowledge, prepareRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
+import { execFileSync } from "node:child_process";
+import type { ReferenceReminder } from "../project/approvedRevisionReferences.js";
+import YAML from "yaml";
 import { prepareRevisionMarkdown } from "../project/approvedRevisionEdits.js";
 import { rememberArticleRegion } from "../project/articleRegionBaselines.js";
 import { suggestedRange } from "../project/articleReferenceObservation.js";
@@ -176,3 +181,162 @@ test("suggested locators submit as new citations, never as another earlier citat
       .toEqual([{ id: "s", references: [createArticleSourceReference(sourceRef, numeric.locator, moved)] }]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("every citation problem of a page is reported at once", async () => {
+  const root = await mkdtemp(join(tmpdir(), "revision-problems-"));
+  const sourceRef = "note:20260912/source.md";
+  const source = "# Note\nOne\nTwo\n";
+  try {
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    await writeFile(join(root, "sources/note/20260912/source.md"), source);
+    const input = { projectRoot: root, sourceRefs: [sourceRef], previous: [], sectionIds: ["a", "b"] };
+    const error = await prepareRevisionReferences({ ...input, edits: [
+      { section_id: "a", references: [{ source_ref: sourceRef, locator: { path: "source.md", start_line: 90, end_line: 91 } }] },
+      { section_id: "b", references: [
+        { source_ref: "note:elsewhere.md", locator: { path: "elsewhere.md", start_line: 1, end_line: 1 } },
+        { source_ref: sourceRef, locator: { path: "source.md", quote: "Missing text" } },
+      ] },
+    ] }).catch(value => value);
+    expect(error).toBeInstanceOf(SubmissionInputErrors);
+    expect((error as SubmissionInputErrors).errors.map(item => item.path)).toEqual([
+      ["sections", 0, "references", 0, "locator"], ["sections", 1, "references", 0, "source_ref"], ["sections", 1, "references", 1, "locator"]]);
+    expect(error.message).toStartWith("3 problems:");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("an unedited paragraph keeps its citation when its repository checkout is missing", async () => {
+  const roots: string[] = [];
+  const root = await initialRevisionKnowledge(roots);
+  try {
+    const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
+    const kept = structure.articles[0].sections[0].references[0];
+    await rm(join(root, "sources/repo/20260903/revision-fixture"), { recursive: true, force: true });
+    const result = await prepareRevisionReferences({ projectRoot: root, sourceRefs: [kept.source_ref],
+      previous: [{ id: "edited", references: [] }, { id: "unedited", references: [kept] }], sectionIds: ["edited", "unedited"],
+      edits: [{ section_id: "edited", references: [] }] });
+    expect(result).toEqual([{ id: "edited", references: [] }, { id: "unedited", references: [kept] }]);
+  } finally { for (const item of roots) await rm(item, { recursive: true, force: true }); }
+});
+
+describe("citations kept in paragraphs the submission did not resubmit", () => {
+  // Repository A (processed by this request) and note B (not processed), both stale.
+  async function workspace(roots: string[], change: (source: string) => Promise<void>) {
+    const root = await prepareRevisionKnowledge(roots);
+    const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")) as { articles?: unknown[] };
+    void structure;
+    const source = join(root, "fixture-source");
+    const before = "export const answer = 42;\n";
+    const repo = createArticleSourceReference("repo:20260903/revision-fixture", { path: "src/index.ts", start_line: 1, end_line: 1 }, before);
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    await writeFile(join(root, "sources/note/20260912/b.md"), "Old note\n");
+    const note = createArticleSourceReference("note:20260912/b.md", { path: "b.md", start_line: 1, end_line: 1 }, "Old note\n");
+    await writeFile(join(root, "sources/note/20260912/b.md"), "New note\n");
+    await change(source);
+    execFileSync("git", ["add", "-A"], { cwd: source });
+    execFileSync("git", ["commit", "-qm", "change"], { cwd: source });
+    const version = execFileSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).trim();
+    const registry = join(root, "sources/repo/index.yaml");
+    const parsed = YAML.parse(await readFile(registry, "utf8"));
+    parsed.sources[0].modules[0].git.ref = version;
+    await writeFile(registry, YAML.stringify(parsed));
+    return { root, repo, note };
+  }
+  const run = (root: string, previous: ArticleStructureEntry["sections"], options: { processed?: string[]; changed?: string[] } = {}) => {
+    const reminders: ReferenceReminder[] = [];
+    return { reminders, result: prepareRevisionReferences({ projectRoot: root, sourceRefs: previous.flatMap(section => section.references.map(item => item.source_ref)),
+      previous, sectionIds: previous.map(section => section.id), edits: [], processedScopes: options.processed ?? [],
+      changedBodies: new Set(options.changed ?? []), onReminder: item => reminders.push(item) }) };
+  };
+
+  test("a stale citation of a processed source blocks; a stale citation of another source is a reminder", async () => {
+    const roots: string[] = [];
+    try {
+      const { root, repo, note } = await workspace(roots, async source => writeFile(join(source, "src/index.ts"), "export const answer = 43;\n"));
+      const blocked = run(root, [{ id: "s", references: [repo, note] }], { processed: ["repo:20260903/revision-fixture"] });
+      const error = await blocked.result.catch(value => value);
+      expect(error).toMatchObject({ reason: "processed-reference-stale", path: ["fragments", "s", "references", 0] });
+      expect(error.message).toContain("src/index.ts:1-1 is not-found (region-not-found) in the source version this revision processes");
+      expect(blocked.reminders).toEqual([expect.objectContaining({ section_id: "s", source_ref: "note:20260912/b.md", state: "not-found" })]);
+      // Without processed scopes both are reminders and the submission passes unchanged.
+      const reminded = run(root, [{ id: "s", references: [repo, note] }]);
+      expect(await reminded.result).toEqual([{ id: "s", references: [repo, note] }]);
+      expect(reminded.reminders.map(item => item.source_ref)).toEqual(["repo:20260903/revision-fixture", "note:20260912/b.md"]);
+    } finally { for (const item of roots) await rm(item, { recursive: true, force: true }); }
+  }, 60_000);
+
+  test("a processed source that no longer has the cited file blocks like changed text", async () => {
+    const roots: string[] = [];
+    try {
+      const { root, repo } = await workspace(roots, async source => rm(join(source, "src/index.ts")));
+      const error = await run(root, [{ id: "s", references: [repo] }], { processed: ["repo:20260903/revision-fixture"] }).result.catch(value => value);
+      expect(error).toMatchObject({ reason: "processed-reference-stale" });
+      expect(error.message).toContain("unavailable (source-file-missing)");
+    } finally { for (const item of roots) await rm(item, { recursive: true, force: true }); }
+  }, 60_000);
+
+  test("a missing checkout blocks only a paragraph whose text changed", async () => {
+    const roots: string[] = [];
+    try {
+      const { root, repo } = await workspace(roots, async source => writeFile(join(source, "README.md"), "unrelated\n"));
+      await rm(join(root, "sources/repo/20260903/revision-fixture"), { recursive: true, force: true });
+      const previous = [{ id: "edited", references: [repo] }, { id: "unedited", references: [repo] }];
+      const error = await run(root, previous, { changed: ["edited"] }).result.catch(value => value);
+      expect(error).toMatchObject({ reason: "reference-unverifiable", path: ["fragments", "edited", "references", 0] });
+      expect(error.message).toContain("repo:20260903/revision-fixture");
+      expect(await run(root, previous).result).toEqual(previous);
+    } finally { for (const item of roots) await rm(item, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
+
+test("an unreadable source is one problem among the page's others, not the end of the check", async () => {
+  const roots: string[] = [];
+  try {
+    const root = await prepareRevisionKnowledge(roots);
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    await writeFile(join(root, "sources/note/20260912/b.md"), "One\nTwo\n");
+    await rm(join(root, "sources/repo/20260903/revision-fixture"), { recursive: true, force: true });
+    const repo = "repo:20260903/revision-fixture", note = "note:20260912/b.md";
+    const error = await prepareRevisionReferences({ projectRoot: root, sourceRefs: [repo, note], previous: [], sectionIds: ["s"],
+      edits: [{ section_id: "s", references: [
+        { source_ref: repo, locator: { path: "src/index.ts", start_line: 1, end_line: 1 } },
+        { source_ref: note, locator: { path: "b.md", start_line: 8, end_line: 9 } },
+        { source_ref: note, locator: { path: "b.md", quote: "Missing text" } },
+      ] }] }).catch(value => value);
+    expect(error).toBeInstanceOf(SubmissionInputErrors);
+    const errors = (error as SubmissionInputErrors).errors;
+    expect(errors.map(item => [item.reason, item.path])).toEqual([
+      ["source-read-failed", ["sections", 0, "references", 0, "source_ref"]],
+      ["locator-out-of-range", ["sections", 0, "references", 1, "locator"]],
+      [undefined, ["sections", 0, "references", 2, "locator"]]]);
+    expect(errors[0]!.message).toContain(`checkout of ${repo} is not accessible`);
+  } finally { for (const item of roots) await rm(item, { recursive: true, force: true }); }
+}, 60_000);
+
+test("an incomplete captured document blocks an in-scope stale citation and reminds otherwise", async () => {
+  const { initContextProject } = await import("../project/workspace.js");
+  const { runCliInDir, writeCaptureProjectEntry } = await import("./projectCaptureFileV062Helpers.js");
+  const root = await mkdtemp(join(tmpdir(), "revision-incomplete-"));
+  try {
+    const { projectRoot } = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+    await mkdir(join(root, "docs"));
+    await writeFile(join(root, "docs/intro.md"), "# Intro\n\nRegistered source content.\n");
+    await runCliInDir(projectRoot, ["source", "add", "file", "product-docs", "--local", "../docs", "--format", "json"]);
+    writeCaptureProjectEntry(projectRoot);
+    await runCliInDir(projectRoot, ["run", "capture:file:product-docs", "--format", "json"]);
+    // The capture is incomplete (as a partial Lark capture would be) and lacks the cited text.
+    const manifestPath = join(projectRoot, "sources/file/product-docs/manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.metadata.capture.report = { path: "capture-report.json", fidelityStatus: "complete", evidenceStatus: "complete",
+      projectionStatus: "complete", resourceStatus: "warning" };
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const cited = createArticleSourceReference("file:product-docs", { path: "intro.md", start_line: 3, end_line: 3 }, "# Intro\n\nEarlier content.\n");
+    const input = { projectRoot, sourceRefs: ["file:product-docs"], previous: [{ id: "s", references: [cited] }], sectionIds: ["s"], edits: [] };
+    const error = await prepareRevisionReferences({ ...input, processedScopes: ["file:product-docs"] }).catch(value => value);
+    expect(error).toMatchObject({ reason: "processed-reference-stale" });
+    expect(error.message).toContain("unavailable (source-capture-incomplete)");
+    const reminders: ReferenceReminder[] = [];
+    expect(await prepareRevisionReferences({ ...input, onReminder: item => reminders.push(item) })).toEqual([{ id: "s", references: [cited] }]);
+    expect(reminders).toEqual([expect.objectContaining({ state: "unavailable", reason: "source-capture-incomplete" })]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);

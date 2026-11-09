@@ -18,6 +18,7 @@ whenever `source_diff` is `null`, align the whole draft with the current
 approved article before submitting. Keep the translation's structure exactly:
 
 - frontmatter contains only a translated `title` and optional `description`;
+  drop a `translation` record copied from a kept draft, because the CLI writes it;
 - keep every `context:section` marker, id and order unchanged;
 - keep every fenced code block and language marker; translate prose in `text`,
   `txt`, and `plaintext` blocks, preserving commands, paths and placeholders such

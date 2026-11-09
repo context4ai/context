@@ -9,7 +9,8 @@ import { maintenanceProductionWorkspace, submitMaintenanceProductionArticle } fr
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace, readProjectCloseStatus } from "../project/close.js";
-import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
+import { buildFixturePackages as buildProjectPackages, recordFixtureVersionIfRequired } from "./workspaceVersionDelivery.fixture.js";
+import { placeApprovedReadingFixture } from "./knowledgeMapReview.fixture.js";
 import { readProductionStage } from "../project/productionStageStore.js";
 import { collectProjectStatus } from "../project/status.js";
 import { readApprovedRevision, requestDigest } from "../project/approvedRevision.js";
@@ -276,6 +277,49 @@ test("maintenance CLI exposes its input schema without a workspace mutation", as
   expect(await readMaintenance(root)).toEqual(before);
 }, 60_000);
 
+
+test("maintenance commands return the next Route instead of only a status command", async () => {
+  const { root, views } = await deliveryWorkspace();
+  const input = join(root, ".tmp/maintain.json");
+  await mkdir(join(root, ".tmp"), { recursive: true });
+  await writeFile(input, JSON.stringify({ id: "next-route", operation: "revise",
+    targets: [{ path: `knowledge/${views[0]!.path}`, instruction: "Clarify the public entry point." }] }));
+  const registered = JSON.parse(await runCliInDir(root, ["task", "maintain", "--input", input, "--format", "json"]));
+  expect(registered.workflow.current.node).toBe("build-next");
+  // The build's JSON output also names the next step (same preparation as the fixture's build).
+  await placeApprovedReadingFixture(root);
+  await recordFixtureVersionIfRequired(root);
+  // The Route keeps the session's managed mode and explicit authorities.
+  const built = JSON.parse(await runCliInDir(root, ["--workflow-managed", "build", "--format", "json"]));
+  expect(built.packages.length).toBeGreaterThan(0);
+  const route = built.workflow.current;
+  expect(route.node).toBe("advance-knowledge-maintenance");
+  expect(JSON.stringify(route.commands)).toContain("--workflow-managed");
+  const authorized = JSON.parse(await runCliInDir(root, ["--workflow-authority", "context.source-read", "build", "--format", "json"])).workflow.current;
+  expect(JSON.stringify(authorized.commands)).toContain("--workflow-authority 'context.source-read'");
+  expect(JSON.stringify(authorized.commands)).not.toContain("--workflow-managed");
+  const advanced = JSON.parse(await runCliInDir(root, ["task", "advance-maintenance", "--revision", route.revision, "--format", "json"]));
+  expect(advanced.outcome).toBe("advanced");
+  expect(advanced.workflow.current.node).not.toBe("advance-knowledge-maintenance");
+}, 90_000);
+
+test("an in-process build keeps the run's managed mode in its next Route", async () => {
+  const { createWorkflowInProcessExecutor } = await import("../project/workflow/workflowInProcessActions.js");
+  const { root, views } = await deliveryWorkspace();
+  await registerKnowledgeMaintenance(root, { id: "in-process", operation: "revise",
+    targets: [{ path: `knowledge/${views[0]!.path}`, instruction: "Clarify the public entry point." }] });
+  await placeApprovedReadingFixture(root);
+  await recordFixtureVersionIfRequired(root);
+  const route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
+  expect(route.node).toBe("build-next");
+  const write = process.stdout.write; let out = "";
+  process.stdout.write = ((chunk: string) => { out += chunk; return true; }) as typeof process.stdout.write;
+  try {
+    await createWorkflowInProcessExecutor().execute({ cwd: root, effect: "write",
+      args: ["--workflow-revision", route.revision, "--workflow-managed", "build", "--format", "json"] } as never);
+  } finally { process.stdout.write = write; }
+  expect(JSON.stringify(JSON.parse(out).workflow.current.commands)).toContain("--workflow-managed");
+}, 90_000);
 
 test("approved maintenance ignores unrelated uncaptured documents without removing them", async () => {
   const { root, views } = await deliveryWorkspace();

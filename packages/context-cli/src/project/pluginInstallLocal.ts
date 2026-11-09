@@ -47,6 +47,16 @@ async function digest(root: string): Promise<string> {
   return hash.digest("hex");
 }
 
+/** An existing destination may be replaced only if an earlier local install wrote it unchanged. */
+async function assertOwnedDirectory(target: string, existing: NonNullable<Awaited<ReturnType<typeof stat>>>): Promise<void> {
+  if (!existing.isDirectory() || existing.isSymbolicLink()) conflict(target);
+  const markerPath = join(target, MARKER);
+  if (!(await stat(markerPath))?.isFile()) conflict(target);
+  let marker: { owner?: string; digest?: string };
+  try { marker = JSON.parse(await readFile(markerPath, "utf8")); } catch { conflict(target); }
+  if (marker?.owner !== "context-plugin-local" || marker.digest !== await digest(target)) conflict(target);
+}
+
 /** Local host projection without registration, user configuration or global pruning. */
 export async function installLocalSkills(root: string, path: string, dryRun: boolean, agent?: PluginAgent): Promise<string> {
   if (!path.trim()) conflict("--local requires a non-empty path");
@@ -65,12 +75,9 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
     await checkParents(commandsRoot);
     for (const entry of await readdir(join(root, agent, "commands"), { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      let content = await readFile(join(root, agent, "commands", entry.name), "utf8");
-      if (agent === "claude" && !["context-plan.md", "context-repo-content.md"].includes(entry.name)) {
-        const frontmatter = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/.exec(content);
-        if (!frontmatter) conflict(join(root, agent, "commands", entry.name));
-        content = `${frontmatter[1]}disable-model-invocation: true\n${frontmatter[2]!.replace(/^disable-model-invocation:.*\r?\n?/mu, "")}${frontmatter[3]}${content.slice(frontmatter[0].length)}`;
-      }
+      // Commands keep their bundled front matter, as in a global install: the entry
+      // command may start when the user asks for Context work in the conversation.
+      const content = await readFile(join(root, agent, "commands", entry.name), "utf8");
       const target = join(commandsRoot, entry.name);
       const marker = join(commandsRoot, `.context-${entry.name}.json`);
       for (const file of [target, marker]) {
@@ -100,28 +107,40 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
     // Planning commands delegate to their Skill so bundled references remain
     // usable. Host projection hides its duplicate user command, not model use.
     const existing = await stat(target);
-    if (existing) {
-      if (!existing.isDirectory() || existing.isSymbolicLink()) conflict(target);
-      const markerPath = join(target, MARKER);
-      if (!(await stat(markerPath))?.isFile()) conflict(target);
-      let marker: { owner?: string; digest?: string };
-      try { marker = JSON.parse(await readFile(markerPath, "utf8")); } catch { conflict(target); }
-      if (marker?.owner !== "context-plugin-local" || marker.digest !== await digest(target)) conflict(target);
-    }
+    if (existing) await assertOwnedDirectory(target, existing);
     plans.push({ name: entry.name, source, target, hash: await digest(source), exists: !!existing });
   }
   if (!plans.length) conflict(sourceRoot);
+  // Command entries link to ../resources/<name>/; install those folders like skills.
+  const resourcePlans: typeof plans = [];
+  const resourcesRoot = join(targetRoot, "resources");
+  if (agent === "claude" || agent === "cursor") {
+    const resourceSource = join(root, agent, "resources");
+    if (await stat(resourceSource)) {
+      await checkParents(resourcesRoot);
+      for (const entry of (await readdir(resourceSource, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+        if (!entry.isDirectory()) continue;
+        const source = join(resourceSource, entry.name);
+        const target = join(resourcesRoot, entry.name);
+        const existing = await stat(target);
+        if (existing) await assertOwnedDirectory(target, existing);
+        resourcePlans.push({ name: entry.name, source, target, hash: await digest(source), exists: !!existing });
+      }
+    }
+  }
   // Preflight every destination before touching any skill; retain unrelated skills.
   if (!dryRun) {
     await mkdir(skillsRoot, { recursive: true });
-    for (const plan of plans) {
-      const staging = await mkdtemp(join(skillsRoot, ".context-install-"));
+    if (resourcePlans.length) await mkdir(resourcesRoot, { recursive: true });
+    for (const plan of [...plans, ...resourcePlans]) {
+      const resource = resourcePlans.includes(plan);
+      const staging = await mkdtemp(join(dirname(plan.target), ".context-install-"));
       const candidate = join(staging, "candidate");
       const previous = join(staging, "previous");
       let moved = false;
       try {
         await cp(plan.source, candidate, { recursive: true });
-        if (agent === "claude" || (agent === "cursor" && ["context-plan", "context-repo-content"].includes(plan.name))) {
+        if (!resource && (agent === "claude" || (agent === "cursor" && ["context-plan", "context-repo-content"].includes(plan.name)))) {
           const skillFile = join(candidate, "SKILL.md");
           const content = await readFile(skillFile, "utf8");
           const parts = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/.exec(content);
@@ -160,6 +179,7 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
     body: ["Global agent configuration unchanged; local entries have no plugin namespace.",
       ...(agent === "codex" ? ["Codex uses skill entries, not a commands directory; bundled invocation policies are preserved."] : []),
       ...(agent === "cursor" ? ["Cursor command entries are separated; hiding Provider skills from its command menu is not guaranteed."] : []),
-      ...plans.map(plan => `skills/${plan.name}`), ...commandPlans.map(plan => `commands/${plan.name}`)],
+      ...plans.map(plan => `skills/${plan.name}`), ...commandPlans.map(plan => `commands/${plan.name}`),
+      ...resourcePlans.map(plan => `resources/${plan.name}`)],
   });
 }

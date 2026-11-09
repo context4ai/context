@@ -70,12 +70,14 @@ export async function prepareActionCompletionOutput(input: {
     ...(Array.isArray(result.reference_warnings) ? { reference_warning_count: result.reference_warnings.length } : {}),
     ...(Array.isArray(result.removed_citations) && result.removed_citations.length
       ? pick(result, ["removed_citations", "removed_citations_note"]) : {}),
-    // A batch reports removed citations per page; keep the note once.
+    // A batch reports citation notes per page; keep each note once.
     ...(result.removed_citations_note === undefined && outcomes.some(item => Array.isArray(item.removed_citations))
       ? { removed_citations_note: outcomes.find(item => item.removed_citations_note !== undefined)?.removed_citations_note } : {}),
+    ...(result.reference_warning_instruction === undefined && outcomes.some(item => Array.isArray(item.reference_warnings))
+      ? { reference_warning_instruction: outcomes.find(item => item.reference_warning_instruction !== undefined)?.reference_warning_instruction } : {}),
     committed_count: Array.isArray(result.outcomes) ? outcomes.filter((item) => item.committed === true).length : null,
     outcomes: outcomes.map((item) => ({
-      ...pick(item, ["task_key", "outcome", "committed", "removed_citations"]),
+      ...pick(item, ["task_key", "outcome", "committed", "removed_citations", "reference_warnings"]),
       ...(item.message === undefined ? {} : { message: shortText(item.message) }),
     })),
     outcomes_omitted: 0,

@@ -11,6 +11,9 @@ rest of the session.
 - CLI: `context --version`.
 - Workspace SDK: the `@c4a/context` version pinned in the workspace
   `package.json`, and the installed one in `node_modules/@c4a/context/package.json`.
+- Workspace CLI: when the workspace also pins `@c4a/context-cli`, its installed
+  `./node_modules/.bin/context` is the CLI for this workspace. Run every Route
+  command with it in place of `context`, and align it together with the SDK.
 - Releases: `npm view @c4a/context-cli versions --json`. Ignore pre-releases.
 
 ## Choose the target

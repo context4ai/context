@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import YAML from "yaml";
+import { cli_main } from "../cli.js";
 import { mkdir, mkdtemp, readFile, rm, writeFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -103,5 +105,45 @@ test("a workspace tracked inside a larger repository compares only its own direc
     expect(inspected.added).toEqual(["knowledge/new.md"]);
     // The repository's own release tag is not a workspace version.
     expect((await inspectWorkspaceVersion(root)).base_ref).toBe("HEAD");
+  } finally { await rm(outer, { recursive: true, force: true }); }
+});
+
+test("a version already on the remote default branch is not offered for reuse", async () => {
+  const outer = await mkdtemp(join(tmpdir(), "context-merged-version-"));
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" });
+  const entry = (version: string) => ({ version, date: "2026-11-08T00:00:00.000Z", title: `Release ${version}`, changes: ["Change"],
+    triggers: [{ kind: "dist", description: "Upgrade" }] });
+  try {
+    const repo = join(outer, "repo"); const remote = join(outer, "remote.git");
+    execFileSync("git", ["init", "-q", "--bare", remote]);
+    await mkdir(join(repo, "kb/knowledge"), { recursive: true });
+    git(repo, "init", "-q", "-b", "main"); git(repo, "config", "user.name", "Author"); git(repo, "config", "user.email", "author@example.test");
+    const root = join(repo, "kb");
+    const manifest = (version: string) => JSON.stringify({ version, context: { project: true, entry: "src/index.ts" } });
+    const example = async () => {
+      const original = process.cwd(); const write = process.stdout.write; let out = "";
+      process.chdir(root); process.stdout.write = ((chunk: string) => { out += chunk; return true; }) as typeof process.stdout.write;
+      try { await cli_main(["node", "context", "version", "inspect"]); }
+      finally { process.stdout.write = write; process.chdir(original); }
+      return JSON.parse(out).input_example as { version: string; triggers: Array<{ kind: string }> };
+    };
+    await writeFile(join(root, "package.json"), manifest("0.1.0"));
+    await writeFile(join(root, "changelog.yaml"), YAML.stringify({ entries: [entry("0.1.0")] }));
+    await writeFile(join(root, "knowledge/guide.md"), "Guide");
+    git(repo, "add", "."); git(repo, "commit", "-qm", "0.1.0");
+    git(repo, "remote", "add", "origin", remote); git(repo, "push", "-q", "origin", "main");
+    // Merged (and possibly published): a new version is required.
+    const merged = await inspectWorkspaceVersion(root);
+    expect(merged.reusable_version).toBeNull();
+    expect(merged.merged_to).toBe("origin/main");
+    // The fill-in example suggests the next patch rather than a first version.
+    expect(await example()).toMatchObject({ version: "0.1.1", triggers: [{ kind: "other" }] });
+    // A recorded version that is still only local may be amended.
+    await writeFile(join(root, "package.json"), manifest("0.1.1"));
+    await writeFile(join(root, "changelog.yaml"), YAML.stringify({ entries: [entry("0.1.1"), entry("0.1.0")] }));
+    const local = await inspectWorkspaceVersion(root);
+    expect(local.reusable_version).toBe("0.1.1");
+    expect(local).not.toHaveProperty("merged_to");
+    expect((await example()).version).toBe("0.1.1");
   } finally { await rm(outer, { recursive: true, force: true }); }
 });

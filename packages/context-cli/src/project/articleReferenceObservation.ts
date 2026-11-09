@@ -10,6 +10,12 @@ import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import { commandGitObjectReader, SourceReadError, SourceUnavailableError } from "./gitObjectReader.js";
 import { hunks, mapReferenceRange } from "./referenceRangeMap.js";
 
+/** Unavailable reasons that describe this machine (a download or commit not yet local), not the source. */
+export const LOCAL_SOURCE_REASONS: Readonly<Record<string, string>> = {
+  "source-content-missing": "The cited file contents are not downloaded in the source checkout.",
+  "source-history-missing": "The registered commit is not in the source checkout.",
+};
+
 export type ReferenceState = "current" | "moved" | "ambiguous" | "not-found" | "unavailable";
 export type SourceRead = ((sourceRef: string, path: string, captured: boolean) => Promise<string>) & {
   incomplete?: (sourceRef: string) => Promise<boolean>;

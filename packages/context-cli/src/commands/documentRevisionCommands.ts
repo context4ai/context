@@ -16,6 +16,20 @@ function requireProjectRoot(): string {
   });
 }
 
+/** A committed result whose next step is only "check status" carries that status's Route,
+ * as `version record` does. If observing fails, the result keeps its status command. */
+async function withNextRoute(program: Command, projectRoot: string, result: unknown): Promise<unknown> {
+  const next = (result as { next_action?: { command?: unknown } } | null)?.next_action?.command;
+  if (next !== "context status --format json") return result;
+  try {
+    const [{ collectProjectStatus }, { workflowAuthorities }] = await Promise.all([
+      import("../project/status.js"), import("../project/workflow/workflowCommandOptions.js")]);
+    const root = program.opts() as { workflowManaged?: boolean; workflowAuthority?: unknown };
+    const status = await collectProjectStatus(projectRoot, { managed: root.workflowManaged === true, authorities: workflowAuthorities(root.workflowAuthority) });
+    return { ...(result as object), workflow: status.workflow };
+  } catch { return result; }
+}
+
 export function registerDocumentRevisionCommand(program: Command): void {
   const task = program.command("task").description("Explicit current-task recovery");
   task.command("retire").description("Preview or apply explicit approved-article retirement and reference cleanup")
@@ -119,7 +133,8 @@ export function registerDocumentRevisionCommand(program: Command): void {
         missingNext: "Provide id, operation (revise/regenerate/rebuild), timing and page targets with instructions.",
         readFailureNext: "Use an input file in this workspace.", parseFailureNext: "Provide valid YAML or JSON." });
       const { registerKnowledgeMaintenance } = await import("../project/knowledgeMaintenance.js");
-      process.stdout.write(`${JSON.stringify(await registerKnowledgeMaintenance(requireProjectRoot(), value))}\n`);
+      const projectRoot = requireProjectRoot();
+      process.stdout.write(`${JSON.stringify(await withNextRoute(program, projectRoot, await registerKnowledgeMaintenance(projectRoot, value)))}\n`);
     });
   task.command("record-fix").description("Record a mechanical correction made after the batch's approval and before its delivery")
     .option("--input <file>", "YAML/JSON path and reason; - for stdin")
@@ -144,7 +159,8 @@ export function registerDocumentRevisionCommand(program: Command): void {
     .action(async (options: { revision: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");
       const { advanceKnowledgeMaintenance } = await import("../project/knowledgeMaintenance.js");
-      process.stdout.write(`${JSON.stringify(await advanceKnowledgeMaintenance(requireProjectRoot(), options.revision))}\n`);
+      const projectRoot = requireProjectRoot();
+      process.stdout.write(`${JSON.stringify(await withNextRoute(program, projectRoot, await advanceKnowledgeMaintenance(projectRoot, options.revision)))}\n`);
     });
   task.command("maintenance-status").description("Inspect maintenance requests and the current cancellation revision")
     .option("--format <format>", "output format: json", "json")

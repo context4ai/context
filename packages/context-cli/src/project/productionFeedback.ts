@@ -11,6 +11,14 @@ export class SubmissionInputError extends TypeError {
   constructor(message: string, readonly path: ReadonlyArray<string | number> = [], readonly reason?: string) { super(message); }
 }
 
+/** Several problems in one submission, reported together; the first keeps the usual fields. */
+export class SubmissionInputErrors extends SubmissionInputError {
+  constructor(readonly errors: readonly SubmissionInputError[]) {
+    super(`${errors.length} problems: ${errors.map((error, index) => `(${index + 1}) ${error.message}`).join(" ")}`,
+      errors[0]?.path ?? [], errors[0]?.reason);
+  }
+}
+
 /** Add recovery information at the production boundary, without new checks,
  * retries or reads. Existing specific errors keep their category and reason. */
 export async function withProductionFeedback<T>(input: {

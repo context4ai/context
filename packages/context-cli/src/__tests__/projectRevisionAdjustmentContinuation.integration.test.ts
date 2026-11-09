@@ -79,7 +79,11 @@ test("adjusting a partially reviewed batch resumes from its already approved cur
   expect(refreshed.pending_targets).toHaveLength(1);
   for (let index = 0; index < 2; index++) {
     const current = (await readApprovedRevision(root))!;
-    await complete(root, { stage: "approved-revision", markdown: current.target.markdown + "\nChecked against the updated source.\n" });
+    const markdown = current.target.markdown + "\nChecked against the updated source.\n";
+    // The refreshed version no longer has the cited line: keeping it is rejected, re-citing passes.
+    await expect(complete(root, { stage: "approved-revision", markdown })).rejects.toMatchObject({ detail: { reason_code: "processed-reference-stale" } });
+    await complete(root, { stage: "approved-revision", markdown, sections: [{ section_id: current.target.sections[0]!.id,
+      references: [{ source_ref: scope.source_ref, locator: { path: "src/index.ts", quote: "export const answer = 43;" } }] }] });
   }
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root); await buildProjectPackages(root);

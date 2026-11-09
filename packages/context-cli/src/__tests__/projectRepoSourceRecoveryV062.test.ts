@@ -204,6 +204,7 @@ describe("repository source recovery", () => {
     const plan = await repositoryRecoveryPlan({ projectRoot: input.project });
     expect(plan.next_action?.input_example).toEqual({ schema: "context.repository-source-recovery.v1",
       repositories: [{ source: "20260813/alpha", mode: "clone" }] });
+    expect(plan.next_action?.input_note).toContain("checks out only the group's required_subpaths");
     const result = await restoreRepositorySources({
       projectRoot: input.project,
       payload: parseRepositoryRecoveryPayload(JSON.parse(JSON.stringify(plan.next_action!.input_example))),
@@ -211,5 +212,9 @@ describe("repository source recovery", () => {
 
     expect(result.restored[0]).toEqual(expect.objectContaining({ mode: "clone", ready: true }));
     expect(result.restored[0]?.checkout).toContain(join(input.project, ".tmp", "repo"));
+    // As the plan says: shallow, and only the required directory checked out.
+    const checkout = result.restored[0]!.checkout!;
+    expect(git(checkout, ["rev-parse", "--is-shallow-repository"]).trim()).toBe("true");
+    expect(git(checkout, ["sparse-checkout", "list"]).trim()).toBe("packages/alpha");
   });
 });

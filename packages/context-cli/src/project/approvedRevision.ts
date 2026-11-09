@@ -4,7 +4,8 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readProductionRequirements, productionRequirementsSchema, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
-import { prepareRevisionReferences, removedCitations, REMOVED_CITATIONS_NOTE, type RemovedCitation } from "./approvedRevisionReferences.js";
+import { citationNotes, prepareRevisionReferences, removedCitations, suggestedCitation, type ReferenceReminder,
+  type RemovedCitation } from "./approvedRevisionReferences.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile, realpath, rm } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
@@ -329,7 +330,7 @@ function frontmatter(markdown: string): Record<string, unknown> {
  * remember false no source region is cached, so a batch preview can run it for every
  * issued page without advancing the task or caching source regions. */
 export async function composeRevisionCandidate(projectRoot: string,
-  request: Pick<ApprovedRevision, "target" | "program_blocks">, input: RevisionContentInput, options: { remember: boolean }) {
+  request: Pick<ApprovedRevision, "target" | "program_blocks" | "processed_scopes">, input: RevisionContentInput, options: { remember: boolean }) {
   const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
   const metadata = frontmatter(markdown);
   const sections = approvedContextSectionsInMarkdown(markdown);
@@ -340,23 +341,31 @@ export async function composeRevisionCandidate(projectRoot: string,
     throw new TypeError("Revision section identities must be unique");
   }
   const title = z.string().trim().min(1).parse(metadata.title);
+  // Paragraph text decides how unverifiable citations are treated, not whether references were resubmitted.
+  const before = new Map(approvedContextSectionsInMarkdown(request.target.markdown).map(section => [section.id, section.readerVisibleBody]));
+  const reminders: ReferenceReminder[] = [];
   const references = await prepareRevisionReferences({ projectRoot,
     sourceRefs: request.target.source_refs, previous: request.target.sections,
-    sectionIds: sections.map(section => section.id!), edits: input.sections, remember: options.remember });
+    sectionIds: sections.map(section => section.id!), edits: input.sections, remember: options.remember,
+    processedScopes: (request.processed_scopes ?? []).map(scope => scope.source_ref),
+    changedBodies: new Set(sections.filter(section => before.get(section.id) !== section.readerVisibleBody).map(section => section.id!)),
+    onReminder: reminder => reminders.push(reminder),
+    suggest: reference => suggestedCitation(projectRoot, reference, request.target.sections) });
   const projectedSections = sections.map((section) => ({
     section_ref: `${request.target.article_id}#${section.id!}`, section_key: section.id!,
     references: references.find(item => item.id === section.id)!.references,
     markdown: section.readerVisibleBody,
     markdown_digest: indexerProtocolDigest(section.readerVisibleBody),
   }));
-  return { markdown, metadata, title, references, projectedSections };
+  return { markdown, metadata, title, references, projectedSections, reference_warnings: reminders };
 }
 
 interface RevisionSubmission extends RevisionContentInput { projectRoot: string; revision: string; preview?: boolean;
   /** Receives earlier citations the submitted page no longer carries. */
-  onRemovedCitations?: (removed: RemovedCitation[]) => void }
+  onCitationNotes?: (notes: ReturnType<typeof citationNotes>) => void }
 export interface RevisionPreview { protocol: "context.approved-revision-preview/v1"; revision: string; path: string; before: string; markdown: string; changed: boolean;
-  removed_citations?: RemovedCitation[]; removed_citations_note?: string }
+  removed_citations?: RemovedCitation[]; removed_citations_note?: string;
+  reference_warnings?: ReferenceReminder[]; reference_warning_instruction?: string }
 export function completeApprovedRevision(input: RevisionSubmission & { preview: true }): Promise<RevisionPreview>;
 export function completeApprovedRevision(input: RevisionSubmission & { preview?: false }): Promise<CandidateRecord | undefined>;
 export async function completeApprovedRevision(input: RevisionSubmission): Promise<RevisionPreview | CandidateRecord | undefined> {
@@ -368,7 +377,7 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (!request || request.revision !== input.revision || request.candidate) throw new TypeError("Approved revision is stale. Refresh context status --format json.");
     if (request.refresh_sources) throw new TypeError("Import the explicitly adjusted source inputs, then run context task adjust with refresh: true before submitting page content.");
     await assertApprovedRevisionBase(input.projectRoot, request);
-    const { markdown, metadata, title, references, projectedSections } = await composeRevisionCandidate(input.projectRoot, request, input, { remember: !input.preview });
+    const { markdown, metadata, title, references, projectedSections, reference_warnings } = await composeRevisionCandidate(input.projectRoot, request, input, { remember: !input.preview });
     await assertRevisionRequirements(input.projectRoot, request);
     const approved = request.target.base_digest === null ? undefined : hydrateApprovedKnowledgeMarkdown({
       content: await targetBytes(input.projectRoot, request.target.previous_path ?? request.target.path), relPath: request.target.previous_path ?? request.target.path,
@@ -391,12 +400,12 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
       review: { title, summary: z.string().trim().min(1).parse(metadata.description ?? title),
         signals: ["approved-page-revision"], reason: request.instruction }, updated: new Date().toISOString(),
     }, 1);
-    const removed = removedCitations(request.target.sections, references);
+    const notes = citationNotes(removedCitations(request.target.sections, references), reference_warnings);
     if (input.preview) return { protocol: "context.approved-revision-preview/v1", revision: request.revision,
       path: request.target.path, before: request.target.markdown, markdown,
       changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections),
-      ...(removed.length ? { removed_citations: removed, removed_citations_note: REMOVED_CITATIONS_NOTE } : {}) };
-    if (removed.length) input.onRemovedCitations?.(removed);
+      ...notes };
+    if (Object.keys(notes).length) input.onCitationNotes?.(notes);
     if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
     const approvedSections = validateArticleStructureEntries((await readKnowledgeStructure(input.projectRoot)).parsed?.articles ?? [])
       .find(article => article.article_id === request.target.article_id)?.sections;

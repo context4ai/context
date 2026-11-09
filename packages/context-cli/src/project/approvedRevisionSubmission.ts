@@ -1,4 +1,4 @@
-import { removedCitations, REMOVED_CITATIONS_NOTE } from "./approvedRevisionReferences.js";
+import { citationNotes, removedCitations } from "./approvedRevisionReferences.js";
 import { join } from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
@@ -141,10 +141,11 @@ export async function completeApprovedRevisionSubmission(input: {
         return completeCurrentIndexerAction({ cwd: input.projectRoot, revision, value: semantic, managed: input.managed === true, authorities });
       }), { fresh: true, managed: input.managed === true });
       const receipt = result as { outcome?: string; submission_state?: SubmissionState; workflow?: typeof workflow; next_preparation_error?: string;
-        removed_citations?: unknown[]; removed_citations_note?: string };
+        removed_citations?: unknown[]; removed_citations_note?: string; reference_warnings?: unknown[]; reference_warning_instruction?: string };
       state = receipt.submission_state ?? "committed";
       outcomes.push({ task_key: task.task, input: task.input, outcome: receipt.outcome ?? "candidate-prepared", committed: state === "committed",
-        ...(receipt.removed_citations?.length ? { removed_citations: receipt.removed_citations, removed_citations_note: receipt.removed_citations_note } : {}) });
+        ...(receipt.removed_citations?.length ? { removed_citations: receipt.removed_citations, removed_citations_note: receipt.removed_citations_note } : {}),
+        ...(receipt.reference_warnings?.length ? { reference_warnings: receipt.reference_warnings, reference_warning_instruction: receipt.reference_warning_instruction } : {}) });
       workflow = receipt.workflow;
       const next = workflow?.current;
       if (receipt.next_preparation_error || !next || next.action?.id !== "author-approved-revision" || next.availability !== "immediate") {
@@ -212,7 +213,7 @@ async function previewApprovedRevisionSubmission(input: { projectRoot: string; r
       now.revision !== issuedTask.revision || now.context !== issuedTask.context;
   };
   const { composeRevisionCandidate } = await import("./approvedRevision.js");
-  const { SubmissionInputError } = await import("./productionFeedback.js");
+  const { SubmissionInputError, SubmissionInputErrors } = await import("./productionFeedback.js");
   const issue = (error: unknown): PreviewIssue => error instanceof SubmissionInputError
     ? { message: error.message, path: error.path, ...(error.reason ? { reason_code: error.reason } : {}) }
     : error instanceof z.ZodError ? { message: error.issues.map(item => item.message).join("; ") }
@@ -237,13 +238,12 @@ async function previewApprovedRevisionSubmission(input: { projectRoot: string; r
       const request = JSON.parse((await readProductionFile({ projectRoot: input.projectRoot, stage: manifest.stage, path: `${task.task}.input.json` })).text);
       const content = "markdown" in semantic ? { markdown: semantic.markdown, ...(semantic.sections === undefined ? {} : { sections: semantic.sections }) }
         : { sections: semantic.sections };
-      const { markdown, references } = await composeRevisionCandidate(input.projectRoot, request, content, { remember: false });
-      const removed = removedCitations(request.target.sections, references);
+      const { markdown, references, reference_warnings } = await composeRevisionCandidate(input.projectRoot, request, content, { remember: false });
       pages.push({ task: task.task, path: request.target.path, ok: true, issues: [],
         changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections),
-        ...(removed.length ? { removed_citations: removed, removed_citations_note: REMOVED_CITATIONS_NOTE } : {}) });
+        ...citationNotes(removedCitations(request.target.sections, references), reference_warnings) });
     } catch (error) {
-      pages.push({ task: task.task, ok: false, issues: [issue(error)] });
+      pages.push({ task: task.task, ok: false, issues: error instanceof SubmissionInputErrors ? error.errors.map(issue) : [issue(error)] });
     }
   }
   const reissue = pages.some(page => page.issues.some(issue => issue.reason_code === "task-input-stale"));
