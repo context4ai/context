@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.97 - 2026-11-10
 
 - Production-stage article submissions report every citation problem of the article at once, one entry per fragment. A citation that repeats an earlier citation's lines keeps that evidence: it stays when the text is unchanged, follows the text when it moved to one unique place, and is reported with its state (changed, ambiguous or unreadable) and, when available, where the text now is; the current text at the old lines is never signed in its place.
 - `context action complete-current --preview` also checks production-stage article files: every problem of every task in one run, without saving anything. Plans and report decisions have no preview.
