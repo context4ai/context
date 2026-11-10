@@ -107,13 +107,40 @@ test.each([
   expect((await readProductionStage(f.root))!.tasks[1]!.status).not.toBe("accepted");
 });
 
+test("a production preview checks every task with the submission rules and saves nothing", async () => {
+  const f = await fixture();
+  const secondRefPath = join(f.directory, "two/references.yaml");
+  await writeFile(secondRefPath, (await readFile(secondRefPath, "utf8")).replaceAll("end_line: 2", "end_line: 99"));
+  const { readdir } = await import("node:fs/promises");
+  // Every command's transaction recovery may create its empty directory; that is not task data.
+  const listing = async () => (await readdir(join(f.root, ".tmp"), { recursive: true }))
+    .filter(path => path !== "context-runtime/transactions").sort();
+  const before = { files: await listing(), ledger: await readFile(join(f.root, CANDIDATE_LEDGER_FILE), "utf8").catch(() => ""),
+    stage: await readProductionStage(f.root) };
+  const preview = await completeProductionSubmission({ ...f.input, preview: true });
+  expect(preview).toMatchObject({ protocol: "context.production-submission-preview/v1", written: false, ok: ["one"] });
+  expect(preview.failed.length).toBeGreaterThan(0);
+  expect(preview.failed.every(item => item.task === "two" && item.file === "two/references.yaml")).toBe(true);
+  // No candidate, task state, repair draft or source-region cache was written.
+  expect(await readFile(join(f.root, CANDIDATE_LEDGER_FILE), "utf8").catch(() => "")).toBe(before.ledger);
+  expect(await readProductionStage(f.root)).toEqual(before.stage);
+  expect(await listing()).toEqual(before.files);
+  // The real submission behaves as before.
+  const submitted = await completeProductionSubmission(f.input);
+  expect(submitted.accepted.map(item => item.task)).toEqual(["one"]);
+  expect(submitted.failed).toEqual(preview.failed);
+});
+
 test("accepts cross-source cross-batch subset, repairs only failures and replays original receipts", async () => {
   const f = await fixture();
   const secondRefPath = join(f.directory, "two/references.yaml");
   const correct = await readFile(secondRefPath, "utf8");
   await writeFile(secondRefPath, correct.replaceAll("end_line: 2", "end_line: 99"));
   const first = await completeProductionSubmission(f.input);
-  expect(first.failed).toMatchObject([{ task: "two", section: "behavior", file: "two/references.yaml" }]);
+  // Every broken fragment of the task is reported at once, starting with the first.
+  expect(first.failed[0]).toMatchObject({ task: "two", section: "behavior", file: "two/references.yaml" });
+  expect(first.failed.length).toBeGreaterThan(1);
+  expect(first.failed.every(item => item.task === "two" && item.file === "two/references.yaml")).toBe(true);
   expect(first.accepted.map(item => item.task)).toEqual(["one"]);
   expect((await readCandidateRecords(f.root))[0]!.source_refs).toHaveLength(2);
   const before = (await readProductionStage(f.root))!;
@@ -601,7 +628,8 @@ test("a failed new article can repair only one fragment using the fixed temporar
   await writeFile(join(f.directory, "two/references.yaml"), YAML.stringify(correct).replaceAll("end_line: 2", "end_line: 99"));
   const first = await completeProductionSubmission(f.input);
   expect(first.accepted.map(item => item.task)).toEqual(["one"]);
-  expect(first.failed).toHaveLength(1);
+  // One entry per broken citation, all in the one failed task's only fragment.
+  expect(first.failed.every(item => item.task === "two" && item.section === "behavior")).toBe(true);
   // The Agent-owned original is no longer the fixed rejected input.
   await writeFile(join(f.directory, "two/article.md"), "Unrelated later draft, not submitted.");
   await writeFile(join(f.directory, "repair.yaml"), YAML.stringify({ edits: [{ replace: ["behavior"],

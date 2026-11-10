@@ -37,16 +37,27 @@ export async function prepareKnownProductionTasks(input: {
     if (!request || stage?.report_approved || (stage ? ![stage.id, request.revision].includes(input.revision) : request.revision !== input.revision)) {
       throw invalid("Use known tasks before report approval, with the current preparation revision. Approved stages use ordinary task amendments.");
     }
-    if (!stage) {
-      await prepareCurrentProductionStage({ projectRoot: input.projectRoot, revision: input.revision,
+    // A stage whose sources could not be read last time is checked again, not reused as failed.
+    if (!stage || stage.gaps.length) {
+      await prepareCurrentProductionStage({ projectRoot: input.projectRoot, revision: stage?.id ?? input.revision,
         sources: [...new Set([...plan.articles.flatMap(article => article.sources), ...plan.pending_scopes ?? []])] });
       stage = (await readProductionStage(input.projectRoot))!;
     }
     // Validate and accept exactly the fixed input already read. Neither this
     // step nor submission reopens the Agent file after preparation.
     const text = YAML.stringify({ ...plan, stage: stage.id });
-    const result = await submitProductionPlan({ projectRoot: input.projectRoot, stage: stage.id, path: fixed.path,
-      manifest: { path: fixed.path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) } });
+    let result;
+    try {
+      result = await submitProductionPlan({ projectRoot: input.projectRoot, stage: stage.id, path: fixed.path,
+        manifest: { path: fixed.path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) } });
+    } catch (error) {
+      // Rerunning this same command re-checks the sources, so it is the next step.
+      if (error instanceof ContextError && error.detail?.reason_code === "production-planning-refresh-required") {
+        error.detail.next_action = { command: `context action prepare-current --revision ${stage.id} --input ${input.path} --format json`,
+          instruction: "Restore or check the listed sources if needed, then rerun this command; it checks them again and submits the same tasks." };
+      }
+      throw error;
+    }
     return { ...result, next_action: { command: "context status --format json" } };
   }));
 }

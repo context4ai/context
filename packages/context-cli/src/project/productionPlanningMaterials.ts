@@ -19,6 +19,29 @@ const markdownParser = unified().use(remarkParse);
 type MarkdownRoot = ReturnType<typeof markdownParser.parse>;
 type MarkdownNode = MarkdownRoot | MarkdownRoot["children"][number];
 
+/** Whether a repository checkout matches its registered commit. Only `git diff` exit 1 means it
+ * differs; a slow first index refresh or a lock held by another git command is retried once and
+ * then reported as unchecked, never as a missing source. The check writes no index (no locks). */
+export async function checkoutMatchesCommit(root: string, ref: string, files: number):
+  Promise<{ state: "same" | "differs" } | { state: "unchecked"; reason: string }> {
+  // Large checkouts on slow disks need a cold index refresh: scale with the file count.
+  const timeout = 30_000 + files * 2;
+  let reason = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await execute("git", ["-C", root, "diff", "--quiet", ref, "--", "."], { timeout, maxBuffer: 64 * 1024,
+        env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+      return { state: "same" };
+    } catch (error) {
+      const failure = error as { code?: unknown; killed?: boolean; stderr?: string };
+      if (failure.code === 1) return { state: "differs" };
+      reason = failure.killed ? `timed out after ${Math.round(timeout / 1000)} s`
+        : String(failure.stderr ?? (error instanceof Error ? error.message : error)).trim().split("\n")[0]!.slice(0, 200);
+    }
+  }
+  return { state: "unchecked", reason };
+}
+
 /** Cheap document navigation. The CLI scans text to extract headings; the
  * Agent receives a bounded opening plus the complete H2/H3 outline, not every
  * document body and not an invented semantic partition. */
@@ -114,16 +137,16 @@ export async function prepareProductionPlanningMaterials(input: {
       if (type === "repo") {
         const repo = registry.repos.find(repo => repo.id === name || repo.name === name)!;
         if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(repo.ref)) throw new TypeError("Planning requires a captured fixed commit, not a moving ref");
-        await execute("git", ["-C", root, "diff", "--quiet", repo.ref, "--", "."], {
-          timeout: 5000, maxBuffer: 64 * 1024,
-        });
         const targets = input.requirements.requirements.flatMap(item => [...item.target_scope.targets,
           ...item.evidence_source_scope?.targets ?? []]).filter(target => target.source_ref === scope);
         const modules = [...new Set(targets.flatMap(target => target.module_refs ?? []))];
         const result = await execute("git", ["-C", root, "ls-tree", "-r", "--name-only", "-z", repo.ref], {
-          encoding: "utf8", timeout: 5000, maxBuffer: 8 * 1024 * 1024,
+          encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
         });
-        const files = result.stdout.split("\0").filter(path => path && !sourceExcludes(input.requirements, scope, path));
+        const tracked = result.stdout.split("\0").filter(Boolean);
+        const checkout = await checkoutMatchesCommit(root, repo.ref, tracked.length);
+        if (checkout.state === "differs") throw new TypeError(`The checkout differs from the registered commit ${repo.ref}; restore it (context source recovery-plan --format json) before planning`);
+        const files = tracked.filter(path => !sourceExcludes(input.requirements, scope, path));
         const directories = new Map<string, number>();
         for (const file of files) {
           const directory = file.includes("/") ? file.split("/")[0]! : "(root)";
@@ -132,7 +155,9 @@ export async function prepareProductionPlanningMaterials(input: {
         sources.set(scope, [`# ${scope}`, "", `Authorized repository boundary: ${root}`, `Captured commit: ${repo.ref}`,
           ...(modules.length ? [`Module focus: ${modules.join(", ")}`] : []),
           "Choose relevant directories while investigating. Module names are work guidance, not inferred path permissions; put useful reading scope in the task brief without a separate mapping or receipt.",
-          `Complete authorized tracked-file count: ${files.length}`, "", "## Directory skeleton", "",
+          `Complete authorized tracked-file count: ${files.length}`,
+          ...(checkout.state === "unchecked" ? [`Checkout check did not complete (${checkout.reason}); the skeleton is read from the registered commit. Read source files through the commit, not the working tree.`] : []),
+          "", "## Directory skeleton", "",
           ...[...directories].sort(([a], [b]) => a.localeCompare(b)).map(([directory, count]) => `- ${directory}: ${count} files`),
           "", "## File navigation sample", "", ...files.slice(0, 128).map(path => `- ${path}`),
           ...(files.length > 128 ? [`${files.length - 128} additional filenames are omitted here; investigate the relevant directory within the authorized boundary.`] : []),

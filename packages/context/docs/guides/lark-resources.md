@@ -83,8 +83,15 @@ an explicit permission denial (including HTTP 403) for an embedded resource, Con
 `document.resource.permission-denied`, keeps the stable resource identity in
 the audit layer, renders the same unavailable-resource notice, and continues
 with a warning. Explicit missing-scope and access-denied resource responses are
-likewise recorded without changing identity. Transient network errors, malformed
-payloads, and unclassified failures still block capture. Reference-only
+likewise recorded without changing identity, as is a synced block whose source
+document the identity cannot open. Such gaps are listed in the capture result and
+cannot be cited. To close one, request the missing app scope for the app at
+https://open.larkoffice.com/app, or ask the document's owner to share it with
+the capturing identity, then capture again. Transient network errors, malformed
+payloads, and unclassified failures still block capture. When a refresh of an
+unchanged revision turns a previously captured resource into such a gap or a
+preview, the new snapshot is saved and the result lists the downgrade; a blocking
+failure keeps the old snapshot, and a body that cannot be read never replaces it. Reference-only
 resources remain explicit in the capture report. Unknown non-empty XML blocks
 stay auditable in the raw XML and receive a warning; the CLI does not infer
 their meaning.

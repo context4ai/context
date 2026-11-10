@@ -338,5 +338,33 @@ test("an incomplete captured document blocks an in-scope stale citation and remi
     const reminders: ReferenceReminder[] = [];
     expect(await prepareRevisionReferences({ ...input, onReminder: item => reminders.push(item) })).toEqual([{ id: "s", references: [cited] }]);
     expect(reminders).toEqual([expect.objectContaining({ state: "unavailable", reason: "source-capture-incomplete" })]);
+    // A path the document does not own names the document's files.
+    const notOwned = await prepareRevisionReferences({ ...input, edits: [{ section_id: "s", references: [
+      { source_ref: "file:product-docs", locator: { path: "assets/diagram.png", start_line: 1, end_line: 1 } }] }] }).catch(value => value);
+    expect(notOwned.message).toContain("Source path assets/diagram.png is not owned by the registered document file:product-docs; cite one of its files: intro.md");
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60_000);
+
+test("a revision may cite captured text but not a capture-gap placeholder", async () => {
+  const root = await mkdtemp(join(tmpdir(), "revision-capture-gap-"));
+  const sourceRef = "note:20260912/source.md";
+  try {
+    await mkdir(join(root, "sources/note/20260912"), { recursive: true });
+    await writeFile(join(root, "sources/note/20260912/source.md"),
+      "Main rule\n> Resource unavailable: Synced block (synced_block; permission denied). <!-- block-1 -->\n");
+    const submit = (locator: { start_line: number; end_line: number } | { quote: string }) => prepareRevisionReferences({ projectRoot: root, sourceRefs: [sourceRef],
+      previous: [], sectionIds: ["s"], edits: [{ section_id: "s", references: [{ source_ref: sourceRef, locator: { path: "source.md", ...locator } }] }] });
+    expect((await submit({ start_line: 1, end_line: 1 }))[0]!.references).toHaveLength(1);
+    await expect(submit({ start_line: 1, end_line: 2 })).rejects.toThrow("source.md:2 is a capture gap");
+    await expect(submit({ quote: "Synced block" })).rejects.toThrow("is a capture gap");
+    // In a table, a row with captured cells besides the gap stays citable; a row of gaps does not.
+    await writeFile(join(root, "sources/note/20260912/source.md"), [
+      "| 官号IM招募 | 私信主播 | > Resource unavailable: Whiteboard (whiteboard; export permission denied). <!-- lark:whiteboard:w1 --> |",
+      "| | > Resource unavailable: Whiteboard (whiteboard; export permission denied). <!-- lark:whiteboard:w2 --><br><br> |", ""].join("\n"));
+    expect((await submit({ start_line: 1, end_line: 1 }))[0]!.references).toHaveLength(1);
+    await expect(submit({ start_line: 2, end_line: 2 })).rejects.toThrow("source.md:2 is a capture gap");
+    // Prose that only starts like a placeholder is ordinary text.
+    await writeFile(join(root, "sources/note/20260912/source.md"), "> Resource unavailable: explained in the guide\n");
+    expect((await submit({ start_line: 1, end_line: 1 }))[0]!.references).toHaveLength(1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

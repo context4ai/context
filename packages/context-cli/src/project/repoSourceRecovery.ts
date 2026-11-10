@@ -1,3 +1,4 @@
+import { GitProgressError, runGitWithProgress } from "../lib/gitProgress.js";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { lstat, mkdir, readlink, realpath, rm, symlink } from "node:fs/promises";
@@ -268,20 +269,18 @@ async function cloneCheckout(input: {
   }
   await mkdir(dirname(target), { recursive: true });
   const cloneArgs = ["clone", "--no-checkout", "--depth=1", "--filter=blob:none", input.remote, target];
+  // Clones run while git reports progress. A stalled or very long clone is reported, not retried.
+  const clone = (args: string[]) => runGitWithProgress(args, { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, label: "git clone" });
   try {
-    await execFileAsync("git", cloneArgs, { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-  } catch {
+    await clone(cloneArgs);
+  } catch (first) {
     await rm(target, { recursive: true, force: true });
     try {
-      await execFileAsync("git", ["clone", "--no-checkout", "--depth=1", input.remote, target], {
-        encoding: "utf8",
-        maxBuffer: 4 * 1024 * 1024,
-      });
+      if (first instanceof GitProgressError && first.kind !== "failed") throw first;
+      await clone(["clone", "--no-checkout", "--depth=1", input.remote, target]);
     } catch (error) {
       await rm(target, { recursive: true, force: true });
-      const detail = error !== null && typeof error === "object" && "stderr" in error
-        ? String((error as { stderr?: unknown }).stderr ?? "").trim()
-        : error instanceof Error ? error.message : String(error);
+      const detail = error instanceof Error ? error.message : String(error);
       throw new ContextError(ExitCode.ExternalToolError, `cannot clone registered repository: ${input.remote}`, {
         category: ErrorCategory.ExternalToolFailed,
         remote: input.remote,
@@ -292,9 +291,12 @@ async function cloneCheckout(input: {
   }
   try {
     try {
-      await git(target, ["fetch", "--depth=1", "--filter=blob:none", "origin", input.ref]);
-    } catch {
-      await git(target, ["fetch", "--depth=1", "origin", input.ref]);
+      await runGitWithProgress(["-C", target, "fetch", "--depth=1", "--filter=blob:none", "origin", input.ref],
+        { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, label: "git fetch" });
+    } catch (first) {
+      if (first instanceof GitProgressError && first.kind !== "failed") throw first;
+      await runGitWithProgress(["-C", target, "fetch", "--depth=1", "origin", input.ref],
+        { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, label: "git fetch" });
     }
     const sparseDirectories = input.subpaths.length > 0 && (await Promise.all(
       input.subpaths.map((subpath) => git(target, ["cat-file", "-t", `${input.ref}:${subpath}`])),

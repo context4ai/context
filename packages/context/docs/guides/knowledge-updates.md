@@ -187,6 +187,13 @@ untagged version updates that description without changing its version or conten
 checkpoint. No additional flag is needed. If this session already published the
 version, record a new version instead: the CLI protects tagged records but cannot
 infer whether an untagged version was published by another tool.
+To merge several unpublished intermediate versions into one entry, restore only
+the version files (`package.json` version, `CHANGELOG.md`, `changelog.yaml`) to
+the last published version and keep every knowledge change. Then run `version
+inspect --base <that version's commit> --format json` and record one entry with
+the returned digest and the same commit as `base_ref`. Never rewrite a version
+already merged into the remote default branch (`merged_to`) or tagged; there is
+no squash command.
 Publication belongs to the installed distribution tool. Record remote receipts
 in its configuration or the existing work summary, separately for each target.
 A successful authorized commit/tag identifies the delivered source; never create
@@ -206,7 +213,9 @@ entry retains its stable key, parent, title and order; optional targets use
 article identity and section key. The current structure preview supplies those
 identities. Read the persistent `src/knowledge-map.yaml`; use
 `expected_revision: null` only when no knowledge map exists.
-After adjustment, follow status to rebuild affected packages. This changes the
+After adjustment, follow status to rebuild affected packages; once delivery has
+finished, the Route records a patch version (`navigation` trigger) and builds,
+without resuming production. This changes the
 reading organization without capturing sources or rewriting approved prose.
 Do not directly edit generated package navigation or use titles as identities.
 

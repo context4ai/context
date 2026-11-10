@@ -1,3 +1,4 @@
+import { runGitWithProgress } from "../lib/gitProgress.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -20,15 +21,20 @@ function inside(root: string, path: string): void {
 /** Checkouts may be shallow or behind the registered commit. With `fetch`, a missing
  * commit is fetched once; otherwise reads stay local. A missing commit fails every
  * path at once instead of per read. */
-function commitAvailability(fetched: Map<string, Promise<boolean>>, fetch = true) {
+function commitAvailability(fetched: Map<string, Promise<boolean>>, fetch = true, failures?: Map<string, string>) {
   return (directory: string, commit: string) => {
     const key = `${directory}\0${commit}`;
     let result = fetched.get(key);
     if (!result) {
+      // A fetch runs while git reports progress; why it failed or stopped is kept for the caller.
       result = execute("git", ["-C", directory, "cat-file", "-e", `${commit}^{commit}`],
         { timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } }).then(() => true, () => !fetch ? false :
-        execute("git", ["-C", directory, "fetch", "--quiet", "--depth=1", "origin", commit], { timeout: 120_000 })
-          .then(() => true, () => false));
+        runGitWithProgress(["-C", directory, "fetch", "--depth=1", "origin", commit],
+          { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, label: `git fetch of commit ${commit.slice(0, 12)}` })
+          .then(() => true, (error: unknown) => {
+            failures?.set(commit, error instanceof Error ? error.message : String(error));
+            return false;
+          }));
       fetched.set(key, result);
     }
     return result;
@@ -40,11 +46,13 @@ function missingCommit(commit: string): SourceUnavailableError {
 }
 
 /** Fetch commits the checkouts do not have yet (the registered one when omitted), one
- * attempt each. Only `update --pending` calls this; every reader stays local. */
-export async function fetchSourceCommits(projectRoot: string, requests: ReadonlyArray<{ source_ref: string; commit?: string }>): Promise<void> {
+ * attempt each. Only `update --pending` calls this; every reader stays local. Returns the
+ * reason for each commit whose fetch failed or was stopped. */
+export async function fetchSourceCommits(projectRoot: string, requests: ReadonlyArray<{ source_ref: string; commit?: string }>): Promise<Map<string, string>> {
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
-  const available = commitAvailability(new Map(), true);
+  const failed = new Map<string, string>();
+  const available = commitAvailability(new Map(), true, failed);
   for (const request of requests) {
     if (!request.source_ref.startsWith("repo:")) continue;
     const name = request.source_ref.slice("repo:".length);
@@ -54,6 +62,7 @@ export async function fetchSourceCommits(projectRoot: string, requests: Readonly
     const root = await realpath(resolve(workspace, entry.materializedAt)).catch(() => undefined);
     if (root) await available(root, commit);
   }
+  return failed;
 }
 
 /** Reads a registered repository file at an earlier commit; callers must verify
@@ -168,7 +177,11 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       pending = (async () => {
         try {
           const { root, files, commit } = await scope(sourceRef);
-          if (files && !files.has(path)) throw new SourceUnavailableError("Source path is not owned by the registered document", "source-path-unregistered");
+          if (files && !files.has(path)) {
+            const owned = [...files.keys()];
+            throw new SourceUnavailableError(`Source path ${path} is not owned by the registered document ${sourceRef}; cite one of its files: `
+              + `${owned.slice(0, 10).join(", ")}${owned.length > 10 ? `, and ${owned.length - 10} more` : ""}.`, "source-path-unregistered");
+          }
           const lexical = resolve(root, path);
           inside(root, lexical);
           let bytes: Uint8Array;

@@ -123,6 +123,18 @@ export async function runLarkResourceCommand(
   return result.stdout;
 }
 
+/** Docs API code for an identity that cannot view the document (e.g. a synced block's source). */
+export const LARK_DOCUMENT_ACCESS_DENIED_CODE = "3380004";
+
+/** What to do about a permission failure: an app scope is requested on the Lark Open Platform;
+ * document access is granted by the document's owner. */
+export function larkPermissionGuidance(error: unknown): string {
+  const stderr = error instanceof Error && "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+  const scope = (error instanceof LarkResourceCommandError && error.missingScope) || hasMissingScope(errorDetail(stderr)) || hasMissingScope(stderr);
+  return scope ? "Request the missing permission for the app at https://open.larkoffice.com/app, then capture again."
+    : "Ask the document's owner to share it with the capturing identity, then capture again.";
+}
+
 /** Only explicit permission failures qualify for non-blocking resource capture. */
 export function isLarkResourcePermissionDenied(error: unknown): error is Error {
   if (!(error instanceof Error)) return false;
@@ -134,6 +146,7 @@ export function isLarkResourcePermissionDenied(error: unknown): error is Error {
   return (error instanceof LarkResourceCommandError && error.missingScope) ||
     hasMissingScope(detail) || hasMissingScope(stderr) ||
     String(detail?.code) === "403" ||
+    String(detail?.code) === LARK_DOCUMENT_ACCESS_DENIED_CODE || errorDetail(error.message)?.code === Number(LARK_DOCUMENT_ACCESS_DENIED_CODE) ||
     (detail?.type === "authorization" &&
       ["permission_denied", "access_denied", "missing_scope"].includes(String(detail.subtype ?? "")));
 }

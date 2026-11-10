@@ -126,3 +126,25 @@ test.each(["bad-request", "invalid-json"])("keeps whiteboard raw %s failures vis
   expect(result.report.status).toBe("error");
   expect(result.report.items[0]?.reason_code).toBeUndefined();
 });
+
+test("a synced block whose source document the identity cannot view is a permission gap, not a capture failure", async () => {
+  // The error shape recorded by the 1106 capture: docs +fetch fails with API code 3380004.
+  const denial = `lark-cli docs +fetch failed: ${JSON.stringify({ ok: false, identity: "bot", error: { type: "api", subtype: "unknown",
+    code: 3380004, message: "No permission to operate on this document: the current user lacks view or edit access." } }, null, 2)}`;
+  const result = await materializeLarkResources({
+    identity: "bot", policy, runner: async () => { throw new Error("no runner call expected"); },
+    resources: [{ kind: "synced-reference", locator: "lark:synced:private", attributes: { "src-token": "doc", "src-block-id": "block" } }],
+    resolveSyncedReference: async () => { throw new LarkCliError(denial, 1, ""); },
+  });
+  expect(result.report.status).toBe("warning");
+  expect(result.report.items[0]).toMatchObject({ status: "failed", reason_code: DOCUMENT_RESOURCE_PERMISSION_DENIED_REASON_CODE });
+  expect(result.report.items[0]!.reason).toContain("Ask the document's owner to share it with the capturing identity");
+  expect(result.replacements.get("lark:synced:private")).toContain("Resource unavailable:");
+  // A missing app scope points to the Open Platform instead.
+  const scoped = await materializeLarkResources({
+    identity: "bot", policy, runner: async () => { throw new Error("no runner call expected"); },
+    resources: [{ kind: "synced-reference", locator: "lark:synced:scope", attributes: { "src-token": "doc", "src-block-id": "block" } }],
+    resolveSyncedReference: async () => { throw new LarkCliError("Document fetch failed", 1, scopeError); },
+  });
+  expect(scoped.report.items[0]!.reason).toContain("https://open.larkoffice.com/app");
+});

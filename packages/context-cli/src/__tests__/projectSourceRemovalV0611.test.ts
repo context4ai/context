@@ -122,6 +122,64 @@ describe("project source removal", () => {
     }
   });
 
+  test("sources the entry builds from the registry are removed without editing the entry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ctx-source-remove-derived-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+      const docs = join(root, "docs");
+      await mkdir(docs, { recursive: true });
+      await writeFile(join(docs, "guide.md"), "# Guide\n", "utf8");
+      expect((await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "file", "20260811", "--module", "guide", "--local", docs, "--format", "json",
+      ])).status).toBe(0);
+      const entry = [
+        'import { fileURLToPath } from "node:url";',
+        'import { captureFile, defineProject, loadSourcesRegistry, source } from "@c4a/context";',
+        'const registry = await loadSourcesRegistry({ rootDir: fileURLToPath(new URL("../", import.meta.url)) });',
+        'const files = registry.files.map(entry => source(entry.name, { type: "file" }));',
+        "export default defineProject({ sources: files, phases: files.map(item => captureFile({ source: item })), packages: [] });",
+        "",
+      ].join("\n");
+      await writeFile(join(initialized.projectRoot, "src/index.ts"), entry, "utf8");
+      const preview = await invokeCliInDir(initialized.projectRoot, [
+        "source", "remove", "20260811/guide", "--format", "json",
+      ]);
+      const removed = await invokeCliInDir(initialized.projectRoot, [
+        "source", "remove", "20260811/guide", "--yes", "--plan-digest", removalDigest(preview.stdout), "--format", "json",
+      ]);
+      expect(removed.status).toBe(0);
+      expect(await readFile(join(initialized.projectRoot, "sources/file/index.yaml"), "utf8")).not.toContain("guide");
+      expect(await readFile(join(initialized.projectRoot, "src/index.ts"), "utf8")).toBe(entry);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a hand-written declaration in another module still blocks removal", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ctx-source-remove-declared-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+      const docs = join(root, "docs");
+      await mkdir(docs, { recursive: true });
+      await writeFile(join(docs, "guide.md"), "# Guide\n", "utf8");
+      expect((await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "file", "20260811", "--module", "guide", "--local", docs, "--format", "json",
+      ])).status).toBe(0);
+      await writeFile(join(initialized.projectRoot, "src/declared.ts"), [
+        'import { captureFile, defineProject, source } from "@c4a/context";',
+        'const guide = source("20260811", "guide", { type: "file" });',
+        "export default defineProject({ sources: [guide], phases: [captureFile({ source: guide })], packages: [] });",
+        "",
+      ].join("\n"), "utf8");
+      await writeFile(join(initialized.projectRoot, "src/index.ts"), 'export { default } from "./declared";\n', "utf8");
+      const preview = await invokeCliInDir(initialized.projectRoot, ["source", "remove", "20260811/guide", "--format", "json"]);
+      expect(preview.stdout + preview.stderr).toContain("project.sources[0]");
+      expect(await readFile(join(initialized.projectRoot, "sources/file/index.yaml"), "utf8")).toContain("guide");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("removing an uncaptured Lark module preserves every snapshot in the shared batch directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "ctx-source-remove-shared-lark-"));
     try {

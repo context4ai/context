@@ -109,6 +109,37 @@ async function yamlReferences(input: {
   return strings.some((value) => stringReferencesSource(value, input.source));
 }
 
+/** Same key as the SDK's `loadSourcesRegistry` exclusion (a global symbol, so any SDK copy sees it). */
+const SOURCES_REGISTRY_EXCLUSION = Symbol.for("c4a.context.sources-registry-exclusion");
+
+function projectReferences(project: Awaited<ReturnType<typeof loadContextProjectModule>>["project"], source: RemovableSource): string[] {
+  const references: string[] = [];
+  project.sources.forEach((declared, index) => {
+    if (sourceIdentity(declared) === source.name) references.push(`project.sources[${index}]`);
+  });
+  project.phases.forEach((phase, index) => {
+    const direct = "source" in phase && sourceIdentity(phase.source as ProjectSourceDefinition) === source.name;
+    const resource = phase.reads.some((read) => resourceReferencesSource(read, source));
+    if (direct || resource) references.push(`project.phases[${index}] (${phase.id})`);
+  });
+  return references;
+}
+
+/** Project declarations that still name the source when its registry entry is left out
+ * are the project's own; those the entry builds from the registry go with the entry.
+ * An SDK without the exclusion, or a project that cannot load without the entry, keeps
+ * every declaration, as before. */
+async function declaredReferences(projectRoot: string, source: RemovableSource): Promise<string[]> {
+  const global = globalThis as Record<symbol, unknown>;
+  const previous = global[SOURCES_REGISTRY_EXCLUSION];
+  global[SOURCES_REGISTRY_EXCLUSION] = new Set([source.name]);
+  let project;
+  try { project = (await loadContextProjectModule(projectRoot)).project; }
+  catch { project = undefined; }
+  finally { global[SOURCES_REGISTRY_EXCLUSION] = previous; }
+  return projectReferences(project ?? (await loadContextProjectModule(projectRoot)).project, source);
+}
+
 async function collectSourceReferences(projectRoot: string, source: RemovableSource): Promise<string[]> {
   const references = new Set<string>();
   const { currentLedger, currentSpec } = await import("./indexerMainRunStoreRecords.js");
@@ -118,15 +149,7 @@ async function collectSourceReferences(projectRoot: string, source: RemovableSou
     const values: string[] = []; collectStrings(spec.request.workset, values);
     if (values.some((value) => stringReferencesSource(value, source))) references.add(`active Indexer ${entry.indexer_id}`);
   }
-  const loaded = await loadContextProjectModule(projectRoot);
-  loaded.project.sources.forEach((declared, index) => {
-    if (sourceIdentity(declared) === source.name) references.add(`project.sources[${index}]`);
-  });
-  loaded.project.phases.forEach((phase, index) => {
-    const direct = "source" in phase && sourceIdentity(phase.source as ProjectSourceDefinition) === source.name;
-    const resource = phase.reads.some((read) => resourceReferencesSource(read, source));
-    if (direct || resource) references.add(`project.phases[${index}] (${phase.id})`);
-  });
+  for (const reference of await declaredReferences(projectRoot, source)) references.add(reference);
 
   for (const candidate of await readCandidateRecords(projectRoot)) {
     if (

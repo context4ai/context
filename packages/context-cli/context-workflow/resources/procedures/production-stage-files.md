@@ -62,7 +62,9 @@ Write results under the returned Agent directory. All submission paths are
 relative to `.tmp/agent-work/production-stages/<stage>/`, even when the manifest is in `submissions/`. They are never relative to `.tmp/context-runtime/` or to the manifest location. Each task lists the complete workspace-relative Markdown and reference output paths.
 Copy the CLI's submission template, keep completed tasks only, and keep each
 task's prefilled `input`. Submit the manifest using the returned command.
-Do not edit submitted files until the command returns.
+To check article files first, append `--preview` to that command: it reports
+every problem of every task at once and saves nothing. Plans and report decisions
+have no preview. Do not edit submitted files until the command returns.
 
 A complete article uses `content` (Markdown) and `references` (YAML/JSON).
 Markdown has reader-facing title and description frontmatter, followed by the
@@ -70,7 +72,9 @@ complete article with stable `context:section` markers. References contain
 `sections`, each with its matching `id` and `references` list. A reference is
 `source_ref` plus `locator: {path, start_line, end_line}` from actual authorized
 text. CLI computes source digests. A fragment may cite at most five distinct
-source files and eight regions; an article may have multiple fragments.
+source files and eight regions; an article may have multiple fragments. A line
+`> Resource unavailable: ...` in a captured document marks a capture gap, not
+evidence: cite the captured lines around it, never the gap.
 
 When prose names a file, directory or Skill from a cited repository, write its
 exact repository-relative path, or the unique name of its directory such as a

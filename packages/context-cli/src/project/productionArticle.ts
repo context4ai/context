@@ -1,7 +1,8 @@
-import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
+import { assertNoCaptureGap, resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import YAML from "yaml";
 import { z, ZodError } from "zod";
 import { ARTICLE_FRAGMENT_REGION_LIMIT, ARTICLE_FRAGMENT_SOURCE_FILE_LIMIT, articleFragmentReferences, createArticleSourceReference,
+  type ArticleSourceReference,
   indexerKnowledgeCollectionSchema, indexerProtocolDigest, repoContentScopeMatches } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
@@ -10,6 +11,9 @@ import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { indexerCandidateId, isReservedKnowledgeIndexPath, isSafeKnowledgeTargetPath,
   parseCandidateRecord, type CandidateRecord } from "./candidateLedger.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
+import { createArticleReferenceObserver, type SourceRead } from "./articleReferenceObservation.js";
+import { suggestedCitation } from "./approvedRevisionReferences.js";
+import { SourceUnavailableError } from "./gitObjectReader.js";
 import { rememberArticleRegion } from "./articleRegionBaselines.js";
 import { applyProductionArticleEdits, productionReferenceInputSchema, type ProductionArticleBase } from "./productionArticleEdits.js";
 import type { ProductionTask } from "./productionStage.js";
@@ -23,7 +27,7 @@ export const productionReferencesSchema = z.object({
   }).strict()),
 }).strict();
 
-export type ProductionSourceReader = (source: string, path: string, captured?: boolean) => Promise<string>;
+export type ProductionSourceReader = SourceRead;
 
 /** Warm this submission's existing reader, not a persistent evidence cache.
  * Only declared, authorized references are read; normal compilation remains
@@ -64,6 +68,32 @@ function articleError(task: ProductionTask, file: string, message: string, secti
   });
 }
 
+/** The earlier citation a submitted reference repeats (same source, file and lines). */
+function earlierCitation(base: ProductionArticleBase | undefined,
+  retained: ReturnType<typeof applyProductionArticleEdits>["retainedReferences"] | undefined, fragment: string,
+  ref: { source_ref: string; locator: Record<string, unknown> }): ArticleSourceReference | undefined {
+  if (!("start_line" in ref.locator)) return undefined;
+  const signed = (value: { source_ref: string; locator: Record<string, unknown>; content_digest?: string }): value is ArticleSourceReference =>
+    !!value.content_digest && "start_line" in value.locator;
+  const same = (value: ArticleSourceReference) => value.source_ref === ref.source_ref && value.locator.path === ref.locator.path &&
+    value.locator.start_line === ref.locator.start_line && value.locator.end_line === ref.locator.end_line;
+  const from = (references: ReadonlyArray<{ source_ref: string; locator: Record<string, unknown>; content_digest?: string }> | undefined) =>
+    references?.filter(signed).find(same);
+  return from(base?.sections.find(section => section.id === fragment)?.references) ?? from(retained?.get(fragment));
+}
+
+/** Signed citations of a base, for location suggestions. */
+const signedSections = (base: ProductionArticleBase | undefined) => (base?.sections ?? []).map(section => ({ id: section.id,
+  references: section.references.filter((value): value is ArticleSourceReference => !!value.content_digest && "start_line" in value.locator) }));
+
+function outsideSourceMessage(task: ProductionTask, source: string, authorization?: { requirements: string[]; dependents: string[] }): string {
+  const owners = authorization?.requirements.length ? `requirement ${authorization.requirements.join(", ")}` : "the requirement that owns this article";
+  const replaced = [task.id, ...authorization?.dependents ?? []];
+  return `Source is outside this task's authorized inputs: ${source}. Cite only ${task.sources.map(item => item.scope).join(", ")}, `
+    + `or authorize it: add ${source} to evidence_source_scope of ${owners} in src/indexers.yaml, then submit a plan amendment `
+    + `whose replaces lists ${replaced.join(", ")}${replaced.length > 1 ? " (this task and the tasks that depend on it)" : ""} with a new task that includes the source.`;
+}
+
 /** Compile one fixed complete article into the existing Candidate model. Source
  * references are computed from authorized text, never accepted as Agent hashes.
  * This function does not persist, approve, publish or load Provider metadata. */
@@ -77,6 +107,10 @@ export async function prepareProductionArticle(input: {
   /** Validated candidate/approved references only; repair drafts never grant authority. */
   trustedBase?: ProductionArticleBase;
   approvedBaseDigest: string | null;
+  /** Checks only: no source-region cache writes. */
+  preview?: boolean;
+  /** How to authorize another source: owning requirements and the tasks an amendment must replace. */
+  authorization?: () => Promise<{ requirements: string[]; dependents: string[] }>;
 }): Promise<CandidateRecord> {
   const { task } = input;
   let files = input.files;
@@ -138,35 +172,61 @@ export async function prepareProductionArticle(input: {
   if (oversized.length) throw articleError(task, files.references.path,
     `Split the claims or choose sufficient references for these fragments: ${oversized.join("; ")}.`);
   const read = input.sourceReader ?? await registeredArticleSourceReader(input.projectRoot);
+  const observe = createArticleReferenceObserver(read);
   const allowed = new Set(task.sources.map(source => source.scope));
+  // Every reference problem of the article is reported together, one entry per fragment problem.
+  const problems: Array<{ section: string; message: string }> = [];
   const sections = [];
   for (const fragment of fragments) {
     const references = [];
     for (const ref of byId.get(fragment.id)!) {
       try {
+        // Repeating an earlier citation's lines keeps that evidence: it follows text that only
+        // moved (one unique match) and is reported otherwise, never re-signed at the old lines.
+        const earlier = earlierCitation(input.trustedBase ?? input.base, retained, fragment.id, ref);
+        // Only a citation the edit retains from the validated base keeps its earlier authority.
         const inherited = retained?.get(fragment.id)?.some(value => value.source_ref === ref.source_ref &&
           indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator));
-        const trusted = inherited ? input.trustedBase?.sections.find(section => section.id === fragment.id)?.references.find(value =>
-          value.source_ref === ref.source_ref && indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator)) : undefined;
-        if (!trusted?.content_digest && ![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) throw new TypeError(`Source is outside this task's authorized inputs: ${ref.source_ref}`);
-        const text = await read(ref.source_ref, ref.locator.path, true);
-        const reference = createArticleSourceReference(ref.source_ref, resolveSubmittedSourceLocator(ref.locator, text), text);
-        const previous = trusted ?? retained?.get(fragment.id)?.find(value => value.source_ref === ref.source_ref &&
-          indexerProtocolDigest(value.locator) === indexerProtocolDigest(ref.locator));
-        if (previous?.content_digest && previous.content_digest !== reference.content_digest) {
-          throw new TypeError("Retained source text changed. Read it and explicitly revise this fragment's references; a body-only edit cannot confirm changed evidence.");
+        const trusted = inherited && earlier && input.trustedBase?.sections.find(section => section.id === fragment.id)?.references
+          .some(value => value.content_digest === earlier.content_digest);
+        if (!trusted && ![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) throw new TypeError(outsideSourceMessage(task, ref.source_ref, await input.authorization?.()));
+        if (earlier) {
+          const observed = await observe(earlier);
+          if (observed.state === "current" || observed.state === "moved") { references.push(observed.reference); continue; }
+          const hint = observed.state === "not-found"
+            ? await suggestedCitation(input.projectRoot, earlier, signedSections(input.trustedBase)).catch(() => undefined) : undefined;
+          throw new TypeError(`${earlier.source_ref} ${earlier.locator.path}:${earlier.locator.start_line}-${earlier.locator.end_line} repeats an earlier citation, `
+            + `which is ${observed.state}${observed.reason ? ` (${observed.reason})` : ""} in the current source. `
+            + `Rewrite the fragment, cite its current text${hint ? ` (${hint})` : ""} with a quote or new lines, or remove the citation.`);
         }
-        rememberArticleRegion(input.projectRoot, reference, text);
+        const text = await read(ref.source_ref, ref.locator.path, true);
+        const locator = resolveSubmittedSourceLocator(ref.locator, text);
+        assertNoCaptureGap(locator, text);
+        const reference = createArticleSourceReference(ref.source_ref, locator, text);
+        if (!input.preview) rememberArticleRegion(input.projectRoot, reference, text);
         references.push(reference);
       } catch (error) {
-        throw articleError(task, files.references.path, error instanceof Error ? error.message : String(error), fragment.id);
+        if (error instanceof ContextError && error.detail?.reason_code !== "source-read-failed" && !(error instanceof SourceUnavailableError)) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        // Name the citation when the message itself does not (a range beyond the file's end).
+        problems.push({ section: fragment.id, message: error instanceof RangeError && "start_line" in ref.locator
+          ? `${ref.source_ref} ${ref.locator.path}:${ref.locator.start_line}-${ref.locator.end_line}: ${message}` : message });
       }
     }
     let unique;
     try { unique = articleFragmentReferences(references); }
-    catch (error) { throw articleError(task, files.references.path, error instanceof ZodError ? error.issues.map(issue => issue.message).join("; ") : error instanceof Error ? error.message : String(error), fragment.id); }
+    catch (error) {
+      problems.push({ section: fragment.id, message: error instanceof ZodError ? error.issues.map(issue => issue.message).join("; ") : error instanceof Error ? error.message : String(error) });
+      continue;
+    }
     sections.push({ section_ref: `${task.article_id}#${fragment.id}`, section_key: fragment.id,
       references: unique, markdown: fragment.readerVisibleBody, markdown_digest: indexerProtocolDigest(fragment.readerVisibleBody) });
+  }
+  if (problems.length) {
+    const error = articleError(task, files.references.path, problems.length === 1 ? problems[0]!.message
+      : `${problems.length} reference problems: ${problems.map((item, index) => `(${index + 1}) ${item.section}: ${item.message}`).join(" ")}`, problems[0]!.section);
+    (error.detail as Record<string, unknown>).problems = problems;
+    throw error;
   }
   const fingerprint = indexerProtocolDigest({ input: task.input, markdown, sections });
   return parseCandidateRecord({

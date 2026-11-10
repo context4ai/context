@@ -72,6 +72,27 @@ test("known 1:1 work reaches the report with one preparation command and no sepa
   console.info(`Known-task CLI fixture (including one idempotency retry): ${(performance.now() - started).toFixed(0)}ms`);
 });
 
+test("rerunning known tasks checks a previously unreadable source again instead of reusing the failure", async () => {
+  const f = await fixture();
+  const { readdir, rename } = await import("node:fs/promises");
+  const notes = join(f.root, "sources/note");
+  const file = (await readdir(notes, { recursive: true })).find(path => String(path).endsWith("access.md"))!;
+  await rename(join(notes, file), join(notes, `${file}.away`));
+  const command = ["action", "prepare-current", "--revision", f.revision, "--input", f.path, "--format", "json"];
+  let failure = "";
+  try { await runCliInDir(f.root, command); }
+  catch (error) { const output = error as { stdout?: string; stderr?: string }; failure = `${output.stdout ?? ""}${output.stderr ?? ""}`; }
+  expect(failure).toContain("production-planning-refresh-required");
+  const stage = (await readProductionStage(f.root))!;
+  // The next step is the same command with its input, not a refresh that drops it.
+  expect(failure).toContain(`prepare-current --revision ${stage.id} --input ${f.path}`);
+  await rename(join(notes, `${file}.away`), join(notes, file));
+  const result = JSON.parse(await runCliInDir(f.root, ["action", "prepare-current", "--revision", stage.id, "--input", f.path, "--format", "json"]));
+  expect((await readProductionStage(f.root))!.planning_complete).toBe(true);
+  // The output names the next step (the report), so no status check is needed.
+  expect(result.workflow.current.node).toBe("confirm-production-report");
+});
+
 test.each(["json", "yaml"] as const)("large file-submission diagnostics remain complete in temporary output (%s)", async format => {
   const f = await fixture();
   await runCliInDir(f.root, ["action", "prepare-current", "--revision", f.revision, "--input", f.path, "--format", "json"]);

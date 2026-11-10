@@ -108,7 +108,7 @@ test("digest relocation in a shallow checkout confirms moved citations without f
   expect(update.changed_references).toBeUndefined();
   expect(update.candidates).toEqual([]);
   // File history is not read; only the processed commit's trees are fetched, to list uncited changes.
-  const fetches = (await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch --quiet"));
+  const fetches = (await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch"));
   expect(fetches).toHaveLength(1);
   expect(fetches[0]).toContain(processed);
   // Only the cited file changed; an incomparable checkout would report an unavailable entry instead.
@@ -222,7 +222,8 @@ test("a registered commit that cannot be fetched is tried once per update", asyn
   const trace = join(root, ".tmp/git-trace.log");
   process.env.GIT_TRACE = trace;
   try {
-    await expect(beginKnowledgeUpdate(root, undefined, { pending: true })).rejects.toThrow(/could not be fetched\. Check that the registered commit SHA exists/u);
+    // The reason the fetch failed is part of the message.
+    await expect(beginKnowledgeUpdate(root, undefined, { pending: true })).rejects.toThrow(/could not be fetched \(git fetch of commit [0-9a-f]{12} failed: .+\)\. Check that the registered commit SHA exists/u);
   } finally { delete process.env.GIT_TRACE; }
   expect((await readFile(trace, "utf8")).split("\n").filter(line => line.includes("built-in: git fetch"))).toHaveLength(1);
   expect(await readKnowledgeUpdate(root)).toBeUndefined();

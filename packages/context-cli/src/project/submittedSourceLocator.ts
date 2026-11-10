@@ -5,6 +5,21 @@ export const submittedSourceLocatorSchema = articleSourceLocatorInputSchema;
 export type SubmittedSourceLocator = ArticleSourceLocatorInput;
 export interface SubmittedSourceReference { source_ref: string; locator: SubmittedSourceLocator }
 
+/** A capture gap's placeholder, as capture writes it, also inside a table cell:
+ * "> Resource unavailable: <title> (<kind>; <reason>). <!-- <locator> -->". */
+const CAPTURE_GAP = /(?:> ?)?Resource unavailable: .+? \([^;()]+; [^()]+\)\. <!-- [^>]+ -->/u;
+
+/** A gap stands for missing content and cannot be evidence. A cited line that holds only
+ * gaps is rejected; a line with captured text besides the gap (a table row) stays citable. */
+export function assertNoCaptureGap(locator: ArticleSourceLocator, capturedText: string): void {
+  const lines = capturedText.replace(/\r\n/gu, "\n").split("\n").slice(locator.start_line - 1, locator.end_line);
+  const gapOnly = (line: string) => CAPTURE_GAP.test(line) &&
+    line.replace(new RegExp(CAPTURE_GAP.source, "gu"), "").replace(/<br\s*\/?>|[|>\s]/giu, "") === "";
+  const gap = lines.findIndex(gapOnly);
+  if (gap >= 0) throw new SubmissionInputError(`${locator.path}:${locator.start_line + gap} is a capture gap (the resource was not captured), `
+    + "not evidence. Cite only captured lines; the missing content cannot support a claim until it is captured.");
+}
+
 /** Call only after authorization, with the same captured text used for hashing. */
 export function resolveSubmittedSourceLocator(input: SubmittedSourceLocator, capturedText: string): ArticleSourceLocator {
   const locator = submittedSourceLocatorSchema.parse(input);

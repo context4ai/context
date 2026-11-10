@@ -457,6 +457,11 @@ const isDirectInvocation =
   isDirectCliInvocation(import.meta.url, process.argv[1]);
 
 if (isDirectInvocation) {
+  // A reader that stops early (`context status | head`) must not crash the
+  // command; it finishes its work and only the unread output is dropped.
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error: NodeJS.ErrnoException) => { if (error.code !== "EPIPE") throw error; });
+  }
   cli_main().catch((err: unknown) => {
     handleCliFailure(err);
   });

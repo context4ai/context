@@ -14,6 +14,7 @@ import {
 import type { LarkExternalResource } from "./larkDocxXml.js";
 import {
   isLarkResourcePermissionDenied,
+  larkPermissionGuidance,
   runLarkResourceCommand,
   type LarkResourceCommandRunner,
 } from "./larkResourceCommand.js";
@@ -727,7 +728,8 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
         required,
         asset_paths: [],
         ...(reasonCode === undefined ? {} : { reason_code: reasonCode }),
-        reason: error instanceof Error ? error.message : String(error),
+        // A permission gap says how to close it; the gap itself does not block the capture.
+        reason: `${error instanceof Error ? error.message : String(error)}${reasonCode === DOCUMENT_RESOURCE_PERMISSION_DENIED_REASON_CODE ? ` ${larkPermissionGuidance(error)}` : ""}`,
       });
     }
   };
