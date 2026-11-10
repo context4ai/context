@@ -43,7 +43,7 @@ import {
   recordContextDebugPerformance,
 } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
-import { inspectWorkspaceVersion } from "./workspaceChangelog.js";
+import { inspectWorkspaceVersion, readWorkspaceChangelog } from "./workspaceChangelog.js";
 import {
   pendingDocumentCaptureCommands,
 } from "./statusRouting.js";
@@ -143,7 +143,11 @@ async function collectProjectStatusSnapshotInternal(
   const authoring = production && !production.delivery &&
     (dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended" ||
       (draftStatus.count > 0 && draftStatus.diagnostics.length === 0));
-  const deferDeliveryChecks = !maintenance && !localRevision && !localUpdate && !localRollback &&
+  // After delivery, a navigation-only edit (task adjust knowledge_map) is
+  // output-only work: record a version and build, without a new task.
+  const navigationOnly = !maintenance && !localRevision && !localUpdate && !localRollback && taskPreparation === "cleared" &&
+    !production && phaseStatus.projectEntryValid && await navigationOnlyChange(projectRoot, phaseStatus.packages);
+  const deferDeliveryChecks = !maintenance && !localRevision && !localUpdate && !localRollback && !navigationOnly &&
     ((taskPreparation === "cleared" && !production) || !!authoring);
   const collectionsWithPages = new Set<string>();
   const approvedPages = await countFiles(
@@ -214,7 +218,7 @@ async function collectProjectStatusSnapshotInternal(
   const draftCollections = [...new Set(indexerDrafts.map((candidate) => candidate.collection))].sort();
   // Output-only maintenance owns this evaluation; an unfinished production
   // ledger must not hide package configuration/Review recovery gates.
-  const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
+  const maintenanceOutputOnly = navigationOnly || maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
     (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
   const sourceUpdate = !maintenance && !localRevision && !localUpdate && !localRollback && !production && draftStatus.count === 0 && approvedPages > 0
     ? await import("./pendingSourceUpdates.js").then(({ inspectPendingSourceUpdates }) => inspectPendingSourceUpdates(projectRoot))
@@ -454,3 +458,31 @@ export async function collectProjectStatus(
   return (await collectProjectStatusSnapshot(projectRoot, options)).status;
 }
 import { withCommandReadCache } from "./commandReadCache.js";
+
+/** A knowledge-map-only change still owes its version or build. Judged against the
+ * last version record, not the working tree: (1) since the commit that last recorded a
+ * version, the knowledge map changed and nothing else under knowledge/, sources/ or src/; or
+ * (2) the latest version records only navigation and its packages are not confirmed
+ * built. (1) takes a few Git calls; (2) runs the build freshness check only after a
+ * navigation-only version. */
+async function navigationOnlyChange(projectRoot: string, packages: Parameters<typeof readPackageFreshnessStatus>[1]): Promise<boolean> {
+  const { KNOWLEDGE_MAP_PATH } = await import("./knowledgeMap.js");
+  const { excludedWorkspaceContent } = await import("./workspaceContentSnapshot.js");
+  const { execFile } = await import("node:child_process");
+  const git = (...args: string[]) => new Promise<string | undefined>(done => execFile("git", ["-C", projectRoot, ...args],
+    { env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, timeout: 30_000, maxBuffer: 64 * 1024 * 1024 }, (error, stdout) => done(error ? undefined : stdout)));
+  const recorded = (await git("log", "-1", "--format=%H", "--", "changelog.yaml"))?.trim();
+  if (recorded) {
+    const changed = [...(await git("diff", "--name-only", "--relative", recorded, "--"))?.split("\n") ?? [],
+      ...(await git("ls-files", "--others", "--exclude-standard"))?.split("\n") ?? []]
+      .filter(path => path && path !== "package.json" && !excludedWorkspaceContent(path));
+    // Notes beside the workspace (README, TODO) do not need production; articles, sources and project code do.
+    if (changed.includes(KNOWLEDGE_MAP_PATH) && changed.every(path => path === KNOWLEDGE_MAP_PATH || !/^(?:knowledge|sources|src)\//u.test(path))) return true;
+  }
+  const latest = (await readWorkspaceChangelog(projectRoot).catch(() => []))[0];
+  if (!latest || !latest.triggers.every(trigger => trigger.kind === "navigation")) return false;
+  // The build's own freshness check decides; a missing local build record is not a finished build.
+  const freshness = await readPackageFreshnessStatus(projectRoot, packages);
+  return freshness.diagnostics.length > 0 || freshness.packages.length < packages.length ||
+    freshness.packages.some(item => item.state !== "ready");
+}

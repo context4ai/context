@@ -137,9 +137,10 @@ const exec = promisify(execFile);
 /** Display evidence only: every candidate is checked against the signed digest.
  * A bounded search may fail, which never changes the citation's classification. */
 export function articleReferenceHistoryReader(root: string, previous: readonly ProcessedScope[] = []) {
-  const repoHistory = registeredRepoHistoryReader(root);
+  // Loaded on first use: a reader that is never asked must not leave a rejected promise behind.
+  let repoHistory: ReturnType<typeof registeredRepoHistoryReader> | undefined;
   const objects = commandGitObjectReader();
-  const registry = loadSourcesRegistry({ rootDir: root });
+  let registry: ReturnType<typeof loadSourcesRegistry> | undefined;
   const logs = new Map<string, Promise<string[]>>();
   function verified(reference: ArticleSourceReference, text: string, commit?: string): ReferenceHistory | undefined {
     try {
@@ -153,7 +154,7 @@ export function articleReferenceHistoryReader(root: string, previous: readonly P
     if (reference.source_ref.startsWith("repo:")) {
       for (const scope of versions) {
         try {
-          const text = await (await repoHistory)(reference.source_ref, reference.locator.path, scope.processed_version);
+          const text = await (await (repoHistory ??= registeredRepoHistoryReader(root)))(reference.source_ref, reference.locator.path, scope.processed_version);
           const result = verified(reference, text, scope.processed_version);
           if (result) return result;
         } catch { /* Historical evidence is optional, unlike the current read. */ }
@@ -161,7 +162,7 @@ export function articleReferenceHistoryReader(root: string, previous: readonly P
       return baseline === undefined ? undefined : { region: baseline };
     }
     const [kind, name] = reference.source_ref.split(":", 2);
-    const sources = await registry;
+    const sources = await (registry ??= loadSourcesRegistry({ rootDir: root }));
     const entries = kind === "lark" ? sources.larks : kind === "file" ? sources.files : kind === "note" ? sources.notes : kind === "sessions" ? sources.sessions : [];
     const entry = entries.find(candidate => candidate.id === name || candidate.name === name);
     if (!entry) return baseline === undefined ? undefined : { region: baseline };

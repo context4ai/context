@@ -214,13 +214,41 @@ test.each(["preview", "reference-only", "existing-preview"])("same-revision capt
     // Repeating an already degraded representation is not a new downgrade.
     const repeated = await runCaptureLarkPhase(input);
     expect(repeated.resource_materialization.items[0]?.reason_code).toBe("document.resource.preview");
+  } else if (mode === "preview") {
+    // A located downgrade is saved and listed, not refused: the main text is still captured.
+    const saved = await runCaptureLarkPhase(input);
+    expect(saved.resource_materialization.items[0]).toMatchObject({ status: "materialized", reason_code: "document.resource.preview" });
+    expect(saved.diagnostics.join("\n")).toContain("lark.capture.resource-degraded: image");
   } else {
     await expect(runCaptureLarkPhase(input)).rejects.toThrow("existing snapshot was preserved");
     expect(await Promise.all(paths.map(path => readFile(join(root, path))))).toEqual(before);
     revision = "2";
     const next = await runCaptureLarkPhase(input);
     expect(next.snapshot.changed).toBe(true);
-    expect(next.resource_materialization.items[0]).toMatchObject(mode === "preview"
-      ? { status: "materialized", reason_code: "document.resource.preview" } : { status: "reference-only" });
+    expect(next.resource_materialization.items[0]).toMatchObject({ status: "reference-only" });
   }
+});
+
+test("a same-revision refresh keeps the main text when a resource becomes a permission gap", async () => {
+  const root = await workspace(); let denied = false;
+  const read: LarkRunner = async (args, options) => {
+    if (args.includes("--help")) return { stdout: "--api-version string\n--doc-format string", stderr: "", exitCode: 0 };
+    if (args.includes("+media-download") || args.includes("+media-preview")) {
+      if (denied) return { stdout: "", exitCode: 1,
+        stderr: JSON.stringify({ ok: false, error: { type: "authorization", subtype: "permission_denied", message: "Image access denied" } }) };
+      await writeFile(resolve(options!.cwd!, args[args.indexOf("--output") + 1]!), "original image");
+      return { stdout: JSON.stringify({ ok: true, data: { saved: true } }), stderr: "", exitCode: 0 };
+    }
+    return { stdout: JSON.stringify({ ok: true, data: { revision_id: "1", document: {
+      content: '<title>Guide</title><p>Main rule</p><img token="illustration" alt="Diagram"/>',
+    } } }), stderr: "", exitCode: 0 };
+  };
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read });
+  denied = true;
+  const saved = await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(saved.resource_materialization.items[0]).toMatchObject({ status: "failed", reason_code: "document.resource.permission-denied" });
+  expect(saved.diagnostics.join("\n")).toContain("lark.capture.resource-degraded: image");
+  const body = await readFile(join(root, documentPath), "utf8");
+  expect(body).toContain("Main rule");
+  expect(body).toContain("> Resource unavailable: Diagram");
 });

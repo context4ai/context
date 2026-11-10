@@ -73,11 +73,14 @@ export async function readKnowledgeUpdate(projectRoot: string): Promise<Knowledg
  * affected citation a candidate; stop and report the facts. How to restore them depends
  * on the environment, so no fixed remedy is prescribed. */
 function stopOnUnreadableSources(unresolved: Awaited<ReturnType<typeof inspectSettledReferences>>["unresolved"],
-  prepared: readonly RepositoryContentPreparation[], network: boolean): void {
+  prepared: readonly RepositoryContentPreparation[], network: boolean,
+  fetchFailures: ReadonlyMap<string, string> = new Map(), registered: ReadonlyMap<string, string> = new Map()): void {
   const missingCommits = [...new Set(unresolved.filter(item => item.reason === "source-history-missing")
     .map(item => item.reference.source_ref))];
   if (missingCommits.length) {
-    throw new TypeError(`The registered commit of ${missingCommits.join(", ")} is not in its source checkout${network ? " and could not be fetched" : ""}. ` +
+    const why = missingCommits.map(source => fetchFailures.get(registered.get(source) ?? "")).filter(Boolean);
+    throw new TypeError(`The registered commit of ${missingCommits.join(", ")} is not in its source checkout${network ? " and could not be fetched" : ""}`
+      + `${why.length ? ` (${why.join("; ")})` : ""}. ` +
       "Check that the registered commit SHA exists in the remote repository. " + (network
         ? "If it does, fetch and check out the registered commit in the source checkout (see context source list --format json), then rerun context update --pending --format json."
         : "context update --pending fetches it; an explicit update reads only what the checkout has, so fetch and check out the commit first, then rerun this update."));
@@ -148,13 +151,15 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     // partial clone lacks. An explicit update reads what the checkouts already have.
     const network = options.pending === true;
     let prepared: Awaited<ReturnType<typeof prepareRepositoryContents>> = [];
+    let fetchFailures = new Map<string, string>();
     if (network) {
-      await fetchSourceCommits(projectRoot, [...repoScopes.map(source_ref => ({ source_ref })),
+      fetchFailures = await fetchSourceCommits(projectRoot, [...repoScopes.map(source_ref => ({ source_ref })),
         ...comparisons.map(item => ({ source_ref: item.source_ref, commit: item.from }))]);
       prepared = await prepareRepositoryContents(projectRoot, repoScopes.map(source => ({ source_ref: source, paths: citedPaths(source, cited) })));
     }
     const inspected = await inspectSettledReferences(projectRoot, cited, scopes.map(scope => scope.source_ref), settled);
-    stopOnUnreadableSources(inspected.unresolved, prepared, network);
+    stopOnUnreadableSources(inspected.unresolved, prepared, network, fetchFailures,
+      new Map(scopes.map(scope => [scope.source_ref, scope.processed_version])));
     // History is optional evidence: prepare old contents only for citations that need it,
     // and continue without it when it cannot be downloaded.
     if (network) await prepareRepositoryContents(projectRoot, repoScopes.flatMap(source => {

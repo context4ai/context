@@ -103,7 +103,7 @@ test("a body-only edit cannot silently accept changed retained evidence", async 
     files: { task: task.id, input: task.input, edits: {
       path: "edits.yaml", text, digest: durableContentDigest(text), bytes: Buffer.byteLength(text),
     } },
-  })).rejects.toThrow("Retained source text changed");
+  })).rejects.toThrow("repeats an earlier citation, which is not-found");
 });
 
 test("only validated citations grant inherited authority, including repair-draft edits", async () => {
@@ -124,7 +124,72 @@ test("only validated citations grant inherited authority, including repair-draft
   };
   expect((await run(base)).source_refs).toEqual([reference.source_ref]);
   await expect(run()).rejects.toThrow("outside this task");
-  await expect(run(base, "Changed evidence\n")).rejects.toThrow("Retained source text changed");
+  await expect(run(base, "Changed evidence\n")).rejects.toThrow("repeats an earlier citation, which is not-found");
   await expect(run(base, "Source text\n", true)).rejects.toThrow("outside this task");
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("repeated earlier lines keep, follow a unique move, or report why — all fragments at once", async () => {
+  const cite = (line: number, text: string) => createArticleSourceReference("note:source.md", { path: "source.md", start_line: line, end_line: line }, text);
+  const old = "Alpha rule\nBeta rule\nGamma rule\nDelta rule\n";
+  const trusted: ProductionArticleBase = {
+    markdown: `---\ntitle: Existing article\ndescription: Existing answer\n---\n\n${wrap("a", "A.")}\n${wrap("b", "B.")}\n${wrap("c", "C.")}\n${wrap("d", "D.")}\n`,
+    sections: [{ id: "a", references: [cite(1, old)] }, { id: "b", references: [cite(2, old)] },
+      { id: "c", references: [cite(3, old)] }, { id: "d", references: [cite(4, old)] }],
+  };
+  const planned = { id: "revision", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
+    sources: [{ scope: "note:source.md", baseline: `sha256:${"a".repeat(64)}` }],
+    base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
+  const task = { ...planned, input: productionTaskInput(planned) };
+  // Every fragment resubmits its earlier lines explicitly, as the 1106 agent did.
+  const references = YAML.stringify({ sections: trusted.sections.map(section => ({ id: section.id,
+    references: section.references.map(ref => ({ source_ref: ref.source_ref, locator: ref.locator })) })) });
+  const submit = (current: string) => prepareProductionArticle({ projectRoot: ".tmp/unused-production-references", task,
+    base: trusted, trustedBase: trusted, approvedBaseDigest: null, preview: true, sourceReader: async () => current,
+    files: { task: task.id, input: task.input,
+      content: { path: "article.md", text: trusted.markdown, digest: durableContentDigest(trusted.markdown), bytes: Buffer.byteLength(trusted.markdown) },
+      references: { path: "references.yaml", text: references, digest: durableContentDigest(references), bytes: Buffer.byteLength(references) } } });
+  // a stays, b moved once (a line inserted above), c changed, d now appears twice.
+  const current = "Alpha rule\nInserted line\nBeta rule\nGamma changed\nDelta rule\nDelta rule\n";
+  const error = await submit(current).catch(value => value);
+  expect(error.detail.problems.map((item: { section: string }) => item.section)).toEqual(["c", "d"]);
+  expect(error.detail.problems[0].message).toContain("source.md:3-3 repeats an earlier citation, which is not-found");
+  expect(error.detail.problems[1].message).toContain("source.md:4-4 repeats an earlier citation, which is ambiguous");
+  // With c and d resolved, a keeps its lines and b follows its unique move instead of re-signing line 2.
+  const candidate = await submit("Alpha rule\nInserted line\nBeta rule\nGamma rule\nDelta rule\n");
+  const lines = candidate.indexer_candidate!.sections.map(section => section.references.map(ref => ref.locator.start_line));
+  expect(lines).toEqual([[1], [3], [4], [5]]);
+});
+
+test("captured text is citable, a capture-gap placeholder is not", async () => {
+  const planned = { id: "check", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
+    sources: [{ scope: "note:source.md", baseline: `sha256:${"a".repeat(64)}` }],
+    base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
+  const task = { ...planned, input: productionTaskInput(planned) };
+  const source = "Main rule\n> Resource unavailable: Synced block (synced_block; permission denied). <!-- block-1 -->\nNext rule\n";
+  const file = (path: string, text: string) => ({ path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) });
+  const submit = (start: number, end: number) => {
+    const references = YAML.stringify({ sections: [{ id: "a", references: [{ source_ref: "note:source.md", locator: { path: "source.md", start_line: start, end_line: end } }] },
+      { id: "b", references: [] }] });
+    return prepareProductionArticle({ projectRoot: ".tmp/unused-production-references", task, approvedBaseDigest: null, preview: true,
+      sourceReader: async () => source, files: { task: task.id, input: task.input,
+        content: file("content.md", base.markdown), references: file("references.yaml", references) } });
+  };
+  expect((await submit(1, 1)).source_refs).toEqual(["note:source.md"]);
+  await expect(submit(1, 3)).rejects.toThrow("source.md:2 is a capture gap");
+});
+
+test("an unauthorized source names the requirement to extend and every task the amendment replaces", async () => {
+  const planned = { id: "revision", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
+    sources: [{ scope: "note:own.md", baseline: `sha256:${"a".repeat(64)}` }],
+    base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
+  const task = { ...planned, input: productionTaskInput(planned) };
+  const file = (path: string, text: string) => ({ path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) });
+  const references = YAML.stringify({ sections: [{ id: "a", references: [{ source_ref: "note:source.md", locator: { path: "source.md", start_line: 1, end_line: 1 } }] },
+    { id: "b", references: [] }] });
+  await expect(prepareProductionArticle({ projectRoot: ".tmp/unused-production-references", task, approvedBaseDigest: null, preview: true,
+    sourceReader: async () => "Source text\n", authorization: async () => ({ requirements: ["guild"], dependents: ["s2", "s3"] }),
+    files: { task: task.id, input: task.input, content: file("content.md", base.markdown), references: file("references.yaml", references) } }))
+    .rejects.toThrow("Cite only note:own.md, or authorize it: add note:source.md to evidence_source_scope of requirement guild in src/indexers.yaml, "
+      + "then submit a plan amendment whose replaces lists revision, s2, s3 (this task and the tasks that depend on it)");
 });

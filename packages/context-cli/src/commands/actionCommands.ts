@@ -1,3 +1,4 @@
+import { withNextRoute } from "./nextRoute.js";
 import { prepareApprovedRevisionSubmission } from "../project/approvedRevisionSubmission.js";
 import { readApprovedRevision } from "../project/approvedRevision.js";
 import { withSubmissionState } from "../project/submissionState.js";
@@ -60,8 +61,10 @@ export function registerProjectActionCommands(program: Command): void {
         ? await prepareApprovedRevisionSubmission({ projectRoot: root.projectRoot, revision, managed: options.managed === true,
           authorities: mergedWorkflowAuthorities(program.opts().workflowAuthority, []) }) : await prepareCurrentProductionStage({ projectRoot: root.projectRoot,
         revision, multiAgent: options.multiAgent === true, ...(options.source.length ? { sources: options.source } : {}) });
+      // Stage preparation names the next step itself, so no separate status check is needed.
+      const output = "stage_state" in result || options.input ? await withNextRoute(program, root.projectRoot, result, { managed: options.managed === true }) : result;
       await new Promise<void>((resolve, reject) => {
-        process.stdout.write(serializeActionCompletion(result, options.format as "json" | "yaml"), error => {
+        process.stdout.write(serializeActionCompletion(output, options.format as "json" | "yaml"), error => {
           if (error) reject(error); else resolve();
         });
       });
@@ -79,7 +82,7 @@ export function registerProjectActionCommands(program: Command): void {
         .argParser(collectWorkflowAuthorityOption)
         .default([]),
     )
-    .option("--preview", "preview an approved revision, or every page of a prepared revision batch, without submitting; not used for production stage files")
+    .option("--preview", "check without submitting: an approved revision, every page of a prepared revision batch, or production stage article files")
     .option("--verbose", "include the full completion and next Route inline")
     .option("--format <format>", "output format: json | yaml", "json")
     .action(async (options: Record<string, unknown>) => withSubmissionState(async () => {

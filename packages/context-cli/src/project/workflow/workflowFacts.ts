@@ -148,7 +148,8 @@ export function createContextWorkflowFacts(
 
   return {
     workspace: {
-      task_start_authorized: observation.taskPreparation !== "cleared",
+      // Output-only work (a rebuild or a navigation change) needs no new task.
+      task_start_authorized: observation.taskPreparation !== "cleared" || outputOnlyMaintenance,
       project_entry_valid: observation.projectEntryValid,
       state_valid: workspaceStateValid(observation),
     },

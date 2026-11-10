@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { withNextRoute } from "./nextRoute.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { beginDocumentRevision } from "../project/documentRevision.js";
@@ -14,20 +15,6 @@ function requireProjectRoot(): string {
   throw new ContextError(ExitCode.WorkspaceStateError, "revise requires a Context workspace", {
     category: ErrorCategory.WorkspaceNotFound,
   });
-}
-
-/** A committed result whose next step is only "check status" carries that status's Route,
- * as `version record` does. If observing fails, the result keeps its status command. */
-async function withNextRoute(program: Command, projectRoot: string, result: unknown): Promise<unknown> {
-  const next = (result as { next_action?: { command?: unknown } } | null)?.next_action?.command;
-  if (next !== "context status --format json") return result;
-  try {
-    const [{ collectProjectStatus }, { workflowAuthorities }] = await Promise.all([
-      import("../project/status.js"), import("../project/workflow/workflowCommandOptions.js")]);
-    const root = program.opts() as { workflowManaged?: boolean; workflowAuthority?: unknown };
-    const status = await collectProjectStatus(projectRoot, { managed: root.workflowManaged === true, authorities: workflowAuthorities(root.workflowAuthority) });
-    return { ...(result as object), workflow: status.workflow };
-  } catch { return result; }
 }
 
 export function registerDocumentRevisionCommand(program: Command): void {

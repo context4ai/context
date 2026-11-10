@@ -120,7 +120,13 @@ test("code plus two documents share reader topics across skills and batches thro
       content: "submissions/1.md", references: "submissions/1.refs.yaml" }] }));
   const invalidRange = await completeProductionSubmission({ projectRoot: root, stage: issued.id, path: "submissions/ready.yaml" });
   expect(invalidRange.accepted).toEqual([]);
-  expect(invalidRange.failed).toMatchObject([{ task: issued.tasks[1]!.id, section: "answer" }]);
+  // Every citation beyond the file's end is reported, each naming its lines.
+  expect(invalidRange.failed).toHaveLength(refs[1]!.length);
+  for (const [index, failure] of invalidRange.failed.entries()) {
+    const locator = refs[1]![index]!.locator;
+    expect(failure).toMatchObject({ task: issued.tasks[1]!.id, section: "answer" });
+    expect(failure.reason).toContain(`${locator.path}:${locator.start_line}-999: Source region exceeds captured text`);
+  }
   expect(await readCandidateRecords(root)).toEqual([retained]);
   await writeFile(join(agent, "submissions/repair.yaml"), YAML.stringify({ edits: [{ replace: ["answer"], with: [{ id: "answer", references: refs[1] }] }] }));
   await writeFile(join(agent, "submissions/ready.yaml"), YAML.stringify({ stage: issued.id,

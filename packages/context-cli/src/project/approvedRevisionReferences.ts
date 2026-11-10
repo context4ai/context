@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
+import { assertNoCaptureGap, resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import { SubmissionInputError, SubmissionInputErrors } from "./productionFeedback.js";
 import { articleFragmentReferences, createArticleSourceReference,
   repoContentScopeMatches, type ArticleSourceReference, type ArticleStructureEntry } from "@c4a/context";
@@ -48,7 +48,7 @@ async function resolveSubmittedReference(context: ReferenceContext, id: string, 
   }
   const text = await context.readSource(reference.source_ref, reference.locator.path, true);
   let locator;
-  try { locator = resolveSubmittedSourceLocator(reference.locator, text); }
+  try { locator = resolveSubmittedSourceLocator(reference.locator, text); assertNoCaptureGap(locator, text); }
   catch (error) {
     if (error instanceof SubmissionInputError) throw new SubmissionInputError(`Fragment ${id}: ${error.message}`, [...at, "locator"]);
     throw error;

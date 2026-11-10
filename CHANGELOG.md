@@ -2,6 +2,22 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- Production-stage article submissions report every citation problem of the article at once, one entry per fragment. A citation that repeats an earlier citation's lines keeps that evidence: it stays when the text is unchanged, follows the text when it moved to one unique place, and is reported with its state (changed, ambiguous or unreadable) and, when available, where the text now is; the current text at the old lines is never signed in its place.
+- `context action complete-current --preview` also checks production-stage article files: every problem of every task in one run, without saving anything. Plans and report decisions have no preview.
+- A citation of a source file the source does not own lists the files it does own. A citation of a source outside the task names the requirement in `src/indexers.yaml` to extend and every task (this one and those depending on it) that the plan amendment must replace.
+- A captured document's capture gap (`> Resource unavailable: ...`) cannot be cited, in revisions and in production; citations of the captured text around it are accepted, including a table row whose other cells were captured.
+- A synced block whose source document the capturing identity cannot open (Lark code 3380004) is a permission gap like an unreadable whiteboard: the document is saved and the gap listed. Permission gaps say how to close them: request the app scope at https://open.larkoffice.com/app, or ask the document's owner to share it.
+- Refreshing an unchanged Lark revision no longer refuses to save when a resource captured before is now a permission gap, a missing source or an image preview; the snapshot is saved and the result lists each downgrade. Other resource failures still keep the old snapshot, and an unreadable body never replaces it.
+- Production planning checks whether a repository checkout matches its registered commit with a time limit that grows with the number of files, without taking Git's index lock, and retries once; a check that cannot finish is reported as unchecked instead of making the source unavailable.
+- Long Git fetches and clones (source recovery, content download, commit fetch) continue while Git's progress shows more objects or more received bytes (warnings and repeated lines do not count), stop after about five minutes without progress, and stop and report after 30 minutes; previously they stopped after a fixed two minutes. Failure reasons name the source and hide credentials.
+- When a production stage has unavailable sources, `context action prepare-current` checks them again instead of reusing the failed result, and the refresh error's next command keeps the `--input` file. `prepare-current` output returns the next Route, keeping the command's `--managed` mode.
+- `context version record` refuses while drafts still await review, unless the workflow itself reached version recording (partial delivery).
+- After delivery, a knowledge-map-only change (`context task adjust` with `knowledge_map`) routes to recording a patch version and building, instead of asking to resume production, also when the change or its version was committed first or a note beside the workspace (such as a TODO file) changed with it. The knowledge updates guide describes how to merge unpublished intermediate versions into one entry.
+- `context source remove` no longer counts the sources and capture phases that the project builds from the source registry as references to the source; declarations written in the project's own files, in any module, still block removal.
+- Output piped to a reader that stops early (`context status | head`) no longer crashes the CLI with `EPIPE`.
+
 ## 0.7.96 - 2026-11-09
 
 - `context plugin install --local` for Claude and Cursor also installs the `resources/` folders that the installed commands link to (for example the routine update and version alignment references); previously those links were broken in local installs. Global installs were not affected. Like skills, an existing folder is replaced only if an earlier local install wrote it unchanged.

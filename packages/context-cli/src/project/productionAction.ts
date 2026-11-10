@@ -26,7 +26,6 @@ export async function completeCurrentProductionAction(input: {
       next_action: { command: "context status --format json" },
     });
     if (!stage) throw invalid("The production stage expired. Read the current route; do not restore a previous process.");
-    if (input.preview) throw invalid("Stage files do not use the retired Author preview. Submit the current task files.");
     if (!input.submissionPath || input.submissionPath === "-") throw invalid("Production requires a stage-local manifest file, not stdin.");
     const path = relative(resolve(input.projectRoot, productionAgentDirectory(stage.id)), resolve(input.cwd, input.submissionPath));
     const manifest = await readProductionFile({ projectRoot: input.projectRoot, stage: stage.id, path });
@@ -35,9 +34,15 @@ export async function completeCurrentProductionAction(input: {
       throw invalid("The manifest must identify the current production stage. No tasks were saved.");
     }
     const submission = { projectRoot: input.projectRoot, stage: stage.id, path, manifest, multiAgent: input.multiAgent === true };
-    if ("decision" in value) return approveProductionReport({ ...submission, revision: input.revision });
+    if ("decision" in value) {
+      if (input.preview) throw invalid("--preview checks article task files; a report decision has nothing to preview.");
+      return approveProductionReport({ ...submission, revision: input.revision });
+    }
     if (input.revision !== stage.id) throw invalid("Use the current stage revision; task input handles protect independent submissions.");
-    if (!stage.planning_complete || "articles" in value) return submitProductionPlan(submission);
-    return completeProductionSubmission(submission);
+    if (!stage.planning_complete || "articles" in value) {
+      if (input.preview) throw invalid("--preview checks article task files; submit the plan to have it checked.");
+      return submitProductionPlan(submission);
+    }
+    return completeProductionSubmission({ ...submission, preview: input.preview === true });
   }));
 }

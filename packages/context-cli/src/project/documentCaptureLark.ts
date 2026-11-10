@@ -4,6 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import type { CaptureLarkPhaseDefinition, LarkSourceRegistryEntry } from "@c4a/context";
 import {
+  isNonBlockingDocumentResourceFailureReasonCode,
   computeDocumentContentHash,
   createDocumentSnapshotManifest,
   normalizeMarkdownDocument,
@@ -449,13 +450,17 @@ async function runCaptureLarkPhaseUnlocked(input: {
 
   // A retry must not replace previously captured resources with transient
   // failures. Keep the complete old snapshot; do not claim stale bytes are fresh.
+  // A located gap (permission, source missing) or a preview is saved and listed instead.
+  let degraded: typeof fetched.resourceMaterialization.items = [];
   if (previousManifest && previousRevision !== undefined && fetched.revisionId === previousRevision) {
     const previous = documentSnapshotFidelityState(previousManifest, readDocumentSnapshotCaptureReport({
       projectRoot: input.projectRoot, materializedAt, manifest: previousManifest,
     }));
-    const lost = fetched.resourceMaterialization.items.filter(item =>
+    let lost = fetched.resourceMaterialization.items.filter(item =>
       previous.resourceMaterialization?.items.some(old => old.kind === item.kind && old.locator === item.locator && old.status === "materialized" &&
         (item.status !== "materialized" || item.reason_code === "document.resource.preview" && old.reason_code !== "document.resource.preview")));
+    degraded = lost.filter(item => item.status === "materialized" || isNonBlockingDocumentResourceFailureReasonCode(item.reason_code));
+    lost = lost.filter(item => !degraded.includes(item));
     if (lost.length) throw new ContextError(ExitCode.WorkspaceStateError,
       "Previously captured resources were degraded; the existing snapshot was preserved. Check resource policy and access before retrying the explicit refresh.",
       { category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
@@ -661,6 +666,10 @@ async function runCaptureLarkPhaseUnlocked(input: {
       ...fetched.resourceMaterialization.items
         .filter((item) => item.status === "failed" || (item.kind === "poll" && item.reason?.includes("absent") === true))
         .map((item) => `${item.status}: lark.capture.resource-${item.status}: ${item.kind}: ${item.reason ?? item.locator}`),
+      ...fetched.resourceMaterialization.items.filter(item => item.reason_code === "document.resource.preview")
+        .map(item => `warning: lark.capture.resource-preview: ${item.kind}: ${item.reason ?? item.locator}`),
+      ...degraded.map(item => `warning: lark.capture.resource-degraded: ${item.kind} ${item.locator} was captured before and is now `
+        + `${item.status === "materialized" ? "a preview" : "a gap"}; its placeholder is not citable evidence`),
     ],
     next_action: workspaceRouteReevaluation(input.phase.id),
   };

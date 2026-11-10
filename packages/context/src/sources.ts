@@ -601,6 +601,10 @@ const assertGlobalSourceUniqueness = (registry: SourcesRegistry): void => {
   }
 };
 
+/** Set only by the CLI while it checks which project declarations the registry
+ * produces: entries with these names or ids are left out of the loaded registry. */
+export const SOURCES_REGISTRY_EXCLUSION = Symbol.for("c4a.context.sources-registry-exclusion");
+
 export const loadSourcesRegistry = async (
   options: LoadSourcesRegistryOptions = {},
 ): Promise<SourcesRegistry> => {
@@ -612,6 +616,9 @@ export const loadSourcesRegistry = async (
   const fileAbsolutePath = resolve(rootDir, fileRegistryPath);
   const larkAbsolutePath = resolve(rootDir, larkRegistryPath);
 
+  const excluded = (globalThis as Record<symbol, unknown>)[SOURCES_REGISTRY_EXCLUSION];
+  const included = (entry: { id: string; name: string }) =>
+    !(excluded instanceof Set && (excluded.has(entry.name) || excluded.has(entry.id)));
   const repoRegistry = parseRepoSourcesRegistry(
     await readYamlIfPresent(repoAbsolutePath, { sources: [] }),
     repoRegistryPath,
@@ -638,9 +645,9 @@ export const loadSourcesRegistry = async (
       file: fileAbsolutePath,
       lark: larkAbsolutePath,
     },
-    repos: repoRegistry.repos,
-    files,
-    larks,
+    repos: repoRegistry.repos.filter(included),
+    files: files.filter(included),
+    larks: larks.filter(included),
     notes: await discoverManagedDocuments(rootDir, "note"),
     sessions: await discoverManagedDocuments(rootDir, "sessions"),
   };

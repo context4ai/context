@@ -3,6 +3,7 @@ import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { loadSourcesRegistry } from "@c4a/context";
+import { redactRemoteCredentials, runGitWithProgress } from "../lib/gitProgress.js";
 
 const execute = promisify(execFile);
 const offline = { ...process.env, GIT_NO_LAZY_FETCH: "1" };
@@ -60,12 +61,6 @@ async function missingObjects(root: string, commit: string, paths: readonly stri
   return checked.split("\n").filter(line => line.endsWith(" missing")).map(line => line.split(" ")[0]!);
 }
 
-function failureSummary(error: unknown): string {
-  const text = error && typeof error === "object" && "stderr" in error ? String((error as { stderr?: unknown }).stderr ?? "") : String(error);
-  const line = text.split("\n").map(part => part.trim()).find(part => /^(fatal|error):/iu.test(part)) ?? text.split("\n")[0]?.trim() ?? "";
-  // Never echo credentials embedded in remote URLs.
-  return line.replace(/\/\/[^/@\s]+@/gu, "//").slice(0, 200) || "fetch failed";
-}
 
 /** Download the contents of cited files that a partial clone has not fetched yet.
  * Only `update --pending` calls this; status, verify and production reads stay local.
@@ -92,11 +87,12 @@ export async function prepareRepositoryContents(projectRoot: string,
       else {
         try {
           for (let index = 0; index < missing.length; index += FETCH_BATCH) {
-            await git(root, ["-c", "fetch.negotiationAlgorithm=noop", "fetch", "--no-tags", "--no-write-fetch-head",
+            // Runs as long as git reports progress; stalls and very long downloads are reported.
+            await runGitWithProgress(["-C", root, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "--no-tags", "--no-write-fetch-head",
               "--recurse-submodules=no", "--filter=blob:none", remote, ...missing.slice(index, index + FETCH_BATCH)],
-            { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, timeout: 120_000 });
+            { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }, label: `git fetch of ${request.source_ref} contents` });
           }
-        } catch (error) { result.reason = failureSummary(error); }
+        } catch (error) { result.reason = redactRemoteCredentials(error instanceof Error ? error.message : String(error)).slice(0, 400); }
         result.unresolved = (await missingObjects(root, commit, paths)).length;
         if (!result.unresolved) delete result.reason;
       }

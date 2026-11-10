@@ -1,4 +1,8 @@
 import type { Command } from "commander";
+import { readCandidateRecords } from "../project/candidateLedger.js";
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
 import { findContextProjectRoot } from "../project/workspace.js";
 import { readYamlOrJsonInput } from "../project/payloadInput.js";
 import { changelogInputSchema, inspectWorkspaceVersion, recordWorkspaceVersion } from "../project/workspaceChangelog.js";
@@ -34,6 +38,19 @@ export function registerVersionCommands(program: Command) {
         ...(reference === undefined ? {} : { resourceReceiptsReference: reference }) };
       const resourceReceipts = execution.resourceReceiptsReference === undefined ? undefined
         : await parseWorkflowResourceReceipts(execution.resourceReceiptsReference, root);
+      // Drafts still awaiting review: only the workflow's own record step may version them
+      // (partial delivery); otherwise review comes first. Rejected candidates do not count.
+      if ((await readCandidateRecords(root)).some(candidate => candidate.status === "draft")) {
+        const current = (await collectProjectStatus(root, {
+          ...execution, ...(resourceReceipts === undefined ? {} : { resourceReceipts }) })).workflow.current;
+        if (current?.node !== "record-workspace-version") {
+          throw new ContextError(ExitCode.WorkspaceStateError, `Drafts are still awaiting review; the current step is ${current?.node ?? "unknown"}, not version recording.`, {
+            category: ErrorCategory.WorkspaceStateInvalid, reason_code: "version-review-pending",
+            next_action: { command: current?.commands?.[0]?.command ?? workflowStatusCommand(execution) },
+            next: "Finish the current step and Review first; the workflow reaches version recording after approval.",
+          });
+        }
+      }
       const recorded = await recordWorkspaceVersion(root, value);
       // The transaction is committed before observing the next Route. A failed
       // observation must not invite the Agent to submit the version again.

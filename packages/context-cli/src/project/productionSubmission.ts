@@ -43,6 +43,12 @@ function writeTarget(path: string, previous: string | undefined, content: string
     target_digest: durableContentDigest(content), content };
 }
 
+/** A check of stage task files with the submission rules; nothing is saved. */
+export interface ProductionSubmissionPreview {
+  protocol: "context.production-submission-preview/v1"; written: false;
+  ok: string[]; failed: ProductionSubmissionResult["failed"];
+}
+
 export interface ProductionSubmissionResult {
   submission_state: "committed" | "not-committed";
   accepted: Array<{ task: string; receipt: string }>;
@@ -56,14 +62,22 @@ export interface ProductionSubmissionResult {
  * the successful subset. Neither
  * candidates nor deduplication records escape .tmp. A new machine starts fresh.
  * The caller may materialize newly eligible work without a full status query. */
-export async function completeProductionSubmission(input: {
+type ProductionSubmissionInput = Parameters<typeof completeProductionSubmissionImpl>[0];
+export function completeProductionSubmission(input: ProductionSubmissionInput & { preview: true }): Promise<ProductionSubmissionPreview>;
+export function completeProductionSubmission(input: ProductionSubmissionInput & { preview?: false }): Promise<ProductionSubmissionResult>;
+export function completeProductionSubmission(input: ProductionSubmissionInput): Promise<ProductionSubmissionResult | ProductionSubmissionPreview>;
+export function completeProductionSubmission(input: ProductionSubmissionInput) { return completeProductionSubmissionImpl(input); }
+
+async function completeProductionSubmissionImpl(input: {
   projectRoot: string;
   stage: string;
   path: string;
   manifest?: FixedProductionFile;
   multiAgent?: boolean;
   prepareNext?: (stage: ProductionStage) => Promise<Awaited<ReturnType<typeof prepareNextProductionStage>> | void>;
-}): Promise<ProductionSubmissionResult> {
+  /** Check every task with the submission rules, then return without saving anything. */
+  preview?: boolean;
+}): Promise<ProductionSubmissionResult | ProductionSubmissionPreview> {
   return withProjectWriteLock(input.projectRoot, "production-submit", async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
     const snapshot = await readProductionStageSnapshot(input.projectRoot);
@@ -154,14 +168,15 @@ export async function completeProductionSubmission(input: {
           // when a prior formal/candidate version also exists.
           base = await readProductionRepairDraft({ projectRoot: input.projectRoot, stage: stage.id, task }) ?? base;
         }
-        retainDraft = !!files.content && !!files.references;
+        retainDraft = !input.preview && !!files.content && !!files.references;
         const candidate = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: "production.submit.validate" },
           () => prepareProductionArticle({ projectRoot: input.projectRoot, task, files,
             sourceReader: sourceReader!,
             approvedBaseDigest: target.approvedBaseDigest,
             ...(base ? { base } : {}),
             ...(target.base ? { trustedBase: target.base } : {}),
-            visibility: target.visibility }));
+            visibility: target.visibility, preview: input.preview === true,
+            authorization: () => productionAuthorization(input.projectRoot, stage!, task) }));
         // Make successful proposals visible to subsequent conflict checks,
         // without exposing any acceptance until their joint transaction saves.
         const key = knowledgeTargetPathKey(candidate.path);
@@ -171,15 +186,27 @@ export async function completeProductionSubmission(input: {
       } catch (error) {
         const detail = error && typeof error === "object" && "detail" in error
           ? error.detail as Record<string, unknown> | undefined : undefined;
-        let reason = error instanceof Error ? error.message : String(error);
+        const reason = error instanceof Error ? error.message : String(error);
+        let note = "";
         if (retainDraft) {
           try { await retainProductionRepairDraft({ projectRoot: input.projectRoot, stage: stage.id, task, files }); }
-          catch { reason += " The temporary repair draft could not be retained; resubmit the complete draft."; }
+          catch { note = " The temporary repair draft could not be retained; resubmit the complete draft."; }
         }
-        result.failed.push({ task: task.id, reason,
-          ...(typeof detail?.file === "string" ? { file: detail.file } : {}),
-          ...(typeof detail?.section === "string" ? { section: detail.section } : {}) });
+        // An article with several reference problems reports each fragment's problem.
+        const problems = Array.isArray(detail?.problems) ? detail.problems as Array<{ section: string; message: string }>
+          : [{ section: detail?.section, message: reason }];
+        for (const item of problems) {
+          result.failed.push({ task: task.id, reason: item.message + note,
+            ...(typeof detail?.file === "string" ? { file: detail.file } : {}),
+            ...(typeof item.section === "string" ? { section: item.section } : {}) });
+        }
       }
+    }
+    if (input.preview) {
+      const order = new Map(fixed.tasks.map((task, index) => [task.task, index]));
+      return { protocol: "context.production-submission-preview/v1", written: false,
+        ok: [...result.accepted.map(item => item.task), ...pending.keys()].sort((a, b) => order.get(a)! - order.get(b)!),
+        failed: result.failed };
     }
     if (pending.size) {
       const changedArticles = new Set([...pending.values()].map(proposal => proposal.candidate.article_id));
@@ -230,4 +257,22 @@ export async function completeProductionSubmission(input: {
     }
     return result;
   });
+}
+
+/** Owning requirements and the active tasks (transitively) waiting on this one. */
+async function productionAuthorization(projectRoot: string, stage: ProductionStage, task: ProductionStage["tasks"][number]) {
+  const { readProductionRequirements } = await import("./productionRequirements.js");
+  const sources = new Set(task.sources.map(source => source.scope));
+  const requirements = await readProductionRequirements(projectRoot).then(value => value.requirements
+    .filter(item => [...item.target_scope.targets, ...item.evidence_source_scope?.targets ?? []].some(target => sources.has(target.source_ref)))
+    .map(item => item.id), () => []);
+  const dependents: string[] = [];
+  for (let added = true; added;) {
+    added = false;
+    for (const other of stage.tasks) {
+      if (dependents.includes(other.id) || ["accepted", "excluded", "replaced"].includes(other.status)) continue;
+      if (other.after.some(id => id === task.id || dependents.includes(id))) { dependents.push(other.id); added = true; }
+    }
+  }
+  return { requirements, dependents };
 }
