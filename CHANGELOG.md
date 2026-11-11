@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.98 - 2026-11-11
 
 - With `CONTEXT_LARK_IDENTITY=bot`, a document the bot cannot open (Lark code 3380004) is now read again as the user, as the bot mode intends; previously this real error did not trigger the fallback.
 - A Lark capture records which identity read the document, why the bot could not read it, and access changes made during the capture in its capture report. `context status` keeps showing a fallback ("the bot could not read this document … it was read as the user", with the risk and what to do) after the capture finished; reports written before this version remain valid.
