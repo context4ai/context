@@ -361,6 +361,32 @@ describe("0.6.2 Lark capture phase", () => {
     }
   });
 
+  test("capture:lark warning for a denied document keeps the Lark error and the owner-sharing step", async () => {
+    const root = makeTmp();
+    try {
+      const projectRoot = await createLarkProject(root);
+      const runner: LarkRunner = async (args) => {
+        if (args.includes("--help")) {
+          return { stdout: "Flags:\n      --api-version string\n      --doc-format string\n", stderr: "", exitCode: 0 };
+        }
+        // Recorded from lark-cli 1.0.98 for an identity that cannot view the document.
+        return { stdout: "", exitCode: 1, stderr: JSON.stringify({ ok: false, identity: "user", error: {
+          type: "api", subtype: "unknown", code: 3380004,
+          message: "No permission to operate on this document: the current user lacks view or edit access.",
+        } }) };
+      };
+      const result = JSON.parse(await runPhase({
+        cwd: projectRoot, phaseId: "capture:lark:handbook", format: "json", larkRunner: runner,
+      }));
+      expect(result.result.warning).toMatchObject({ state: "deferred-no-evidence", cause: "external.authorization-required" });
+      expect(result.result.warning.stderr).toContain("3380004");
+      expect(result.result.warning.next).toContain("owner to share it");
+      expect(result.result.warning.next).not.toContain("auth login");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("capture:lark classifies unavailable credential storage as a host execution requirement", async () => {
     const root = makeTmp();
     try {

@@ -320,7 +320,10 @@ MIT.
 mode, a credential/scope/access failure retries once as the current user; the
 rest of that capture keeps the fallback identity for pagination and resources.
 Network, rate-limit and parsing errors do not trigger a user authorization
-attempt. This does not change source-read consent or the audience of published
+attempt. The capture report records which identity read the document and why a
+fallback happened; `context status` keeps warning about the fallback, because
+content only that user can see is now in the snapshot and later bot captures may
+not read it. This does not change source-read consent or the audience of published
 knowledge. Host-managed OAuth must use the host's authorization flow.
 
 ### Workspace updates

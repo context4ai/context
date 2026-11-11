@@ -72,7 +72,13 @@ The fallback restarts the entire body, including pagination; never combine body
 pages from different identities. Once the body is available, its identity is
 fixed for all media, synced references, Sheets, Base and whiteboard reads.
 Resource failures do not request user authorization or restart the article.
-Network, rate-limit and format errors do not switch identity.
+Network, rate-limit and format errors do not switch identity. When a capture
+result or `context status` reports `lark.capture.identity-fallback`, tell the
+user which documents were read as them, the risk (content only they can see is
+now in the snapshot; later bot captures may not read it) and the remedy (ask the
+document's owner to share it with the bot). When a capture is deferred
+(`document.acquisition-unavailable`), relay the warning's `next` instead of
+retrying on your own.
 
 An image download denied by permissions may use the official preview endpoint
 once with the same identity. A captured preview is explicitly marked as such.

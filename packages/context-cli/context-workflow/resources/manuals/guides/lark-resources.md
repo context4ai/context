@@ -270,6 +270,8 @@ tokens in generated pages or claim that excluded images have been interpreted.
 The selected document identity remains fixed for resource reads. In Bot mode,
 only an authorization failure while reading the body can restart the article
 as the current user. Resource failures never trigger that identity fallback.
+The capture report records the identity and the reason for a fallback, and
+`context status` keeps showing it until the document is captured again.
 Images may use the official same-identity preview endpoint after download
 permission is denied. Previews are marked explicitly; unavailable resources
 retain references and diagnostics. Use available body evidence without inferring

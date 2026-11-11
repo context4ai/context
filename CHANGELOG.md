@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- With `CONTEXT_LARK_IDENTITY=bot`, a document the bot cannot open (Lark code 3380004) is now read again as the user, as the bot mode intends; previously this real error did not trigger the fallback.
+- A Lark capture records which identity read the document, why the bot could not read it, and access changes made during the capture in its capture report. `context status` keeps showing a fallback ("the bot could not read this document … it was read as the user", with the risk and what to do) after the capture finished; reports written before this version remain valid.
+- An unchanged Lark revision is captured again in full when it is read by a different identity than before or when access changed during the capture, instead of reusing the earlier snapshot.
+- When a document cannot be acquired, the warning keeps its next step and the Lark error (credentials hidden) instead of only the cause; a document the capturing identity cannot open (code 3380004) asks to have it shared instead of suggesting to sign in again.
+
 ## 0.7.97 - 2026-11-10
 
 - Production-stage article submissions report every citation problem of the article at once, one entry per fragment. A citation that repeats an earlier citation's lines keeps that evidence: it stays when the text is unchanged, follows the text when it moved to one unique place, and is reported with its state (changed, ambiguous or unreadable) and, when available, where the text now is; the current text at the old lines is never signed in its place.

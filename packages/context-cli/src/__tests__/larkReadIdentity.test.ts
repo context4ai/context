@@ -46,6 +46,22 @@ describe("configured Lark read identity", () => {
     expect(session.usedFallback).toBe(true);
   });
 
+  test("bot falls back when the Docs API denies the document (code 3380004)", async () => {
+    // Recorded from lark-cli 1.0.98: the envelope is printed on stderr with exit code 1.
+    const documentDenied = { exitCode: 1, stdout: "", stderr: JSON.stringify({ ok: false, identity: "bot", error: {
+      type: "api", subtype: "unknown", code: 3380004,
+      message: "No permission to operate on this document: the current user lacks view or edit access.",
+    } }) };
+    const seen: string[] = [];
+    const session = createLarkReadSession(async args => {
+      seen.push(as(args)!);
+      return as(args) === "bot" ? documentDenied : success;
+    }, "bot");
+    await session.readDocument(() => session.run(["docs", "+fetch", "--as", "bot"]));
+    expect(seen).toEqual(["bot", "user"]);
+    expect(session.usedFallback).toBe(true);
+  });
+
   test.each(["rate_limit", "network", "validation", "parse"])("does not switch on %s errors", async type => {
     const seen: string[] = [];
     const session = createLarkReadSession(async args => {
@@ -135,6 +151,57 @@ describe("configured Lark read identity", () => {
     expect(result.identityFallback).toBe(true);
   });
 
+  test("a real document denial falls back and records why in the capture report", async () => {
+    const documentDenied = { exitCode: 1, stdout: "", stderr: JSON.stringify({ ok: false, identity: "bot", error: {
+      type: "api", subtype: "unknown", code: 3380004, message: "No permission to operate on this document",
+    } }) };
+    const runner: LarkRunner = async args => as(args) === "bot" ? documentDenied : {
+      ...success, stdout: JSON.stringify({ ok: true, identity: "user", data: { document: { content: "<p>Body</p>" } } }),
+    };
+    const result = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/shared", identity: "bot", docsApiVersion: "v2" }, runner);
+    expect(result.access).toMatchObject({ identity: "user", fallback: { from: "bot", cause: "lark error 3380004" } });
+    const report = JSON.parse(Buffer.from(result.assets.find(asset => asset.path === "capture-report.json")!.bytes!).toString("utf8"));
+    expect(report.access).toEqual(result.access);
+  });
+
+  test("an unchanged revision read by a different identity re-reads resources instead of reusing the snapshot", async () => {
+    process.env.CONTEXT_LARK_IDENTITY = "user";
+    const runner: LarkRunner = async args => ({ ...success, stdout: JSON.stringify({ ok: true, identity: as(args),
+      data: { document: { content: "<p>Body</p>", revision_id: 7 } } }) });
+    const same = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", identity: "user", docsApiVersion: "v2",
+      unchangedRevisionId: "7", unchangedAccess: { identity: "user" } }, runner);
+    expect(same.unchanged).toBe(true);
+    const switched = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", identity: "user", docsApiVersion: "v2",
+      unchangedRevisionId: "7", unchangedAccess: { identity: "bot" } }, runner);
+    expect(switched.unchanged).toBeUndefined();
+    expect(switched.assets.some(asset => asset.path === "capture-report.json")).toBe(true);
+    const events = [{ kind: "viewer-added", message: "app cli_x was added as a viewer", changed_access: true }];
+    const granted = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", identity: "user", docsApiVersion: "v2",
+      unchangedRevisionId: "7", unchangedAccess: { identity: "user" }, accessEvents: events }, runner);
+    expect(granted.unchanged).toBeUndefined();
+    expect(granted.access.events).toEqual(events);
+  });
+
+  test("a document that still falls back to the user reuses its user snapshot at the same revision", async () => {
+    process.env.CONTEXT_LARK_IDENTITY = "bot";
+    const denied3380004 = { exitCode: 1, stdout: "", stderr: JSON.stringify({ ok: false, error: { type: "api", subtype: "unknown", code: 3380004 } }) };
+    // Builds that try to add the bot as a viewer first see that attempt fail here.
+    const runner: LarkRunner = async args => as(args) === "bot" || args[0] === "drive" ? denied3380004
+      : { ...success, stdout: JSON.stringify({ ok: true, identity: "user", data: { document: { content: "<p>Body</p>", revision_id: 7 } } }) };
+    const first = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", docsApiVersion: "v2", unchangedRevisionId: "7" }, runner);
+    expect(first.unchanged).toBeUndefined();
+    const again = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", docsApiVersion: "v2",
+      unchangedRevisionId: "7", unchangedAccess: first.access }, runner);
+    expect(again.accessIdentity).toBe("user");
+    expect(again.unchanged).toBe(true);
+    // A snapshot that was read as the user on purpose did not record this fallback yet.
+    const newFallback = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/a", docsApiVersion: "v2",
+      unchangedRevisionId: "7", unchangedAccess: { identity: "user" } }, runner);
+    expect(newFallback.unchanged).toBeUndefined();
+    expect(newFallback.access.fallback?.cause).toBe("lark error 3380004");
+  });
+
+
   test("the official capture phase honors the environment without an identity argument", async () => {
     process.env.CONTEXT_LARK_IDENTITY = "bot";
     const root = makeLarkCaptureTmp();
@@ -152,6 +219,31 @@ describe("configured Lark read identity", () => {
       });
       expect(JSON.parse(output).result.snapshot.changed).toBe(true);
       expect(identities).toEqual(["bot", "bot"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a capture that fell back to the user stays visible in a later status read", async () => {
+    process.env.CONTEXT_LARK_IDENTITY = "bot";
+    const root = makeLarkCaptureTmp();
+    try {
+      const cwd = await createLarkCaptureProject(root);
+      const output = JSON.parse(await runLarkCapturePhase({ cwd, phaseId: "capture:lark:handbook", format: "json",
+        larkRunner: async args => {
+          if (args.includes("--help")) return { ...success, stdout: "Flags:\n --doc-format string\n --api-version string\n" };
+          if (as(args) === "bot") return { exitCode: 1, stdout: "", stderr: JSON.stringify({ ok: false, identity: "bot",
+            error: { type: "api", subtype: "unknown", code: 3380004, message: "No permission to operate on this document" } }) };
+          return { ...success, stdout: JSON.stringify({ ok: true, identity: "user", data: {
+            document: { content: "<title>Handbook</title><p>Body</p>" } } }) };
+        },
+      }));
+      expect(output.result.access).toMatchObject({ identity: "user", fallback: { cause: "lark error 3380004" } });
+      expect(output.result.diagnostics.join("\n")).toContain("lark.capture.identity-fallback");
+      const { readSourceStatus } = await import("../project/statusReaders.js");
+      const source = (await readSourceStatus(cwd)).documentSources.find(item => item.name === "handbook")!;
+      expect(source.snapshotReady).toBe(true);
+      expect(source.diagnostics.join("\n")).toContain("lark.capture.identity-fallback: the bot could not read this document (lark error 3380004)");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

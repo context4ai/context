@@ -8,6 +8,7 @@ import type {
 import { computeDocumentContentHash, isNonBlockingDocumentResourceFailureReasonCode } from "@c4a/extract";
 import {
   captureReportMaterialization,
+  larkAccessDiagnostics,
   parseLarkCaptureReport,
   type LarkCaptureReport,
 } from "../lib/larkCaptureReport.js";
@@ -70,6 +71,7 @@ export function documentSnapshotFidelityState(
         .map((item) => `lark.capture.resource-materialization-failed: ${item.kind}: ${item.reason ?? item.locator}`),
     ],
     warnings: [
+      ...larkAccessDiagnostics(captureReport?.access).map(line => line.replace(/^(?:warning|info): /u, "")),
       ...(report === undefined ? [] : render((issue) => issue.impact === "projection" || issue.severity === "warning")),
       ...(resources?.items ?? [])
         .filter((item) =>
