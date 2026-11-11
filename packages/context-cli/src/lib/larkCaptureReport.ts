@@ -15,11 +15,30 @@ export interface LarkCaptureReportResource extends DocumentResourceMaterializati
   attributes: Record<string, string>;
 }
 
+/** Something that changed who can read the document during this capture (e.g. a viewer was added). */
+export interface LarkAccessEvent {
+  kind: string;
+  message: string;
+  app_id?: string;
+  /** True when the event changed who can read the document upstream (not for failed attempts). */
+  changed_access?: boolean;
+}
+
+/** Which identity read the document, recorded so later status checks need not re-run capture. */
+export interface LarkCaptureAccess {
+  identity: "user" | "bot";
+  /** Set when the requested bot could not read the document and the user identity read it instead. */
+  fallback?: { from: "bot"; cause: string };
+  events?: LarkAccessEvent[];
+}
+
 export interface LarkCaptureReport {
   schema_version: typeof LARK_CAPTURE_REPORT_SCHEMA_VERSION;
   fidelity: DocumentCaptureFidelityReport;
   resource_materialization: Omit<DocumentResourceMaterializationReport, "items">;
   resources: LarkCaptureReportResource[];
+  /** Absent in reports written before 0.7.98. */
+  access?: LarkCaptureAccess;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,6 +87,7 @@ export function createLarkCaptureReport(input: {
   fidelity: DocumentCaptureFidelityReport;
   resourceMaterialization: LarkResourceMaterializationReport;
   resources: readonly LarkExternalResource[];
+  access?: LarkCaptureAccess;
 }): LarkCaptureReport {
   const descriptors = new Map(input.resources.map((resource) => [resourceKey(resource), resource]));
   return {
@@ -82,6 +102,34 @@ export function createLarkCaptureReport(input: {
         attributes: descriptor?.attributes ?? {},
       };
     }),
+    ...(input.access === undefined ? {} : { access: input.access }),
+  };
+}
+
+function parseAccess(value: unknown): LarkCaptureAccess | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || (value.identity !== "user" && value.identity !== "bot")) {
+    throw new TypeError("Lark capture report access.identity must be user or bot");
+  }
+  const fallback = value.fallback;
+  if (fallback !== undefined && (!isRecord(fallback) || fallback.from !== "bot" || typeof fallback.cause !== "string")) {
+    throw new TypeError("Lark capture report access.fallback must name the bot and a cause");
+  }
+  if (value.events !== undefined && !Array.isArray(value.events)) throw new TypeError("Lark capture report access.events must be an array");
+  const events = (value.events as unknown[] | undefined)?.map((event, index) => {
+    if (!isRecord(event) || typeof event.kind !== "string" || typeof event.message !== "string" ||
+        (event.app_id !== undefined && typeof event.app_id !== "string") ||
+        (event.changed_access !== undefined && typeof event.changed_access !== "boolean")) {
+      throw new TypeError(`Lark capture report access.events[${index}] must have kind and message`);
+    }
+    return { kind: event.kind, message: event.message,
+      ...(event.app_id === undefined ? {} : { app_id: event.app_id as string }),
+      ...(event.changed_access === undefined ? {} : { changed_access: event.changed_access as boolean }) };
+  });
+  return {
+    identity: value.identity,
+    ...(fallback === undefined ? {} : { fallback: { from: "bot" as const, cause: fallback.cause as string } }),
+    ...(events === undefined ? {} : { events }),
   };
 }
 
@@ -118,6 +166,7 @@ export function parseLarkCaptureReport(value: unknown): LarkCaptureReport {
   if (materialization === undefined) {
     throw new TypeError("Lark capture report resource_materialization is required");
   }
+  const access = parseAccess(value.access);
   return {
     schema_version: LARK_CAPTURE_REPORT_SCHEMA_VERSION,
     fidelity,
@@ -127,6 +176,7 @@ export function parseLarkCaptureReport(value: unknown): LarkCaptureReport {
       ...(enriched[index]?.title === undefined ? {} : { title: enriched[index].title }),
       attributes: enriched[index]?.attributes ?? {},
     })),
+    ...(access === undefined ? {} : { access }),
   };
 }
 
@@ -135,4 +185,23 @@ export function captureReportMaterialization(report: LarkCaptureReport): Documen
     ...report.resource_materialization,
     items: report.resources.map(materializationItem),
   };
+}
+
+/** Whether two captures recorded the same access facts (identity, fallback and events). */
+export function sameLarkAccess(left: LarkCaptureAccess, right: LarkCaptureAccess): boolean {
+  const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+    : isRecord(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+/** Shared with status: an identity fallback and access changes stay visible after capture. */
+export function larkAccessDiagnostics(access: LarkCaptureAccess | undefined): string[] {
+  return [
+    ...(access?.fallback === undefined ? [] : [
+      `warning: lark.capture.identity-fallback: the bot could not read this document (${access.fallback.cause}), so it was read as the user. `
+      + "Content only that user can see is now in the snapshot, and later bot captures may not be able to read it; "
+      + "ask the document's owner to share it with the bot",
+    ]),
+    ...(access?.events ?? []).map(event => `info: lark.capture.${event.kind}: ${event.message}`),
+  ];
 }

@@ -56,6 +56,10 @@ export async function runDocumentCaptureWithAvailability<T>(
         state: source.snapshotReady ? "retained-snapshot" : "deferred-no-evidence",
         ...(source.snapshotHash ? { snapshot_hash: source.snapshotHash } : {}),
         retry_command: `context run ${phase.id}`,
+        // Keep the recovery that explains this cause; without it the warning names a cause but no way out.
+        ...(typeof error.detail.next === "string" ? { next: error.detail.next } : {}),
+        ...(typeof error.detail.stderr === "string" ? { stderr: error.detail.stderr } : {}),
+        ...(Array.isArray(error.detail.access_events) ? { access_events: error.detail.access_events } : {}),
         message: source.snapshotReady
           ? "Document refresh unavailable. Retain the validated registered snapshot; it is not confirmed current upstream."
           : "Document acquisition unavailable. Keep this source registered as a pending evidence gap; do not cite it or invent content. Unrelated work may continue.",

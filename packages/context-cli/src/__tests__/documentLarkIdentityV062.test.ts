@@ -65,6 +65,9 @@ describe("Lark capture identity selection", () => {
 
     expect(result.accessIdentity).toBe("bot");
     expect(result.identityFallback).toBe(true);
+    // A user → bot switch is not the bot → user fallback whose risk the report records.
+    expect(result.access.fallback).toBeUndefined();
+    expect(result.access.identity).toBe("bot");
     expect(result.markdown).toContain("Body");
     expect(result.markdown).toContain("assets/materialized/image/");
     expect(identities).toEqual([

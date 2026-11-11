@@ -1,3 +1,4 @@
+import { larkAccessDiagnostics, type LarkAccessEvent, type LarkCaptureAccess } from "../lib/larkCaptureReport.js";
 import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
@@ -58,6 +59,7 @@ export interface CaptureLarkRunResult {
   };
   access_identity: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>["accessIdentity"];
   identity_fallback: boolean;
+  access: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>["access"];
   snapshot: {
     manifest: string;
     materializedAt: string;
@@ -193,6 +195,12 @@ function larkErrorRecovery(error: unknown, sourceName: string): {
     return {
       reasonCode: "external.response-invalid",
       next: `Inspect the Lark document shape or permissions, then rerun context run capture:lark:${sourceName}`,
+    };
+  }
+  if (/"code"\s*:\s*3380004\b/u.test(message)) {
+    return {
+      reasonCode: "external.authorization-required",
+      next: `The Lark identity used for capture cannot view this document (code 3380004); signing in again does not help. Ask the document's owner to share it with that identity (for a bot, add its app as a viewer), then rerun context run capture:lark:${sourceName}`,
     };
   }
   if (/auth|login|permission|forbidden|unauthori[sz]ed|scope/iu.test(message)) {
@@ -399,6 +407,14 @@ async function runCaptureLarkPhaseUnlocked(input: {
     previousManifest?.normalizer_version === LARK_DOCUMENT_NORMALIZER_VERSION && fingerprint !== undefined
     ? previousRevision : undefined;
   await beginFormatOnlyUpdate(input.projectRoot);
+  // The access recorded with the unchanged snapshot; old reports without it keep reusing the snapshot.
+  let unchangedAccess: LarkCaptureAccess | undefined;
+  if (typeof unchangedRevisionId === "string" && previousManifest !== null) {
+    try {
+      unchangedAccess = readDocumentSnapshotCaptureReport({ projectRoot: input.projectRoot, materializedAt, manifest: previousManifest })?.access;
+    } catch { /* An unreadable report is diagnosed by the fidelity checks below. */ }
+  }
+  const accessEvents: LarkAccessEvent[] = [];
   let fetched: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>;
   let capturedAt = (input.now ?? new Date()).toISOString();
   try {
@@ -412,21 +428,31 @@ async function runCaptureLarkPhaseUnlocked(input: {
       resourcePolicy: input.phase.resources,
       requireCompleteBody: true,
       ...(typeof unchangedRevisionId === "string" ? { unchangedRevisionId } : {}),
+      ...(unchangedAccess === undefined ? {} : { unchangedAccess }),
+      accessEvents,
       ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
     }, input.larkRunner);
   } catch (error) {
-    if (error instanceof ContextError) throw error;
+    // Access changes already happened upstream even when the read failed; report them either way.
+    const events = accessEvents.length ? { access_events: [...accessEvents] } : {};
+    if (error instanceof ContextError) {
+      if (!accessEvents.length) throw error;
+      throw new ContextError(error.code, error.message, { ...error.detail, ...events });
+    }
     const failure = normalizeLarkError(error, resolved.sourceName);
     if (failure.detail?.reason_code === "external.authorization-required" ||
         failure.detail?.reason_code === "external.tool-failed" && error instanceof LarkCliError && error.exitCode !== 0) {
-      throw new ContextError(failure.code, failure.message, { ...failure.detail, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, acquisition_cause: failure.detail?.reason_code });
+      throw new ContextError(failure.code, failure.message, { ...failure.detail, ...events, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, acquisition_cause: failure.detail?.reason_code });
     }
-    throw failure;
+    if (!accessEvents.length) throw failure;
+    throw new ContextError(failure.code, failure.message, { ...failure.detail, ...events });
   }
 
+  // Every later failure still reports access changes that already happened upstream.
+  const accessEventDetail = accessEvents.length ? { access_events: [...accessEvents] } : {};
   if (fetched.fidelity.evidence_status === "error" || fetched.fidelity.projection_status === "error") {
     throw new ContextError(ExitCode.WorkspaceStateError, `lark source ${resolved.sourceName} returned an incomplete body; the existing snapshot was not changed`, {
-      category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
+      category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, ...accessEventDetail,
       sourceName: resolved.sourceName, issues: fetched.fidelity.issues,
       next: `context run ${input.phase.id} --format json`,
     });
@@ -439,7 +465,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
       kind: "document.capture.lark.result", source: { type: "lark", name: resolved.sourceName,
         identity: target.kind, title: entry.title ?? fetched.title ?? previousManifest.files[0]?.title ?? resolved.sourceName,
         ...(entry.url === undefined ? {} : { url: entry.url }) },
-      access_identity: fetched.accessIdentity, identity_fallback: fetched.identityFallback,
+      access_identity: fetched.accessIdentity, identity_fallback: fetched.identityFallback, access: fetched.access,
       snapshot: { manifest: manifestPath, materializedAt, snapshot_hash: previousManifest.snapshot_hash, changed: false },
       documents: previousManifest.files.map(file => ({ path: file.path, title: file.title ?? resolved.sourceName, line_count: file.line_count })),
       assets: previousManifest.assets ?? [], fidelity: state.report ?? fetched.fidelity,
@@ -463,7 +489,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     lost = lost.filter(item => !degraded.includes(item));
     if (lost.length) throw new ContextError(ExitCode.WorkspaceStateError,
       "Previously captured resources were degraded; the existing snapshot was preserved. Check resource policy and access before retrying the explicit refresh.",
-      { category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
+      { category: ErrorCategory.PartialFailure, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, ...accessEventDetail,
         resources: lost.map(item => ({ locator: item.locator, reason: item.reason })),
         next_action: { command: `context run ${input.phase.id} --input - --format json`,
           input: { refresh_sources: [`lark:${resolved.sourceName}`] } } });
@@ -612,6 +638,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
       {
         category: ErrorCategory.PartialFailure,
         code: "lark.capture.resource-materialization-failed",
+        ...accessEventDetail,
         sourceName: resolved.sourceName,
         snapshot: {
           manifest: manifestPath,
@@ -636,6 +663,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     },
     access_identity: fetched.accessIdentity,
     identity_fallback: fetched.identityFallback,
+    access: fetched.access,
     snapshot: {
       manifest: manifestPath,
       materializedAt,
@@ -657,9 +685,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     diagnostics: [
       ...cacheDiagnostics,
       ...(recovery === undefined ? [] : [recovery.diagnostic]),
-      ...(fetched.identityFallback
-        ? [`info: lark.capture.identity-fallback: capture used an identity fallback; document identity: ${fetched.accessIdentity}; embedded reads may use the fallback identity`]
-        : []),
+      ...larkAccessDiagnostics(fetched.access),
       ...fetched.fidelity.issues.map((issue) =>
         `${issue.severity}: ${issue.code}: ${issue.block_type} × ${issue.count}: ${issue.reason}`
       ),

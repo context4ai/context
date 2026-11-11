@@ -15,7 +15,7 @@ import {
   type LarkResourceMaterializationPolicy,
   type LarkResourceMaterializationReport,
 } from "./larkResourceMaterialization.js";
-import { createLarkCaptureReport } from "./larkCaptureReport.js";
+import { createLarkCaptureReport, sameLarkAccess, type LarkAccessEvent, type LarkCaptureAccess } from "./larkCaptureReport.js";
 import { larkMarkdownImageResources, replaceLarkMarkdownImages } from "./larkMarkdownImages.js";
 import { createLarkReadSession, resolveLarkReadIdentity } from "./larkReadIdentity.js";
 
@@ -109,6 +109,10 @@ export interface PrefetchedLarkDocument {
 export interface FetchFeishuDocInput {
   /** A validated local snapshot may skip embedded downloads at this revision. */
   unchangedRevisionId?: string;
+  /** Access recorded with that snapshot; different access facts this time are captured again. */
+  unchangedAccess?: LarkCaptureAccess;
+  /** Collects access changes made during this read (e.g. a viewer added); recorded in the capture report. */
+  accessEvents?: LarkAccessEvent[];
   requireCompleteBody?: boolean;
   /** Explicit standalone reads can lock identity; existing capture defaults remain unchanged. */
   allowIdentityFallback?: boolean;
@@ -151,6 +155,7 @@ export interface FetchFeishuDocSnapshotResult {
   resourceMaterialization: LarkResourceMaterializationReport;
   accessIdentity: LarkAccessIdentity;
   identityFallback: boolean;
+  access: LarkCaptureAccess;
 }
 
 export const DEFAULT_RESOURCE_POLICY: LarkResourceMaterializationPolicy = {
@@ -455,6 +460,7 @@ function captureReportAsset(input: {
   fidelity: LarkCaptureFidelityReport;
   resourceMaterialization: LarkResourceMaterializationReport;
   resources: readonly LarkExternalResource[];
+  access: LarkCaptureAccess;
 }): FetchFeishuDocAsset {
   const report = createLarkCaptureReport(input);
   return {
@@ -696,17 +702,28 @@ export async function fetchFeishuDocSnapshot(
       },
     });
   }
+  const identityFallback = identityFetch.fallback || session.usedFallback;
+  const access: LarkCaptureAccess = {
+    identity: accessIdentity,
+    // Only the bot → user direction is recorded; legacy `auto` falls back the other way (user → bot).
+    ...(session.usedFallback ? { fallback: { from: "bot" as const, cause: session.fallbackCause ?? "credential failure" } } : {}),
+    ...(input.accessEvents?.length ? { events: [...input.accessEvents] } : {}),
+  };
+  // Changed access facts (identity, fallback, events) must be recorded, so they cannot reuse the earlier
+  // snapshot; repeating the same facts can. Snapshots from before access was recorded are reused unless
+  // this read had to fall back.
+  const sameAccess = !input.accessEvents?.some(event => event.changed_access) && (input.unchangedAccess === undefined
+    ? !identityFallback : sameLarkAccess(input.unchangedAccess, access));
   // Do not download embedded resources for an unchanged, complete document or
   // for an incomplete body that capture cannot safely promote.
-  if ((revisionId !== undefined && revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error") ||
+  if ((sameAccess && revisionId !== undefined && revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error") ||
       (input.requireCompleteBody === true && (fidelity.evidence_status === "error" || fidelity.projection_status === "error"))) {
     return {
       markdown: body,
       ...(title === undefined ? {} : { title }),
       ...(revisionId === undefined ? {} : { revisionId }),
-      ...(revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error" ? { unchanged: true } : {}),
-      assets, fidelity, resourceMaterialization, accessIdentity,
-      identityFallback: identityFetch.fallback || session.usedFallback,
+      ...(sameAccess && revisionId === input.unchangedRevisionId && fidelity.evidence_status !== "error" && fidelity.projection_status !== "error" ? { unchanged: true } : {}),
+      assets, fidelity, resourceMaterialization, accessIdentity, identityFallback, access,
     };
   }
   const resources = [...new Map([...(projection?.resources ?? []), ...larkMarkdownImageResources(body)]
@@ -754,6 +771,7 @@ export async function fetchFeishuDocSnapshot(
     fidelity,
     resourceMaterialization,
     resources,
+    access,
   }));
 
   // Prepend title as H1 if the readable projection doesn't already lead with one —
@@ -768,7 +786,8 @@ export async function fetchFeishuDocSnapshot(
       fidelity,
       resourceMaterialization,
       accessIdentity,
-      identityFallback: identityFetch.fallback || session.usedFallback,
+      identityFallback,
+      access,
     };
   }
   return {
@@ -779,7 +798,8 @@ export async function fetchFeishuDocSnapshot(
     fidelity,
     resourceMaterialization,
     accessIdentity,
-    identityFallback: identityFetch.fallback || session.usedFallback,
+    identityFallback,
+    access,
   };
 }
 

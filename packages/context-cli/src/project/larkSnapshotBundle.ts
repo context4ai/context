@@ -207,6 +207,7 @@ async function validateBundle(root: string, manifest: SnapshotManifest): Promise
   }
   return { url: manifest.url, capturedAt: manifest.captured_at, resourcePolicy: manifest.resource_policy, fetched: {
     markdown, assets, accessIdentity: manifest.access_identity, identityFallback: false,
+    access: report.access ?? { identity: manifest.access_identity },
     ...(manifest.title === undefined ? {} : { title: manifest.title }),
     ...(manifest.revision_id === undefined ? {} : { revisionId: manifest.revision_id }),
     fidelity: report.fidelity,

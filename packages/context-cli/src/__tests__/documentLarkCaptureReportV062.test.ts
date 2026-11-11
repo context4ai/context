@@ -125,4 +125,22 @@ describe("0.6.2 compact Lark capture report", () => {
     })).toThrow();
   });
 
+  test("keeps the access record and still reads reports written before it existed", () => {
+    const base = {
+      schema_version: "context.lark-capture-report.v1",
+      fidelity: { status: "complete", evidence_status: "complete",
+        projection_status: "complete", discovered: {}, converted: {}, skipped: [], issues: [] },
+      resource_materialization: { status: "complete", discovered: {}, materialized: {}, reference_only: {}, failed: {} },
+      resources: [],
+    };
+    expect(parseLarkCaptureReport(base).access).toBeUndefined();
+    const access = {
+      identity: "user", fallback: { from: "bot", cause: "lark error 3380004" },
+      events: [{ kind: "viewer-added", message: "app cli_x was added as a viewer", app_id: "cli_x", changed_access: true }],
+    };
+    expect(parseLarkCaptureReport({ ...base, access }).access).toEqual(access as never);
+    expect(() => parseLarkCaptureReport({ ...base, access: { identity: "someone" } })).toThrow(/access.identity/u);
+    expect(() => parseLarkCaptureReport({ ...base, access: { identity: "user", events: [{ kind: "x" }] } })).toThrow(/access.events/u);
+  });
+
 });
