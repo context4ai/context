@@ -158,7 +158,7 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
       ? parsed as Record<string, unknown>
       : {};
     const recorded = record.input_hash;
-    const delivery = await readProductionStage(projectRoot) ? undefined : await readRevisionDelivery(projectRoot);
+    const delivery = await readProductionStage(projectRoot) ? undefined : await currentRevisionDelivery(projectRoot);
     const deliveryNeedsClose = delivery !== undefined && delivery.closed !== true;
     return recorded === inputHash && !deliveryNeedsClose
       ? { state: "ready", inputHash, diagnostics: [] }
@@ -172,6 +172,15 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
   }
 }
 
+/** A rollback replaces the revision a partial delivery was selected from; a
+ * selection left by an older rollback is stale and the rollback cleanup removes it. */
+async function currentRevisionDelivery(projectRoot: string) {
+  const delivery = await readRevisionDelivery(projectRoot);
+  if (!delivery) return undefined;
+  const { readTaskRollback } = await import("./taskRollback.js");
+  return await readTaskRollback(projectRoot) ? undefined : delivery;
+}
+
 export async function closeProjectWorkspace(projectRoot: string): Promise<ProjectCloseResult> {
   return withProjectWriteLock(projectRoot, "close-knowledge", async () => {
     const candidates = await readCandidateRecords(projectRoot);
@@ -179,7 +188,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
     const production = await readProductionStage(projectRoot);
-    const delivery = production ? undefined : await readRevisionDelivery(projectRoot);
+    const delivery = production ? undefined : await currentRevisionDelivery(projectRoot);
     if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
     else await assertRequiredArticlesReviewed(projectRoot, candidates);
     if (draftCandidates.length > 0 && !delivery?.partial) {
