@@ -621,8 +621,10 @@ already delivered pages. The preview shows actual before/after contents and
 draft loss, including the open production stage: `production.effect` is
 `discard-whole-task` (cleanup deletes the stage, its unfinished tasks and every
 unsubmitted file in its working directory) or `keep` (only a page revision that
-interrupted production is rolled back; production resumes unchanged). State this
-to the user. Once the user approves that exact scope, run the preview's apply
+interrupted production is rolled back; production resumes unchanged).
+`discarded_revision_delivery` lists pages of a requested partial delivery that
+the rollback cancels. A production stage prepared after the rollback was applied
+is not part of it and is kept. State this to the user. Once the user approves that exact scope, run the preview's apply
 command with its plan digest. Then follow the rollback Route through close,
 build and cleanup. A failed build retries delivery, not the already-applied
 reversions. Begin the independent task only after cleanup succeeds.

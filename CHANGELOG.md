@@ -8,6 +8,8 @@ All notable changes to Context are documented here.
 - The rollback preview shows what happens to the current production stage (`production.effect`): `discard-whole-task` deletes the stage, its unfinished tasks and its working directory at cleanup; `keep` means only a page revision that interrupted production is rolled back, and production resumes unchanged. Previously abandoning such a revision also deleted production.
 - While a rollback is active, the build no longer checks a partial-delivery selection that the rollback removed ("No reviewed articles can be delivered"); the rollback cleanup settles it.
 - Rollback cleanup removes production before the rollback record, so a cleanup that fails can be retried.
+- A production stage prepared after a rollback was applied (for example with a `prepare-current` command obtained earlier) is no longer deleted when that rollback finishes; the rollback now records that it found no stage, and only the stage it disclosed can be discarded.
+- Rolling back a page revision with a requested partial delivery no longer stops `context close` with "Partial revision delivery is no longer active": the rollback cancels that delivery selection and lists its pages in the preview (`discarded_revision_delivery`).
 
 ## 0.7.98 - 2026-11-11
 
