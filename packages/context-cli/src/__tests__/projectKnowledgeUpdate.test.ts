@@ -328,7 +328,7 @@ test("a production stage prepared after a rollback without one is kept when the 
   expect(await readProductionStage(root)).toEqual(later);
 }, 60_000);
 
-test("rolling back a partially delivered page revision discards its delivery selection so close and build proceed", async () => {
+test.each([false, true])("rolling back a partially delivered page revision (selection left by an older CLI: %p) closes, builds and finishes", async (legacy) => {
   const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
   const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
@@ -348,12 +348,22 @@ test("rolling back a partially delivered page revision discards its delivery sel
   const value = { summary: "Abandon the page revisions.", discard_unfinished: true as const, files: [] };
   const plan = await rollbackProjectTask({ projectRoot: root, value });
   expect(plan.discarded_revision_delivery).toEqual([`knowledge/${first.target.path}`]);
+  const { REVISION_DELIVERY_FILE } = await import("../project/revisionDelivery.js");
+  const selection = await readFile(join(root, REVISION_DELIVERY_FILE), "utf8");
   await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
   expect(await readRevisionDelivery(root)).toBeUndefined();
+  if (legacy) {
+    // A rollback applied by an older CLI left the selection behind; retrying the
+    // rollback only reports already-applied, so close must ignore the stale record.
+    await writeFile(join(root, REVISION_DELIVERY_FILE), selection);
+    expect((await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision })).action).toBe("already-applied");
+    expect((await collectProjectStatus(root, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.close-required");
+  }
   await closeProjectWorkspace(root);
   await buildProjectPackages(root);
   await finishTaskRollback(root);
   expect(await readTaskRollback(root)).toBeUndefined();
+  expect(await readRevisionDelivery(root)).toBeUndefined();
 }, 60_000);
 
 test.each(["architecture", "standards"])("explicit page move to %s preserves identity and updates incoming navigation through Review apply", async (collection) => {
