@@ -618,7 +618,11 @@ restoring an absent file. Include changed sources/configuration/processed scopes
 when they belong to the rollback. Leave unrelated and pre-existing edits alone.
 An empty list only discards unfinished work and must not be described as undoing
 already delivered pages. The preview shows actual before/after contents and
-draft loss. Once the user approves that exact scope, run the preview's apply
+draft loss, including the open production stage: `production.effect` is
+`discard-whole-task` (cleanup deletes the stage, its unfinished tasks and every
+unsubmitted file in its working directory) or `keep` (only a page revision that
+interrupted production is rolled back; production resumes unchanged). State this
+to the user. Once the user approves that exact scope, run the preview's apply
 command with its plan digest. Then follow the rollback Route through close,
 build and cleanup. A failed build retries delivery, not the already-applied
 reversions. Begin the independent task only after cleanup succeeds.

@@ -1,5 +1,5 @@
 import { revisionStoragePath } from "./maintenanceStorage.js";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
@@ -20,7 +20,31 @@ const stateSchema = z.object({ protocol: z.literal("context.task-rollback/v1"),
   revision: digest, summary: z.string().min(1), files: z.array(z.object({
     path: z.string().min(1), target_digest: digest.nullable(),
   }).strict()),
+  // The production stage present when the rollback was applied and whether the
+  // rollback discards it (whole current task) or only the revision that
+  // interrupted it (production resumes unchanged). Absent in older states.
+  production: z.object({ stage: z.string().min(1), discard: z.boolean() }).strict().optional(),
 }).strict();
+
+const UNFINISHED_TASK_STATUSES = new Set(["pending", "issued", "blocked"]);
+
+/** What the rollback does to the current production stage: a page revision that
+ * interrupted production rolls back alone and production resumes; otherwise the
+ * whole current task, its unfinished tasks and Agent working files are discarded. */
+async function productionScope(projectRoot: string) {
+  const { readProductionStage } = await import("./productionStageStore.js");
+  const stage = await readProductionStage(projectRoot);
+  if (!stage) return undefined;
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const discard = !await readApprovedRevision(projectRoot);
+  const { productionAgentDirectory } = await import("./productionSubmissionFiles.js");
+  return {
+    stage: stage.id, discard,
+    unfinished_tasks: stage.tasks.filter((task) => UNFINISHED_TASK_STATUSES.has(task.status)).length,
+    working_directory: productionAgentDirectory(stage.id),
+    digest: indexerProtocolDigest(stage),
+  };
+}
 export async function readTaskRollback(projectRoot: string) {
   const raw = await readJsonMaybe(projectRoot, await revisionStoragePath(projectRoot));
   if (!raw || typeof raw !== "object" || !("protocol" in raw) || raw.protocol !== "context.task-rollback/v1") return undefined;
@@ -75,17 +99,27 @@ export async function rollbackProjectTask(input: {
     }
     const candidates = await readCandidateRecords(input.projectRoot);
     const ledger = await currentLedger(input.projectRoot);
+    const production = await productionScope(input.projectRoot);
     const current = await contents(input.projectRoot, await revisionStoragePath(input.projectRoot));
     const candidateBytes = await contents(input.projectRoot, CANDIDATE_LEDGER_FILE);
     const revision = indexerProtocolDigest({ value, targets, candidateBytes: candidateBytes ?? null,
-      current: current ?? null, ledger: ledger ?? null });
+      current: current ?? null, ledger: ledger ?? null,
+      ...(production ? { production: { stage: production.digest, discard: production.discard } } : {}) });
     if (!input.apply) return { action: "preview", revision, summary: value.summary, changes,
       discarded_candidates: candidates.map((candidate) => candidate.candidate_id),
       discarded_tasks: ledger?.entries.length ?? 0,
+      // Disclose the production stage before approval: what is deleted with the task.
+      production: production === undefined ? null : production.discard
+        ? { stage: production.stage, effect: "discard-whole-task", unfinished_tasks: production.unfinished_tasks,
+          deleted_working_directory: production.working_directory,
+          note: "The whole current task is discarded: the production stage, its unfinished tasks and every unsubmitted file in the working directory." }
+        : { stage: production.stage, effect: "keep", unfinished_tasks: production.unfinished_tasks,
+          note: "Only the page revision that interrupted production is rolled back; production resumes unchanged." },
       next: `context task rollback --input <same-file> --apply --plan-digest '${revision}' --format json` };
     if (input.plan_digest !== revision) throw new TypeError("Rollback preview is missing or stale; preview the same explicit input again before applying.");
     const state = { protocol: "context.task-rollback/v1", revision, summary: value.summary,
-      files: targets.map(({ path, target_digest }) => ({ path, target_digest })) };
+      files: targets.map(({ path, target_digest }) => ({ path, target_digest })),
+      ...(production ? { production: { stage: production.stage, discard: production.discard } } : {}) };
     const body = `${JSON.stringify(state)}\n`;
     targets.push({ path: await revisionStoragePath(input.projectRoot), operation: "write",
       base_digest: current === undefined ? null : durableContentDigest(current),
@@ -105,7 +139,8 @@ export async function rollbackProjectTask(input: {
 
 export async function finishTaskRollback(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "finish-task-rollback", async () => {
-    if (!await readTaskRollback(projectRoot)) return { action: "already-finished", next: "context status --format json" };
+    const rollback = await readTaskRollback(projectRoot);
+    if (!rollback) return { action: "already-finished", next: "context status --format json" };
     const { readProjectCloseStatus } = await import("./close.js");
     const { collectPackageFreshness } = await import("./packageBuilder.js");
     const { loadContextProjectModule } = await import("./workspace.js");
@@ -116,8 +151,21 @@ export async function finishTaskRollback(projectRoot: string) {
     }
     const { settleJoinedMaintenance } = await import("./knowledgeMaintenance.js");
     await settleJoinedMaintenance(projectRoot, "cancelled");
+    const { readProductionStage } = await import("./productionStageStore.js");
+    const production = await readProductionStage(projectRoot);
+    // Discard only the production stage this rollback disclosed as part of the
+    // task. A rollback of a revision that interrupted production retires just its
+    // own pointer, like a finished revision; production resumes unchanged.
+    // Older states without the record discard the stage they were applied over.
+    if (production && rollback.production?.discard === false) {
+      await rm(join(projectRoot, await revisionStoragePath(projectRoot)), { force: true });
+      return { action: "finished", production: "resumed", next: "context status --format json" };
+    }
+    if (production && rollback.production && rollback.production.stage !== production.id) {
+      throw new TypeError("The production stage changed after this rollback was applied; it was not part of the approved rollback. Follow context status --format json.");
+    }
     const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
-    await clearCompletedLifecycle(projectRoot);
+    await clearCompletedLifecycle(projectRoot, { discardUnfinishedProduction: true });
     return { action: "finished", next: "context status --format json" };
   });
 }

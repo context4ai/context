@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- `context task rollback` no longer gets stuck with an unfinished production stage: `context close` and the build accept the active rollback, and the rollback cleanup removes the stage. Previously close stopped with `production-not-complete` and the cleanup could not run.
+- The rollback preview shows what happens to the current production stage (`production.effect`): `discard-whole-task` deletes the stage, its unfinished tasks and its working directory at cleanup; `keep` means only a page revision that interrupted production is rolled back, and production resumes unchanged. Previously abandoning such a revision also deleted production.
+- While a rollback is active, the build no longer checks a partial-delivery selection that the rollback removed ("No reviewed articles can be delivered"); the rollback cleanup settles it.
+- Rollback cleanup removes production before the rollback record, so a cleanup that fails can be retried.
+
 ## 0.7.98 - 2026-11-11
 
 - With `CONTEXT_LARK_IDENTITY=bot`, a document the bot cannot open (Lark code 3380004) is now read again as the user, as the bot mode intends; previously this real error did not trigger the fallback.

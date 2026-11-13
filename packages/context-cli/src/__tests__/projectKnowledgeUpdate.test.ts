@@ -223,6 +223,87 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
   expect(await readKnowledgeUpdate(root)).toBeDefined();
 }, 60_000);
 
+test("explicit rollback with an unfinished production stage closes, builds and clears the unfinished stage", async () => {
+  const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
+  const { beginDocumentRevision } = await import("../project/documentRevision.js");
+  const { durableContentDigest } = await import("../project/durableSingleFileTransaction.js");
+  const { productionPlanningRequest } = await import("../project/productionPlanning.js");
+  const { prepareCurrentProductionStage } = await import("../project/productionStagePreparation.js");
+  const { readProductionStage } = await import("../project/productionStageStore.js");
+  const { resumeWorkspaceTask } = await import("../project/taskResumption.js");
+  const { createDocumentRevisionWorkspace } = await import("./projectDocumentRevisionV074.fixture.js");
+  const root = await initialRevisionKnowledge(roots);
+  const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
+  const path = structure.articles[0].path;
+  const original = await readFile(join(root, "knowledge", path), "utf8");
+  await beginDocumentRevision({ projectRoot: root, selector: path, instruction: "Clarify the overview." });
+  const revision = (await readApprovedRevision(root))!;
+  await complete(root, { stage: "approved-revision", markdown: revision.target.markdown.replace(/(\n# [^\n]+)/u, "$1 clarified") });
+  await approveCandidates(root, await readCandidateRecords(root));
+  await closeProjectWorkspace(root); await buildProjectPackages(root);
+  const changed = await readFile(join(root, "knowledge", path), "utf8");
+  await resumeWorkspaceTask(root);
+  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision });
+  expect(await readProductionStage(root)).toBeDefined();
+  const value = { summary: "Restore the overview and discard unfinished production stage.",
+    discard_unfinished: true as const, files: [{ path: `knowledge/${path}`, base_digest: durableContentDigest(changed), content: original }] };
+  const plan = await rollbackProjectTask({ projectRoot: root, value });
+  await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
+  expect((await collectProjectStatus(root, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.close-required");
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect((await collectProjectStatus(root, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.cleanup-required");
+  await finishTaskRollback(root);
+  expect(await readTaskRollback(root)).toBeUndefined();
+  expect(await readProductionStage(root)).toBeUndefined();
+
+  const coldRoot = await createDocumentRevisionWorkspace();
+  roots.push(coldRoot);
+  await prepareCurrentProductionStage({ projectRoot: coldRoot, revision: (await productionPlanningRequest(coldRoot))!.revision });
+  expect(await readProductionStage(coldRoot)).toBeDefined();
+  const coldValue = { summary: "Discard unfinished cold-start production stage.", discard_unfinished: true as const, files: [] };
+  const coldPlan = await rollbackProjectTask({ projectRoot: coldRoot, value: coldValue });
+  // The preview discloses that the whole current task, its unfinished tasks and working files go.
+  const coldStage = (await readProductionStage(coldRoot))!;
+  expect(coldPlan.production).toMatchObject({ stage: coldStage.id, effect: "discard-whole-task",
+    deleted_working_directory: `.tmp/agent-work/production-stages/${coldStage.id}` });
+  expect(coldPlan.production!.unfinished_tasks).toBe(coldStage.tasks.filter(task => ["pending", "issued", "blocked"].includes(task.status)).length);
+  await rollbackProjectTask({ projectRoot: coldRoot, value: coldValue, apply: true, plan_digest: coldPlan.revision });
+  expect((await collectProjectStatus(coldRoot, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.close-required");
+  await closeProjectWorkspace(coldRoot);
+  expect((await collectProjectStatus(coldRoot, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.cleanup-required");
+  await finishTaskRollback(coldRoot);
+  expect(await readTaskRollback(coldRoot)).toBeUndefined();
+  expect(await readProductionStage(coldRoot)).toBeUndefined();
+}, 60_000);
+
+test("abandoning a page revision that interrupted production keeps production unchanged", async () => {
+  const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
+  const { beginDocumentRevision } = await import("../project/documentRevision.js");
+  const { productionPlanningRequest } = await import("../project/productionPlanning.js");
+  const { prepareCurrentProductionStage } = await import("../project/productionStagePreparation.js");
+  const { readProductionStage } = await import("../project/productionStageStore.js");
+  const { resumeWorkspaceTask } = await import("../project/taskResumption.js");
+  const root = await initialRevisionKnowledge(roots);
+  const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
+  const path = structure.articles[0].path;
+  await resumeWorkspaceTask(root);
+  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision });
+  const before = (await readProductionStage(root))!;
+  // A page revision interrupts production, then the user abandons it ("Abandon this update").
+  await beginDocumentRevision({ projectRoot: root, selector: path, instruction: "Clarify the overview." });
+  const value = { summary: "Abandon the overview revision.", discard_unfinished: true as const, files: [] };
+  const plan = await rollbackProjectTask({ projectRoot: root, value });
+  expect(plan.production).toMatchObject({ stage: before.id, effect: "keep" });
+  await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect(await finishTaskRollback(root)).toMatchObject({ action: "finished", production: "resumed" });
+  expect(await readTaskRollback(root)).toBeUndefined();
+  expect(await readApprovedRevision(root)).toBeUndefined();
+  expect(await readProductionStage(root)).toEqual(before);
+}, 60_000);
+
 test.each(["architecture", "standards"])("explicit page move to %s preserves identity and updates incoming navigation through Review apply", async (collection) => {
   const { beginDocumentRevision } = await import("../project/documentRevision.js");
   const { access } = await import("node:fs/promises");

@@ -708,3 +708,51 @@ test("the actual completion command accepts stage-relative file results and retu
   expect(value.stage_state).toBe("ended");
   expect(value).not.toHaveProperty("result_file");
 }, 30_000);
+
+test("rolling back a partially delivered article discards the task without the stale delivery blocking build", async () => {
+  const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
+  const f = await fixture(true);
+  execFileSync("git", ["init", "--quiet"], { cwd: f.root });
+  const approveAll = async () => {
+    const candidates = await readCandidateRecords(f.root);
+    const ids = candidates.map(candidate => candidate.candidate_id).sort();
+    await applyReviewDecisions({ projectRoot: f.root, payload: { scope: { kind: "all", count: ids.length,
+      visible_candidate_ids: ids, ids_sha256: candidateIdsHash(ids), candidates_sha256: candidateSetHash(candidates) },
+      decisions: ids.map(candidate_id => ({ candidate_id, status: "approved" })) } });
+  };
+  // Round 1 delivers article A ("one"); task "two" stays unfinished.
+  await writeFile(join(f.directory, f.input.path), YAML.stringify({ ...f.manifest, tasks: [f.manifest.tasks[0]] }));
+  await completeProductionSubmission(f.input);
+  await requestProductionDelivery(f.root);
+  await approveAll();
+  await closeProjectWorkspace(f.root);
+  await cp(resolve(import.meta.dir, "../../../context/templates/package-templates/kb"), join(f.root, "src/package-templates/kb"), { recursive: true });
+  const entryPath = join(f.root, "src/index.ts");
+  await writeFile(entryPath, (await readFile(entryPath, "utf8")).replace("import { defineProject }", "import { defineProject, kbPackage }")
+    .replace("packages: []", 'packages: [kbPackage({ name: "rollback-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
+  await acceptStarterPackageTemplates({ projectRoot: f.root });
+  await buildFixturePackages(f.root);
+  // Round 2 selects new article B ("two") for delivery and approves it.
+  await writeFile(join(f.directory, f.input.path), YAML.stringify({ ...f.manifest, tasks: [f.manifest.tasks[1]] }));
+  await completeProductionSubmission(f.input);
+  await requestProductionDelivery(f.root);
+  expect((await readProductionStage(f.root))!.delivery).toContain("two");
+  // The reviewer's case: only B is selected for this delivery (A came from an earlier one).
+  await saveProductionStage(f.root, { ...(await readProductionStage(f.root))!, delivery: ["two"] });
+  await approveAll();
+  await closeProjectWorkspace(f.root);
+  // Rolling B back deletes it and discards the current task.
+  const bPath = "knowledge/architecture/two.md";
+  const b = await readFile(join(f.root, bPath), "utf8");
+  const value = { summary: "Remove article B and discard the current task.", discard_unfinished: true as const,
+    files: [{ path: bPath, base_digest: durableContentDigest(b), content: null }] };
+  const plan = await rollbackProjectTask({ projectRoot: f.root, value });
+  await rollbackProjectTask({ projectRoot: f.root, value, apply: true, plan_digest: plan.revision });
+  await closeProjectWorkspace(f.root);
+  await buildFixturePackages(f.root);
+  await finishTaskRollback(f.root);
+  expect(await readTaskRollback(f.root)).toBeUndefined();
+  expect(await readProductionStage(f.root)).toBeUndefined();
+  expect(await readFile(join(f.root, "knowledge/architecture/one.md"), "utf8")).toContain("Combined behavior.");
+  await expect(readFile(join(f.root, bPath), "utf8")).rejects.toThrow();
+}, 120_000);

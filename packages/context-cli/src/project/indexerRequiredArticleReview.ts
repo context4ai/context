@@ -11,13 +11,14 @@ import { productionAgentDirectory } from "./productionSubmissionFiles.js";
 import { assertProductionPlanRequirementsCurrent } from "./productionPlanning.js";
 import { readMaintenance } from "./maintenanceStorage.js";
 import { readApprovedRevision } from "./approvedRevision.js";
+import { readTaskRollback } from "./taskRollback.js";
 
 /** Review may reject prose, but rejection alone does not cancel a required
  * article in the accepted plan. Keep the Author available for repair. */
 export async function assertRequiredArticlesReviewed(root: string, candidates: readonly CandidateRecord[]): Promise<void> {
-  // Maintenance has its own revision/Review authority; it cannot settle the
-  // suspended production stage. Build completion keeps that stage intact.
-  if ((await readMaintenance(root)).active || await readApprovedRevision(root)) return;
+  // Maintenance, approved revisions and explicit task rollbacks have their own
+  // authority; they do not settle an unfinished production stage during close.
+  if ((await readMaintenance(root)).active || await readApprovedRevision(root) || await readTaskRollback(root)) return;
   const rejected = candidates.filter(candidate => candidate.status === "rejected" && candidate.indexer_candidate);
   const production = await readProductionStage(root);
   if (production) {
