@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.99 - 2026-11-13
 
 - `context task rollback` no longer gets stuck with an unfinished production stage: `context close` and the build accept the active rollback, and the rollback cleanup removes the stage. Previously close stopped with `production-not-complete` and the cleanup could not run.
 - The rollback preview shows what happens to the current production stage (`production.effect`): `discard-whole-task` deletes the stage, its unfinished tasks and its working directory at cleanup; `keep` means only a page revision that interrupted production is rolled back, and production resumes unchanged. Previously abandoning such a revision also deleted production.
