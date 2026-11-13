@@ -461,7 +461,12 @@ export async function collectPackageFreshness(
 
 export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
   return withProjectWriteLock(projectRoot, "build-packages", async () => {
-    const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery;
+    // A task rollback discards the current production stage with its delivery
+    // selection; the rollback finish settles it, so build neither checks nor
+    // finishes that stale selection.
+    const { readTaskRollback } = await import("./taskRollback.js");
+    const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery &&
+      !await readTaskRollback(projectRoot);
     if (partial) await assertProductionDeliveryReady(projectRoot);
     const result = await buildProjectPackagesInternal(projectRoot, options);
     if (partial) await finishProductionDelivery(projectRoot);

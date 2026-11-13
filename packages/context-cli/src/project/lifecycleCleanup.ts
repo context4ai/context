@@ -25,9 +25,9 @@ const COMPLETED_RUNTIME_PATHS = [
   INDEXER_RUNTIME_ROOT,
 ] as const;
 
-export async function clearCompletedLifecycle(projectRoot: string): Promise<void> {
+export async function clearCompletedLifecycle(projectRoot: string, options: { discardUnfinishedProduction?: boolean } = {}): Promise<void> {
   const production = await readProductionStage(projectRoot);
-  if (production) {
+  if (production && !options.discardUnfinishedProduction) {
     if (production.delivery) throw new TypeError("Partial delivery must retain the production stage and its unfinished tasks; finish the build or explicitly resume writing.");
     // Review of an interrupting revision does not authorize deleting production.
     // Enforce this at the deletion boundary, regardless of the caller's owner.
@@ -64,6 +64,8 @@ export async function clearCompletedLifecycle(projectRoot: string): Promise<void
   await rm(join(compile, "current.json"), { force: true });
   // Empty directory removal is cosmetic; no task state remains at this point.
   await rm(indexer, { recursive: true, force: true });
-  await rm(join(projectRoot, APPROVED_REVISION_PATH), { force: true });
+  // Production goes before the revision/rollback pointer: if its cleanup fails,
+  // the remaining pointer keeps the task open and a retry finishes it.
   if (production) await clearCompletedProduction(projectRoot, production);
+  await rm(join(projectRoot, APPROVED_REVISION_PATH), { force: true });
 }
