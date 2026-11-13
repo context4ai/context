@@ -11,7 +11,8 @@ import { selectPartialDelivery } from "./partialDelivery.js";
 import { readApprovedRevision } from "./approvedRevision.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 
-const FILE = join(LIFECYCLE_ROOT, "revision-delivery.json");
+export const REVISION_DELIVERY_FILE = join(LIFECYCLE_ROOT, "revision-delivery.json");
+const FILE = REVISION_DELIVERY_FILE;
 const stateSchema = z.object({
   partial: z.object({ kind: z.literal("revision"),
     paths: z.array(z.string().startsWith("knowledge/")).min(1), refs: z.array(z.string()).min(1) }).strict(),

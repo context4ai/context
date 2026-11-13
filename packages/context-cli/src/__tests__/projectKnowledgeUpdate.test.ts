@@ -304,6 +304,58 @@ test("abandoning a page revision that interrupted production keeps production un
   expect(await readProductionStage(root)).toEqual(before);
 }, 60_000);
 
+test("a production stage prepared after a rollback without one is kept when the rollback finishes", async () => {
+  const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
+  const { productionPlanningRequest } = await import("../project/productionPlanning.js");
+  const { prepareCurrentProductionStage } = await import("../project/productionStagePreparation.js");
+  const { readProductionStage } = await import("../project/productionStageStore.js");
+  const { resumeWorkspaceTask } = await import("../project/taskResumption.js");
+  const root = await initialRevisionKnowledge(roots);
+  await resumeWorkspaceTask(root);
+  // A prepare-current command obtained before the rollback.
+  const request = (await productionPlanningRequest(root))!;
+  const value = { summary: "Discard the unfinished task.", discard_unfinished: true as const, files: [] };
+  const plan = await rollbackProjectTask({ projectRoot: root, value });
+  expect(plan.production).toBeNull();
+  await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
+  await prepareCurrentProductionStage({ projectRoot: root, revision: request.revision });
+  const later = (await readProductionStage(root))!;
+  expect(later).toBeDefined();
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect(await finishTaskRollback(root)).toMatchObject({ action: "finished", production: "kept" });
+  expect(await readTaskRollback(root)).toBeUndefined();
+  expect(await readProductionStage(root)).toEqual(later);
+}, 60_000);
+
+test("rolling back a partially delivered page revision discards its delivery selection so close and build proceed", async () => {
+  const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
+  const root = await initialRevisionKnowledge(roots);
+  await beginKnowledgeUpdate(root, { scopes: [scope] });
+  const update = (await readKnowledgeUpdate(root))!;
+  await complete(root, { stage: "source-update", decisions: selectedUpdatePages(update).map(({ path }) => ({ path, instruction: "Improve this explanation." })), scope_summary: "Both pages.", new_topics: [] });
+  const first = (await readApprovedRevision(root))!;
+  const { approvedContextSectionsInMarkdown } = await import("../project/verifyContextSections.js");
+  const section = approvedContextSectionsInMarkdown(first.target.markdown)[0]!;
+  await completeApprovedRevision({ projectRoot: root, revision: first.revision,
+    sections: [{ section_id: section.id!, content: [{ markdown: `${section.readerVisibleBody}\n\nClarified usage.` }] }] });
+  const second = (await readApprovedRevision(root))!;
+  await complete(root, { stage: "approved-revision", markdown: second.target.markdown.replace("public entry point", "documented public entry point") });
+  await approveOne(root, first.target.path);
+  const { requestRevisionDelivery, readRevisionDelivery } = await import("../project/revisionDelivery.js");
+  await requestRevisionDelivery(root);
+  expect((await readRevisionDelivery(root))?.partial.paths).toEqual([`knowledge/${first.target.path}`]);
+  const value = { summary: "Abandon the page revisions.", discard_unfinished: true as const, files: [] };
+  const plan = await rollbackProjectTask({ projectRoot: root, value });
+  expect(plan.discarded_revision_delivery).toEqual([`knowledge/${first.target.path}`]);
+  await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
+  expect(await readRevisionDelivery(root)).toBeUndefined();
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  await finishTaskRollback(root);
+  expect(await readTaskRollback(root)).toBeUndefined();
+}, 60_000);
+
 test.each(["architecture", "standards"])("explicit page move to %s preserves identity and updates incoming navigation through Review apply", async (collection) => {
   const { beginDocumentRevision } = await import("../project/documentRevision.js");
   const { access } = await import("node:fs/promises");
