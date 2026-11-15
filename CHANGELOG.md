@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- The routine update example now starts the scheduled task content with a plain line naming the Context Skill instead of a slash command. Some schedulers expand a leading slash command into the Skill text and drop the rest, so the run never saw its paragraph and `ROUTINE_POLICY` and stopped to ask what to do.
+
 ## 0.7.99 - 2026-11-13
 
 - `context task rollback` no longer gets stuck with an unfinished production stage: `context close` and the build accept the active rollback, and the rollback cleanup removes the stage. Previously close stopped with `production-not-complete` and the cleanup could not run.

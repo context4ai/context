@@ -13,7 +13,7 @@ instance configuration may also define `ROUTINE_POLICY` defaults; keys in the
 trigger take precedence. For example, a scheduler's task content:
 
 ```text
-/c4a:context routine update
+Routine update: use the `c4a:context` Skill and follow its routine update procedure.
 
 This is the routine update of the Billing knowledge base. Refresh it from the
 latest registered code and documents, revise the affected articles so they
@@ -29,7 +29,10 @@ ROUTINE_POLICY:
   time_budget_minutes: 90    # stop starting new batches after this
 ```
 
-Start the trigger with one short paragraph naming the knowledge base and what the
+Begin the content with a plain line that names this Skill and the routine
+update, not with a slash command: some schedulers expand a leading command into
+the Skill text and drop everything after it, so the run never sees its settings.
+Then write one short paragraph naming the knowledge base and what the
 run should achieve, including any team-specific guidance; it tells the agent
 which workspace and what matters. The paragraph may also set the reviews in
 plain language: an explicit statement that the whole run is managed and reviewed
