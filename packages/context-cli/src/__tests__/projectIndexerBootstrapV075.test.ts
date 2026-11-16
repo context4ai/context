@@ -48,6 +48,15 @@ describe("Production bootstrap follows the workspace Graph", () => {
       for (const resource of before.workflow.current!.resources.required) {
         if (resource.path) expect((await readFile(resource.path, "utf8")).length).toBeGreaterThan(0);
       }
+      // Missing requirements → CLI status → every printed resource command runs as printed.
+      const printed = JSON.parse(await readFile(summary.next_route.file, "utf8")) as { revision: string; resources: { required: Array<{ command?: string }> } };
+      const materialize = printed.resources.required.filter(resource => resource.command);
+      expect(materialize.length).toBeGreaterThan(0);
+      expect(printed.revision).toMatch(/^sha256:[a-f0-9]{64}$/);
+      for (const resource of materialize) {
+        const args = resource.command!.replace(/^context /, "").match(/'[^']*'|\S+/g)!.map((arg: string) => arg.replace(/^'|'$/g, ""));
+        expect(JSON.parse(await runCliInDir(root, args))).toBeTruthy();
+      }
     });
 
     test(`plain and dry run preserve an unprepared plan (managed=${managed})`, async () => {
