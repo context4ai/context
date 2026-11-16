@@ -4,6 +4,10 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+- Before production requirements exist (`src/indexers.yaml` missing), the Route's resource commands such as `context resource materialize context.source-boundary` now carry a valid workflow revision. Previously they carried `requirements-configuration` and always failed with "workflow revision is invalid".
+
+## Unreleased
+
 - The routine update example now starts the scheduled task content with a plain line naming the Context Skill instead of a slash command. Some schedulers expand a leading slash command into the Skill text and drop the rest, so the run never saw its paragraph and `ROUTINE_POLICY` and stopped to ask what to do.
 
 ## 0.7.99 - 2026-11-13

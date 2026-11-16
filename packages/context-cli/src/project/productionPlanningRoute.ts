@@ -11,13 +11,15 @@ export async function productionPlanningRoute(input: { projectRoot: string; auth
   stage?: ProductionStage): Promise<ContextResolvedWorkflowRoute | undefined> {
   const request = stage ? undefined : await productionPlanningRequest(input.projectRoot);
   const present = !!stage || !!request;
-  const revision = stage?.id ?? request?.revision ?? "requirements-configuration";
   const prepared = !!stage && await productionPlanningIsPrepared(input.projectRoot, stage);
   const context = { workspace: input.projectRoot, authorities: [...input.authorities], facts: {
     production: { requirements_present: present, planning_prepared: prepared, planning_complete: prepared && (stage?.planning_complete ?? false) },
   } };
   const provider = await loadContextWorkflowProvider();
   const evaluated = evaluateGraph(provider, "indexer", "production-planning", context);
+  // Before requirements exist there is no plan revision; the graph evaluation's
+  // revision keeps the Route's resource commands valid workflow revisions.
+  const revision = stage?.id ?? request?.revision ?? evaluated.evaluation.revision;
   const selected = evaluated.evaluation.primaryRoute;
   if (!selected) throw new TypeError("Production planning has no current graph route");
   const route = await resolveRoute(provider, "indexer", "production-planning", selected.routeId, context, evaluated.evaluation.revision);
