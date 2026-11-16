@@ -2,7 +2,7 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.100 - 2026-11-16
 
 - Before production requirements exist (`src/indexers.yaml` missing), the Route's resource commands such as `context resource materialize context.source-boundary` now carry a valid workflow revision. Previously they carried `requirements-configuration` and always failed with "workflow revision is invalid".
 
