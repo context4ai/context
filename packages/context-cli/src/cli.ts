@@ -272,10 +272,9 @@ export function createCliProgram(): Command {
 
   review
     .command("original-revisions")
-    .description("List or decide revisions proposed for pages kept as written (src/original-revisions.yaml)")
-    .option("--decide <id=decision>", "record a decision: upstream | local | kept; repeatable", (value: string, previous: string[] = []) => [...previous, value])
-    .option("--upstream <id=outcome>", "record the outcome of an upstream correction; repeatable", (value: string, previous: string[] = []) => [...previous, value])
-    .option("--propose <file>", "add proposals from a YAML/JSON file or - (stdin); Context reads the original text and fingerprints the evidence")
+    .description("Propose, list or resolve revisions for pages kept as written (temporary, per review batch)")
+    .option("--propose <file>", "add proposals from a YAML/JSON file or - (stdin); Context reads the original passage")
+    .option("--resolve <id>", "remove a proposal whose decision was applied to the article, or all; repeatable", (value: string, previous: string[] = []) => [...previous, value])
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       if (options.format !== "text" && options.format !== "json") {
@@ -286,9 +285,8 @@ export function createCliProgram(): Command {
       const { runOriginalRevisionsCommand } = await import("./project/originalRevisionsCommand.js");
       await runOriginalRevisionsCommand({
         cwd: process.cwd(),
-        decide: Array.isArray(options.decide) ? options.decide as string[] : [],
-        upstream: Array.isArray(options.upstream) ? options.upstream as string[] : [],
         ...(typeof options.propose === "string" ? { propose: options.propose } : {}),
+        resolve: Array.isArray(options.resolve) ? options.resolve as string[] : [],
         format: options.format === "json" ? "json" : "text",
       });
     });

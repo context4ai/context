@@ -114,8 +114,9 @@ Partial delivery must include the approved articles needed by its local links.
 When the task's requirement in `shared/requirements.md` has
 `preserve_original: true`, reproduce each original page as an article: keep its
 title, section headings and the main order of its content, and keep its wording.
-Cite each section's original lines, and also cite the code a passage describes,
-so later code changes reach the article.
+Cite each section's original lines, and also cite the code a passage describes
+from the requirement's `evidence_source_scope`, so later code changes reach the
+article.
 
 Where a passage contradicts the cited code or describes behavior the code no
 longer has, write the corrected text in the article and propose the revision
@@ -133,13 +134,17 @@ revisions:
       - { source_ref: repo:service, locator: { path: src/limits.ts, start_line: 1, end_line: 1 } }
 ```
 
-Context reads the original passage, fingerprints the evidence and records the
-proposal under the workspace write lock, so parallel writers do not overwrite
-each other; do not edit `src/original-revisions.yaml` by hand. Do not correct
-wording, style or structure that the code does not contradict. A proposal whose
-status is `kept` keeps the original text: do not propose it again while
-`context review original-revisions` does not report it as reopened. Moved lines
-with unchanged text do not reopen it.
+Context reads the original passage and keeps the proposal with the current
+batch under the workspace write lock, so parallel writers do not overwrite each
+other. Proposals are temporary: once the user decides, the article carries the
+decision. Do not correct wording, style or structure that the code does not
+contradict.
+
+Before proposing a correction for an existing article, read its Git history and
+the workspace changelog: a contradiction the user already chose to keep stays
+kept and is not proposed again unless the cited code changed since that
+decision. Keep the code citation on a kept passage, so a later change to that
+code reaches the article through the ordinary source update.
 
 ### Locating submitted references
 

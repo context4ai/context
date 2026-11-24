@@ -48,8 +48,10 @@ Do not automatically exclude something merely because it is large or costly.
 
 `preserve_original: true` keeps the target pages as written: each article keeps
 its page's title, sections and order, and contradictions with the code are
-recorded as proposals instead of silent edits. Writers follow "Pages kept as
-written" in the production stage files guide.
+recorded as proposals instead of silent edits. List the code repositories the
+pages describe in its `evidence_source_scope`, so writers can cite and check
+that code. Writers follow "Pages kept as written" in the production stage files
+guide.
 
 Do not add Provider selections, versions, hashes, run identifiers, candidate
 receipts or task assignments. Those are not long-term requirements. Skills and

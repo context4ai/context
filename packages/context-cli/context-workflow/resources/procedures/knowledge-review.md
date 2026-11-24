@@ -37,19 +37,18 @@ No review code or special approval phrase is required. When the report's
 `navigation.changes` is not empty, name those menu changes (added, removed,
 renamed, pointing elsewhere) in the confirmation request.
 
-When the report returns `original_revisions`, the batch revised pages kept as
-written. Run `context review original-revisions --format json` and present each
-proposed or reopened item with its original text, revision and evidence. The
-user chooses per item: `upstream` (keep the revision and propose the correction
-to the original document through the knowledge-updates guide's optional
-upstream correction; a remote write still needs its own authorization),
-`local` (keep the revision only here) or `kept` (restore the original passage
-in the article and keep it). Record the choices with
-`context review original-revisions --decide <id>=<decision>`, restore the
-original text of `kept` items before approval, and record an upstream outcome
-with `--upstream <id>=<outcome>`. In fully managed and routine runs, record
-`local` for every proposal and list them in the run report so the user can
-change a decision later.
+When the report returns `original_revisions`, the batch proposes revisions to
+pages kept as written. Run `context review original-revisions --format json`
+and present each proposal with its original text, revision and evidence. The
+user chooses per proposal and the choice is applied to the article: `upstream`
+keeps the revision and proposes the correction to the original document through
+the knowledge-updates guide's optional upstream correction (a remote write still
+needs its own authorization), `local` keeps the revision only here, and `keep`
+restores the original passage while keeping its code citation. Record each
+outcome in the batch's changelog entry or commit message, then remove the
+proposals with `context review original-revisions --resolve <id|all>`. In fully
+managed and routine runs keep the revisions locally and list them in the run
+report so the user can change them later.
 
 For old automation, `review approve-all --force` remains a deprecated explicit
 approval alias and applies the current candidate scope without requiring a new

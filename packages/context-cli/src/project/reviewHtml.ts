@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { inspectOriginalRevisions, originalRevisionReviewHtml, originalRevisionSummary } from "./originalRevisions.js";
+import { ORIGINAL_REVISION_PROPOSALS_PATH, originalRevisionReviewHtml, readOriginalRevisionProposals } from "./originalRevisions.js";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -112,7 +112,7 @@ export async function writeReviewHtml(input: {
   navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[];
     changes: ReviewNavigationChange[] };
   retirement?: ReviewSiteModel["retirement"];
-  original_revisions?: (ReturnType<typeof originalRevisionSummary> | { path: string; problem: string }) & { command: string };
+  original_revisions?: { path: string; proposed?: number; problem?: string; command: string };
   next_action?: { command: string; message: string };
 }> {
   const reviewScope = input.all === true ? "all" : input.collection;
@@ -126,18 +126,16 @@ export async function writeReviewHtml(input: {
   await mkdir(dirname(outPath), { recursive: true });
   const model = await collectReviewSiteModel(input.projectRoot, candidates);
   // Revisions proposed for pages kept as written are shown above their articles.
-  // The ledger only annotates the report; a problem with it must not block review.
+  // Proposals only annotate the report; a problem with them must not block review.
   let originalRevisionProblem: string | undefined;
-  const originalRevisions = await inspectOriginalRevisions(input.projectRoot).catch((error: unknown) => {
+  const originalRevisions = await readOriginalRevisionProposals(input.projectRoot).catch((error: unknown) => {
     originalRevisionProblem = error instanceof Error ? error.message : String(error);
     return [];
   });
   for (const page of model.pages) {
-    const block = originalRevisionReviewHtml(originalRevisions.filter(revision =>
-      revision.article === page.path && (revision.status === "proposed" || revision.reopened === true || page.candidate_id !== undefined)));
+    const block = originalRevisionReviewHtml(originalRevisions.filter(proposal => proposal.article === page.path));
     if (block) page.html = `${block}${page.html}`;
   }
-  const originalRevisionCounts = originalRevisionSummary(originalRevisions);
   let diagramScript = "";
   if (model.pages.some(page => page.html.includes('class="language-mermaid"'))) {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -164,10 +162,10 @@ export async function writeReviewHtml(input: {
     ...(retirementFixes ? { retirement: { ...model.retirement!, blockers: retirementFixes } } : {}),
     ...(!unplaced.length && retirementFixes?.length ? { next_action: { ...retirementFixes[0]!.fix,
       message: "Some links still point to a page retired in this batch. Fix each item in retirement.blockers as its fix says before requesting approval; approval cannot apply while they remain." } } : {}),
-    ...(originalRevisionProblem !== undefined
-      ? { original_revisions: { path: originalRevisionCounts.path, problem: originalRevisionProblem, command: "context review original-revisions --format json" } }
-      : originalRevisionCounts.proposed + originalRevisionCounts.reopened > 0
-        ? { original_revisions: { ...originalRevisionCounts, command: "context review original-revisions --format json" } } : {}),
+    ...(originalRevisionProblem !== undefined || originalRevisions.length > 0
+      ? { original_revisions: { path: ORIGINAL_REVISION_PROPOSALS_PATH,
+          ...(originalRevisionProblem !== undefined ? { problem: originalRevisionProblem } : { proposed: originalRevisions.length }),
+          command: "context review original-revisions --format json" } } : {}),
     path: outPath,
     candidates: candidates.length,
     candidate_set_digest: candidateSetHash(candidates.map(({ record }) => record)),

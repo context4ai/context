@@ -48,6 +48,19 @@ test("the existing task adjustment updates only organization and rejects stale c
 });
 
 
+test("an invalid knowledge map edit reports the map's own errors", async () => {
+  const root = await mkdtemp(join(tmpdir(), "reading-invalid-"));
+  try {
+    const { parent: _parent, ...withoutParent } = update.upsert[0]!;
+    await expect(adjustCurrentTaskSources(root, { knowledge_map: { ...update, upsert: [withoutParent] } })).rejects.toMatchObject({ detail: {
+      reason_code: "production-knowledge-map-adjustment-failed",
+      issues: [{ path: ["knowledge_map", "upsert", 0, "parent"] }],
+    } });
+    expect(await readKnowledgeMap(root)).toBeUndefined();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+
 test("missing bindings reject approval before either decision or reading file is written", async () => {
   const root = await mkdtemp(join(tmpdir(), "reading-required-"));
   const decisionPath = ".tmp/context-runtime/indexer/structure-review/current.json";

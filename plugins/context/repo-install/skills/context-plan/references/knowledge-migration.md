@@ -89,11 +89,13 @@ with their limitation, not presented as ready. In particular:
   the website package's `select.exclude` to leave the pages off the website.
 - Keeping pages unchanged goes through production with `preserve_original: true`
   on the requirement: register the collection as a file source that keeps its
-  folders (with its repository and commit as origin when it keeps changing).
+  folders (with its repository and commit as origin when it keeps changing), and
+  list the code repositories the pages describe in `evidence_source_scope`.
   Writers keep each page's title, sections, order and wording, cite its lines and
-  the code it describes, and record contradictions with the code as proposals
-  the user accepts (also proposing the fix upstream), keeps only locally, or
-  rejects to keep the original. Managed and routine runs revise locally. Each
+  the code it describes, and propose contradictions with the code for review:
+  the user accepts them (also proposing the fix upstream), keeps them only
+  locally, or keeps the original. Decisions live in the articles and their
+  history. Managed and routine runs revise locally. Each
   page still goes through ordinary batches and review; estimate that cost.
 
 When the user chooses an approach the installation cannot perform yet, keep the

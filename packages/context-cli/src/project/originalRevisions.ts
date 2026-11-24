@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { articleSourceLocatorSchema, articleSourceReferenceSchema, articleSourceRegion, articleSourceRegionDigest } from "@c4a/context";
+import { articleSourceLocatorSchema, articleSourceRegion } from "@c4a/context";
 import YAML from "yaml";
 import { z } from "zod";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -11,298 +10,132 @@ import { ExitCode } from "../types/exitCode.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
 
 /**
- * Revisions to pages kept as written (`preserve_original` requirements). Each
- * proposal records the original passage, the corrected text and the code that
- * contradicts it; the user's decision stays with the workspace.
+ * Revisions proposed for pages kept as written (`preserve_original` requirements)
+ * while a batch is being reviewed. This is temporary working state: the user's
+ * decision is applied to the article itself and recorded in the changelog or
+ * commit, so Git history and the article's code citations carry it afterwards.
  */
-export const ORIGINAL_REVISIONS_PATH = "src/original-revisions.yaml";
-
-export const ORIGINAL_REVISION_DECISIONS = ["upstream", "local", "kept"] as const;
-export type OriginalRevisionDecision = typeof ORIGINAL_REVISION_DECISIONS[number];
+export const ORIGINAL_REVISION_PROPOSALS_PATH = ".tmp/context-runtime/original-revisions.yaml";
 
 const text = z.string().trim().min(1);
-const originalRevisionSchema = z.object({
+const locatorSchema = z.object({ path: text, start_line: z.number().int().min(1), end_line: z.number().int().min(1) }).strict();
+const referenceSchema = z.object({ source_ref: text, locator: locatorSchema }).strict();
+const proposalSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/u, "Use a lowercase path-safe id"),
   /** Knowledge-relative article path, as shown in the review report. */
   article: text,
   section: text.optional(),
-  original: z.object({ source_ref: text, locator: articleSourceLocatorSchema, text }).strict(),
+  original: referenceSchema,
   revised: text,
   /** `wrong`: never matched the code; `stale`: matched once, the code changed since. */
   reason: z.enum(["wrong", "stale"]),
-  evidence: z.array(articleSourceReferenceSchema).min(1),
-  /** `proposed` awaits a decision; `upstream` and `local` revise the article; `kept` keeps the original text. */
-  status: z.enum(["proposed", ...ORIGINAL_REVISION_DECISIONS]),
-  /** Outcome of a correction proposed to the original document, when `upstream`. */
-  upstream: text.optional(),
+  evidence: z.array(referenceSchema).min(1),
   note: text.optional(),
 }).strict();
+const storedProposalSchema = proposalSchema.extend({
+  original: referenceSchema.extend({ locator: articleSourceLocatorSchema, text }).strict(),
+}).strict();
+const proposalInputSchema = z.object({ revisions: z.array(proposalSchema).min(1) }).strict();
+const storedProposalsSchema = z.object({ revisions: z.array(storedProposalSchema).default([]) }).strict();
 
-const originalRevisionsSchema = z.object({ revisions: z.array(originalRevisionSchema).default([]) }).strict();
+export type OriginalRevisionProposal = z.infer<typeof storedProposalSchema>;
 
-export type OriginalRevision = z.infer<typeof originalRevisionSchema>;
-
-function invalid(message: string): ContextError {
-  return new ContextError(ExitCode.UserError, `Invalid ${ORIGINAL_REVISIONS_PATH}: ${message}`, {
-    category: ErrorCategory.UserInputInvalid,
-    reason_code: "invalid-original-revisions",
-    next: `Correct ${ORIGINAL_REVISIONS_PATH}, keeping each proposal's original passage, revised text, evidence and decision.`,
-  });
+function inputError(message: string, reasonCode: string): ContextError {
+  return new ContextError(ExitCode.UserError, message, { category: ErrorCategory.UserInputInvalid, reason_code: reasonCode });
 }
 
-export async function readOriginalRevisions(projectRoot: string): Promise<OriginalRevision[]> {
+const issues = (error: z.ZodError): string =>
+  error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ");
+
+export async function readOriginalRevisionProposals(projectRoot: string): Promise<OriginalRevisionProposal[]> {
   let content: string;
   try {
-    content = await readFile(join(projectRoot, ORIGINAL_REVISIONS_PATH), "utf8");
+    content = await readFile(join(projectRoot, ORIGINAL_REVISION_PROPOSALS_PATH), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  let parsed: z.infer<typeof originalRevisionsSchema>;
-  try {
-    parsed = originalRevisionsSchema.parse(YAML.parse(content, { uniqueKeys: true }) ?? {});
-  } catch (error) {
-    throw invalid(error instanceof z.ZodError
-      ? error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")
-      : error instanceof Error ? error.message : String(error));
+  const parsed = storedProposalsSchema.safeParse(YAML.parse(content) ?? {});
+  if (!parsed.success) {
+    throw inputError(`Invalid ${ORIGINAL_REVISION_PROPOSALS_PATH}: ${issues(parsed.error)}`, "invalid-original-revision-proposals");
   }
-  const ids = parsed.revisions.map((revision) => revision.id);
-  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
-  if (duplicate !== undefined) throw invalid(`duplicate id ${duplicate}`);
-  return parsed.revisions;
+  return parsed.data.revisions;
 }
 
-/** Record decisions for proposals; every id must exist. */
-export async function decideOriginalRevisions(
-  projectRoot: string,
-  decisions: ReadonlyMap<string, { status: OriginalRevisionDecision; upstream?: string }>,
-): Promise<OriginalRevision[]> {
-  const revisions = await readOriginalRevisions(projectRoot);
-  const known = new Set(revisions.map((revision) => revision.id));
-  const unknown = [...decisions.keys()].filter((id) => !known.has(id));
+async function writeProposals(projectRoot: string, proposals: readonly OriginalRevisionProposal[]): Promise<void> {
+  const path = join(projectRoot, ORIGINAL_REVISION_PROPOSALS_PATH);
+  if (proposals.length === 0) {
+    await rm(path, { force: true });
+    return;
+  }
+  await atomicWriteFile(path, YAML.stringify({ revisions: proposals }));
+}
+
+/**
+ * Add proposals under the caller's write lock. Context reads the original
+ * passage itself; writers supply locations only. A proposal replaces one with
+ * the same id.
+ */
+export async function proposeOriginalRevisions(projectRoot: string, input: unknown): Promise<OriginalRevisionProposal[]> {
+  const parsed = proposalInputSchema.safeParse(input);
+  if (!parsed.success) throw inputError(`Invalid original revision proposals: ${issues(parsed.error)}`, "invalid-original-revision-proposals");
+  const ids = parsed.data.revisions.map((proposal) => proposal.id);
+  const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (repeated !== undefined) {
+    throw inputError(`Original revision id ${repeated} appears more than once in the proposals`, "invalid-original-revision-proposals");
+  }
+  const read = await registeredArticleSourceReader(projectRoot);
+  const region = async (sourceRef: string, locator: { path: string; start_line: number; end_line: number }): Promise<string> => {
+    let source: string;
+    try {
+      source = await read(sourceRef, locator.path);
+    } catch (error) {
+      throw inputError(`Cannot read ${sourceRef} ${locator.path}: ${error instanceof Error ? error.message : String(error)}`, "original-revision-source-unreadable");
+    }
+    try {
+      return articleSourceRegion(source, locator);
+    } catch {
+      throw inputError(`Lines ${locator.start_line}-${locator.end_line} are outside ${sourceRef} ${locator.path}`, "original-revision-locator-invalid");
+    }
+  };
+  const byId = new Map((await readOriginalRevisionProposals(projectRoot)).map((proposal) => [proposal.id, proposal]));
+  for (const proposal of parsed.data.revisions) {
+    const originalText = await region(proposal.original.source_ref, proposal.original.locator);
+    for (const item of proposal.evidence) await region(item.source_ref, item.locator);
+    byId.set(proposal.id, storedProposalSchema.parse({ ...proposal, original: { ...proposal.original, text: originalText } }));
+  }
+  const next = [...byId.values()];
+  await writeProposals(projectRoot, next);
+  return next;
+}
+
+/** Remove proposals once their decision has been applied to the article. */
+export async function resolveOriginalRevisions(projectRoot: string, ids: readonly string[]): Promise<OriginalRevisionProposal[]> {
+  const current = await readOriginalRevisionProposals(projectRoot);
+  const known = new Set(current.map((proposal) => proposal.id));
+  const unknown = ids.filter((id) => id !== "all" && !known.has(id));
   if (unknown.length > 0) {
     throw new ContextError(ExitCode.UserError, `Unknown original revision id: ${unknown.join(", ")}`, {
       category: ErrorCategory.UserInputInvalid,
       next: "context review original-revisions --format json",
     });
   }
-  // Keeping the original settles it against the code as it is now, so later
-  // checks reopen it only when that code changes again.
-  const read = [...decisions.values()].some((decision) => decision.status === "kept")
-    ? await registeredArticleSourceReader(projectRoot)
-    : undefined;
-  const next: OriginalRevision[] = [];
-  for (const revision of revisions) {
-    const decision = decisions.get(revision.id);
-    if (decision === undefined) {
-      next.push(revision);
-      continue;
-    }
-    const rest: OriginalRevision = { ...revision };
-    delete rest.upstream;
-    const upstream = decision.upstream ?? (decision.status === "upstream" ? revision.upstream : undefined);
-    let evidence = revision.evidence;
-    if (decision.status === "kept" && read !== undefined) {
-      evidence = [];
-      for (const item of revision.evidence) {
-        let text: string;
-        try {
-          text = await read(item.source_ref, item.locator.path);
-        } catch (error) {
-          throw new ContextError(ExitCode.UserError, `Cannot keep ${revision.id}: its evidence ${item.source_ref} ${item.locator.path} is unreadable (${error instanceof Error ? error.message : String(error)})`, {
-            category: ErrorCategory.UserInputInvalid,
-            reason_code: "original-revision-evidence-unreadable",
-            next: "Restore the cited source, then record the decision again",
-          });
-        }
-        // Follow evidence that only moved; otherwise settle on the recorded lines as they are now.
-        const locator = locateEvidence(text, item.locator, item.content_digest) ?? item.locator;
-        let digest: string;
-        try {
-          digest = articleSourceRegionDigest(text, locator);
-        } catch (error) {
-          if (!(error instanceof RangeError)) throw error;
-          throw new ContextError(ExitCode.UserError, `Cannot keep ${revision.id}: lines ${locator.start_line}-${locator.end_line} no longer exist in ${item.source_ref} ${locator.path}`, {
-            category: ErrorCategory.UserInputInvalid,
-            reason_code: "original-revision-evidence-gone",
-            next: "Propose the revision again with the current evidence lines, then record the decision",
-          });
-        }
-        evidence.push({ ...item, locator, content_digest: digest });
-      }
-    }
-    next.push({ ...rest, evidence, status: decision.status, ...(upstream !== undefined ? { upstream } : {}) });
-  }
-  await atomicWriteFile(join(projectRoot, ORIGINAL_REVISIONS_PATH), YAML.stringify({ revisions: next }));
+  const remove = new Set(ids.includes("all") ? known : ids);
+  const next = current.filter((proposal) => !remove.has(proposal.id));
+  await writeProposals(projectRoot, next);
   return next;
-}
-
-export interface OriginalRevisionView extends OriginalRevision {
-  /** A kept original whose code evidence changed since the decision: decide again. */
-  reopened?: true;
-  /** Evidence that could not be read; the decision cannot be rechecked yet. */
-  unreadable?: true;
-}
-
-/** Recheck kept originals against the current code: unchanged evidence keeps them settled. */
-export async function inspectOriginalRevisions(projectRoot: string): Promise<OriginalRevisionView[]> {
-  const revisions = await readOriginalRevisions(projectRoot);
-  if (!revisions.some((revision) => revision.status === "kept")) return revisions;
-  const read = await registeredArticleSourceReader(projectRoot).catch(() => undefined);
-  const views: OriginalRevisionView[] = [];
-  for (const revision of revisions) {
-    if (revision.status !== "kept") {
-      views.push(revision);
-      continue;
-    }
-    let changed = false;
-    let unreadable = false;
-    for (const evidence of revision.evidence) {
-      // Only a failed read makes evidence unreadable; cited lines that no longer
-      // exist (a shortened file) count as a change, and other errors propagate.
-      let current: string;
-      try {
-        if (read === undefined) throw new Error("source reader unavailable");
-        current = await read(evidence.source_ref, evidence.locator.path);
-      } catch {
-        unreadable = true;
-        continue;
-      }
-      if (locateEvidence(current, evidence.locator, evidence.content_digest) === undefined) changed = true;
-    }
-    views.push({ ...revision, ...(changed ? { reopened: true as const } : {}), ...(unreadable ? { unreadable: true as const } : {}) });
-  }
-  return views;
-}
-
-/**
- * Where the cited lines are now: at their recorded place, or moved to exactly one
- * other place with the same text (for example below an added import line).
- * Undefined when they changed, were deleted, or the text is not unique enough
- * to tell where they went (short lines such as `}` recur in most files).
- */
-function locateEvidence(
-  text: string,
-  locator: { path: string; start_line: number; end_line: number },
-  digest: string,
-): { path: string; start_line: number; end_line: number } | undefined {
-  const lines = text.replace(/\r\n/gu, "\n").split("\n");
-  const length = locator.end_line - locator.start_line + 1;
-  const regionDigest = (start: number) =>
-    `sha256:${createHash("sha256").update(lines.slice(start, start + length).join("\n"), "utf8").digest("hex")}`;
-  if (locator.end_line <= lines.length && regionDigest(locator.start_line - 1) === digest) return locator;
-  const matches: number[] = [];
-  for (let start = 0; start + length <= lines.length && matches.length < 2; start += 1) {
-    if (regionDigest(start) === digest) matches.push(start);
-  }
-  if (matches.length !== 1) return undefined;
-  return { path: locator.path, start_line: matches[0]! + 1, end_line: matches[0]! + length };
-}
-
-const proposalLocatorSchema = z.object({ path: text, start_line: z.number().int().min(1), end_line: z.number().int().min(1) }).strict();
-const originalRevisionProposalSchema = z.object({
-  id: originalRevisionSchema.shape.id,
-  article: text,
-  section: text.optional(),
-  original: z.object({ source_ref: text, locator: proposalLocatorSchema }).strict(),
-  revised: text,
-  reason: z.enum(["wrong", "stale"]),
-  evidence: z.array(z.object({ source_ref: text, locator: proposalLocatorSchema }).strict()).min(1),
-  note: text.optional(),
-}).strict();
-export const originalRevisionProposalsSchema = z.object({ revisions: z.array(originalRevisionProposalSchema).min(1) }).strict();
-
-/**
- * Record proposals under the caller's write lock. Context reads the original
- * passage and fingerprints the evidence itself; writers supply locations only.
- * A proposal may replace one with the same id only while it is still `proposed`.
- */
-export async function proposeOriginalRevisions(projectRoot: string, input: unknown): Promise<OriginalRevision[]> {
-  const parsed = originalRevisionProposalsSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new ContextError(ExitCode.UserError, `Invalid original revision proposals: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")}`, {
-      category: ErrorCategory.UserInputInvalid,
-      reason_code: "invalid-original-revision-proposals",
-    });
-  }
-  const ids = parsed.data.revisions.map((proposal) => proposal.id);
-  const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
-  if (repeated !== undefined) {
-    throw new ContextError(ExitCode.UserError, `Original revision id ${repeated} appears more than once in the proposals`, {
-      category: ErrorCategory.UserInputInvalid,
-      reason_code: "invalid-original-revision-proposals",
-    });
-  }
-  const existing = await readOriginalRevisions(projectRoot);
-  const read = await registeredArticleSourceReader(projectRoot);
-  const region = async (sourceRef: string, locator: { path: string; start_line: number; end_line: number }) => {
-    let text: string;
-    try {
-      text = await read(sourceRef, locator.path);
-    } catch (error) {
-      throw new ContextError(ExitCode.UserError, `Cannot read ${sourceRef} ${locator.path}: ${error instanceof Error ? error.message : String(error)}`, {
-        category: ErrorCategory.UserInputInvalid,
-        reason_code: "original-revision-source-unreadable",
-      });
-    }
-    const lines = text.replace(/\r\n/gu, "\n").split("\n");
-    if (locator.end_line < locator.start_line || locator.end_line > lines.length) {
-      throw new ContextError(ExitCode.UserError, `Lines ${locator.start_line}-${locator.end_line} are outside ${sourceRef} ${locator.path}`, {
-        category: ErrorCategory.UserInputInvalid,
-        reason_code: "original-revision-locator-invalid",
-      });
-    }
-    return text;
-  };
-  const byId = new Map(existing.map((revision) => [revision.id, revision]));
-  for (const proposal of parsed.data.revisions) {
-    const previous = byId.get(proposal.id);
-    if (previous !== undefined && previous.status !== "proposed") {
-      throw new ContextError(ExitCode.UserError, `Original revision ${proposal.id} is already decided (${previous.status}); use a new id`, {
-        category: ErrorCategory.UserInputInvalid,
-        reason_code: "original-revision-decided",
-      });
-    }
-    const originalText = await region(proposal.original.source_ref, proposal.original.locator);
-    const evidence = [];
-    for (const item of proposal.evidence) {
-      evidence.push({ ...item, content_digest: articleSourceRegionDigest(await region(item.source_ref, item.locator), item.locator) });
-    }
-    byId.set(proposal.id, originalRevisionSchema.parse({
-      ...proposal,
-      original: { ...proposal.original, text: articleSourceRegion(originalText, proposal.original.locator) },
-      evidence,
-      status: "proposed",
-    }));
-  }
-  const next = [...byId.values()];
-  await atomicWriteFile(join(projectRoot, ORIGINAL_REVISIONS_PATH), YAML.stringify({ revisions: next }));
-  return next;
-}
-
-export function originalRevisionSummary(views: readonly OriginalRevisionView[]) {
-  const count = (status: OriginalRevision["status"]) => views.filter((view) => view.status === status).length;
-  return {
-    path: ORIGINAL_REVISIONS_PATH,
-    proposed: count("proposed"),
-    upstream: count("upstream"),
-    local: count("local"),
-    kept: count("kept"),
-    reopened: views.filter((view) => view.reopened === true).length,
-  };
 }
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/gu, (char) => `&#${char.charCodeAt(0)};`);
 
 /** A block shown above an article in the review report listing its proposals. */
-export function originalRevisionReviewHtml(revisions: readonly OriginalRevisionView[]): string {
-  if (revisions.length === 0) return "";
-  const items = revisions.map((revision) => [
-    `<li><strong>${escapeHtml(revision.id)}</strong> · ${revision.reason === "wrong" ? "原文写错 / written wrong" : "原文过时 / went stale"}`,
-    ` · ${escapeHtml(revision.status)}${revision.reopened ? " · 代码又有变化 / code changed again" : ""}`,
-    `<br>原文 / Original: <del>${escapeHtml(revision.original.text)}</del>`,
-    `<br>修订 / Revised: <ins>${escapeHtml(revision.revised)}</ins>`,
-    `<br>依据 / Evidence: ${revision.evidence.map((item) => escapeHtml(`${item.source_ref} ${item.locator.path} L${item.locator.start_line}-L${item.locator.end_line}`)).join("; ")}`,
+export function originalRevisionReviewHtml(proposals: readonly OriginalRevisionProposal[]): string {
+  if (proposals.length === 0) return "";
+  const items = proposals.map((proposal) => [
+    `<li><strong>${escapeHtml(proposal.id)}</strong> · ${proposal.reason === "wrong" ? "原文写错 / written wrong" : "原文过时 / went stale"}`,
+    `<br>原文 / Original: <del>${escapeHtml(proposal.original.text)}</del>`,
+    `<br>修订 / Revised: <ins>${escapeHtml(proposal.revised)}</ins>`,
+    `<br>依据 / Evidence: ${proposal.evidence.map((item) => escapeHtml(`${item.source_ref} ${item.locator.path} L${item.locator.start_line}-L${item.locator.end_line}`)).join("; ")}`,
     "</li>",
   ].join("")).join("");
   return `<aside class="original-revisions" style="border:1px solid #d0a000;border-radius:6px;padding:8px 12px;margin-bottom:16px">`

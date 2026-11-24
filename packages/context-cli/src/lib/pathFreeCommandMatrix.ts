@@ -62,7 +62,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "review", view: "production-semantic", handles: ["candidate_id", "review_status"], notes: "Review namespace for draft project candidates." },
   { command: "review html", view: "production-semantic", handles: ["candidate_id", "review_status", "source_ref"], notes: "Renders self-contained review UI and copyable review payload." },
   { command: "review list", view: "production-semantic", handles: ["candidate_id", "review_status"], notes: "Lists draft candidates without reading workspace files directly." },
-  { command: "review original-revisions", view: "production-semantic", handles: ["review_status", "source_ref"], notes: "Lists and decides revisions proposed for pages kept as written." },
+  { command: "review original-revisions", view: "production-semantic", handles: ["review_status", "source_ref"], notes: "Proposes, lists and resolves temporary revisions for pages kept as written." },
   { command: "review apply", view: "production-semantic", handles: ["candidate_id", "review_status", "decision_payload"], notes: "Applies copied review decisions to the project ledger and approved knowledge." },
   { command: "review approve", view: "production-semantic", handles: ["candidate_id", "review_scope", "review_status"], notes: "Approves one draft candidate inside an explicit collection or all-candidate review scope." },
   { command: "review approve-all", view: "production-semantic", handles: ["candidate_id", "candidate_fingerprint", "review_scope", "review_status"], notes: "Atomically approves the validated current review scope under explicit current-conversation managed authority or the Route-bound user force-approval escape path." },

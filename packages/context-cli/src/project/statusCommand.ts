@@ -32,11 +32,10 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
     ),
   ].sort();
   const completedCollections = [...status.approvedCollections].sort();
-  // Proposals for pages kept as written are decided outside the Route; remind
-  // without reading sources (reopened checks run in the review command).
-  const { readOriginalRevisions } = await import("./originalRevisions.js");
-  const originalRevisions = await readOriginalRevisions(projectRoot).then(
-    revisions => ({ proposed: revisions.filter(revision => revision.status === "proposed").length }),
+  // Proposals for pages kept as written are decided outside the Route; remind.
+  const { readOriginalRevisionProposals } = await import("./originalRevisions.js");
+  const originalRevisions = await readOriginalRevisionProposals(projectRoot).then(
+    revisions => ({ proposed: revisions.length }),
     (error: unknown) => ({ problem: error instanceof Error ? error.message : String(error) }));
   // The shared serializer either returns the intact Route inline or points to
   // it on disk. Summary fields never become a partial executable contract.
@@ -54,7 +53,7 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
     } } : {}),
     ...("problem" in originalRevisions || originalRevisions.proposed > 0 ? { original_revisions: { ...originalRevisions,
       next_action: { command: "context review original-revisions --format json",
-        message: "Revisions proposed for pages kept as written await a decision; in fully managed and routine runs record local." } } } : {}),
+        message: "Revisions proposed for pages kept as written await a decision; apply it to the article, record it in the changelog, then resolve the proposal. Fully managed and routine runs keep the revisions locally." } } } : {}),
     ...(status.executionMode !== undefined
       ? { executionMode: status.executionMode }
       : {}),

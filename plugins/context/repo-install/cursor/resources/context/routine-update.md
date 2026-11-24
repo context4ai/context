@@ -117,9 +117,9 @@ workspace targets or the delivery configuration.
    through their normal capture Route; for a newer origin version, install it
    into a new version directory and move the registration first, as in the
    knowledge-updates guide's versioned external content section. For pages kept
-   as written, run `context review original-revisions --format json`: revise
-   proposed and reopened items locally (record `local`) and list them in the
-   run report; leave `kept` items that are not reopened as they are. Do not
+   as written, keep revisions of code contradictions locally, list them in the
+   run report, and do not raise again a contradiction the history shows was
+   kept unless its cited code changed. Do not
    start a new batch after the time budget; finish or checkpoint the current one.
 7. **Cover uncited changes.** In the source-update decision, go through
    `uncited_changes` by directory, new directories first. Skip tests, lock

@@ -26,7 +26,7 @@ const requirement = z.object({
   evidence_source_scope: scope.optional(),
   exclusions: z.array(z.object({ scope, reason: text, paths: z.array(localPath).min(1).optional(),
     source_baselines: z.record(text).optional() }).strict()).optional(),
-  /** Keep each target page's title, sections and order; record code contradictions in src/original-revisions.yaml. */
+  /** Keep each target page's title, sections and order; propose contradictions with the code for review. */
   preserve_original: z.boolean().optional(),
 }).strict();
 
