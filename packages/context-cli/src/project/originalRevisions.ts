@@ -115,7 +115,20 @@ export async function decideOriginalRevisions(
             next: "Restore the cited source, then record the decision again",
           });
         }
-        evidence.push({ ...item, content_digest: articleSourceRegionDigest(text, item.locator) });
+        // Follow evidence that only moved; otherwise settle on the recorded lines as they are now.
+        const locator = locateEvidence(text, item.locator, item.content_digest) ?? item.locator;
+        let digest: string;
+        try {
+          digest = articleSourceRegionDigest(text, locator);
+        } catch (error) {
+          if (!(error instanceof RangeError)) throw error;
+          throw new ContextError(ExitCode.UserError, `Cannot keep ${revision.id}: lines ${locator.start_line}-${locator.end_line} no longer exist in ${item.source_ref} ${locator.path}`, {
+            category: ErrorCategory.UserInputInvalid,
+            reason_code: "original-revision-evidence-gone",
+            next: "Propose the revision again with the current evidence lines, then record the decision",
+          });
+        }
+        evidence.push({ ...item, locator, content_digest: digest });
       }
     }
     next.push({ ...rest, evidence, status: decision.status, ...(upstream !== undefined ? { upstream } : {}) });
@@ -155,7 +168,7 @@ export async function inspectOriginalRevisions(projectRoot: string): Promise<Ori
         unreadable = true;
         continue;
       }
-      if (!evidenceStillPresent(current, evidence.locator, evidence.content_digest)) changed = true;
+      if (locateEvidence(current, evidence.locator, evidence.content_digest) === undefined) changed = true;
     }
     views.push({ ...revision, ...(changed ? { reopened: true as const } : {}), ...(unreadable ? { unreadable: true as const } : {}) });
   }
@@ -163,19 +176,27 @@ export async function inspectOriginalRevisions(projectRoot: string): Promise<Ori
 }
 
 /**
- * True when the cited lines are unchanged, at their recorded place or moved
- * elsewhere in the file (for example after an added import line).
+ * Where the cited lines are now: at their recorded place, or moved to exactly one
+ * other place with the same text (for example below an added import line).
+ * Undefined when they changed, were deleted, or the text is not unique enough
+ * to tell where they went (short lines such as `}` recur in most files).
  */
-function evidenceStillPresent(text: string, locator: { start_line: number; end_line: number }, digest: string): boolean {
+function locateEvidence(
+  text: string,
+  locator: { path: string; start_line: number; end_line: number },
+  digest: string,
+): { path: string; start_line: number; end_line: number } | undefined {
   const lines = text.replace(/\r\n/gu, "\n").split("\n");
   const length = locator.end_line - locator.start_line + 1;
   const regionDigest = (start: number) =>
     `sha256:${createHash("sha256").update(lines.slice(start, start + length).join("\n"), "utf8").digest("hex")}`;
-  if (locator.end_line <= lines.length && regionDigest(locator.start_line - 1) === digest) return true;
-  for (let start = 0; start + length <= lines.length; start += 1) {
-    if (regionDigest(start) === digest) return true;
+  if (locator.end_line <= lines.length && regionDigest(locator.start_line - 1) === digest) return locator;
+  const matches: number[] = [];
+  for (let start = 0; start + length <= lines.length && matches.length < 2; start += 1) {
+    if (regionDigest(start) === digest) matches.push(start);
   }
-  return false;
+  if (matches.length !== 1) return undefined;
+  return { path: locator.path, start_line: matches[0]! + 1, end_line: matches[0]! + length };
 }
 
 const proposalLocatorSchema = z.object({ path: text, start_line: z.number().int().min(1), end_line: z.number().int().min(1) }).strict();
@@ -200,6 +221,14 @@ export async function proposeOriginalRevisions(projectRoot: string, input: unkno
   const parsed = originalRevisionProposalsSchema.safeParse(input);
   if (!parsed.success) {
     throw new ContextError(ExitCode.UserError, `Invalid original revision proposals: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")}`, {
+      category: ErrorCategory.UserInputInvalid,
+      reason_code: "invalid-original-revision-proposals",
+    });
+  }
+  const ids = parsed.data.revisions.map((proposal) => proposal.id);
+  const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (repeated !== undefined) {
+    throw new ContextError(ExitCode.UserError, `Original revision id ${repeated} appears more than once in the proposals`, {
       category: ErrorCategory.UserInputInvalid,
       reason_code: "invalid-original-revision-proposals",
     });

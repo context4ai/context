@@ -159,4 +159,55 @@ describe("revisions to pages kept as written", () => {
     expect(reviewNavigationChanges(before, after, [])).toEqual([{ key: "pkg", title: "Package only", changes: ["hidden"] }]);
     expect(reviewNavigationChanges(after, before, [])).toEqual([{ key: "pkg", title: "Package only", changes: ["shown"] }]);
   });
+
+  test("kept evidence follows moved lines, needs unique text to count as moved, and fails clearly when gone", async () => {
+    const { root, projectRoot, code } = await workspaceWithCode();
+    try {
+      const generic = "}\n";
+      writeFileSync(join(code, "limits.md"), `${CODE}${generic}${generic}`, "utf8");
+      await runCliInDir(projectRoot, ["run", "capture:file:code", "--format", "json"]);
+      const text = readFileSync(join(code, "limits.md"), "utf8");
+      const line1 = articleSourceRegionDigest(text, { path: "limits.md", start_line: 1, end_line: 1 });
+      const brace = articleSourceRegionDigest(text, { path: "limits.md", start_line: 3, end_line: 3 });
+      const ledger = (items: unknown[]) => writeFileSync(join(projectRoot, "src", "original-revisions.yaml"), YAML.stringify({ revisions: items }), "utf8");
+      ledger([
+        revision("moved", "proposed", line1),
+        { ...revision("generic", "kept", brace), evidence: [{ source_ref: "file:code", locator: { path: "limits.md", start_line: 3, end_line: 3 }, content_digest: brace }] },
+      ]);
+      // An import line moves the cited code; deciding "kept" records where it is now.
+      writeFileSync(join(code, "limits.md"), `import x from "y";\n${text}`, "utf8");
+      await runCliInDir(projectRoot, ["run", "capture:file:code", "--format", "json"]);
+      const kept = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--decide", "moved=kept", "--format", "json"])) as {
+        revisions: Array<{ id: string; reopened?: boolean; evidence: Array<{ locator: { start_line: number } }> }>;
+      };
+      expect(kept.revisions.find((item) => item.id === "moved")?.evidence[0]?.locator.start_line).toBe(2);
+      // A "}" recurs, so a shifted brace cannot prove the cited line is unchanged.
+      expect(kept.revisions.find((item) => item.id === "generic")?.reopened).toBe(true);
+
+      writeFileSync(join(code, "limits.md"), "export const limit = 9;\n", "utf8");
+      await runCliInDir(projectRoot, ["run", "capture:file:code", "--format", "json"]);
+      const changed = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--format", "json"])) as { revisions: Array<{ id: string; reopened?: boolean }> };
+      expect(changed.revisions.find((item) => item.id === "moved")?.reopened).toBe(true);
+      const gone = await invokeCliInDir(projectRoot, ["review", "original-revisions", "--decide", "generic=kept", "--format", "json"]);
+      expect(gone.status).not.toBe(0);
+      expect(gone.stderr).toContain("no longer exist");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("repeated ids in one proposal input are rejected", async () => {
+    const { root, projectRoot } = await workspaceWithCode();
+    try {
+      const item = { id: "dup", article: "a.md", reason: "wrong", revised: "x",
+        original: { source_ref: "file:code", locator: { path: "limits.md", start_line: 1, end_line: 1 } },
+        evidence: [{ source_ref: "file:code", locator: { path: "limits.md", start_line: 1, end_line: 1 } }] };
+      const file = join(projectRoot, "proposals.yaml");
+      writeFileSync(file, YAML.stringify({ revisions: [item, item] }), "utf8");
+      const result = await invokeCliInDir(projectRoot, ["review", "original-revisions", "--propose", file, "--format", "json"]);
+      expect(result.stderr).toContain("appears more than once");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

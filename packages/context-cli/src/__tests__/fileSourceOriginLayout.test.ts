@@ -12,6 +12,7 @@ import {
   makeTmp,
   runCliInDir,
   writeCaptureProjectEntry,
+  writeMdxCaptureProjectEntry,
 } from "./projectCaptureFileV062Helpers.js";
 
 interface CaptureOutput {
@@ -334,6 +335,23 @@ describe("file source layout, gaps and versioned origins", () => {
       const registry = await loadSourcesRegistry({ rootDir: projectRoot });
       const site = siteReferenceSource({ source_ref: "file:kb", locator: { path: "a.md", start_line: 1, end_line: 2 } } as Parameters<typeof siteReferenceSource>[0], registry);
       expect(site.href).toBe("https://example.com/kb/detail");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("links to route metadata in a tree snapshot do not keep it stale", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      const site = join(projectRoot, "..", "mdx-site");
+      await mkdir(site, { recursive: true });
+      writeFileSync(join(site, "_meta.json"), JSON.stringify({ index: "Home" }), "utf8");
+      writeFileSync(join(site, "index.md"), "# Home\n\nSee [routes](_meta.json).\n", "utf8");
+      await runCliInDir(projectRoot, ["source", "add", "file", "site", "--local", site, "--layout", "tree", "--format", "json"]);
+      writeMdxCaptureProjectEntry(projectRoot, "site");
+      await runCliInDir(projectRoot, ["run", "capture:file:site", "--format", "json"]);
+      const ensure = JSON.parse(await runCliInDir(projectRoot, ["source", "ensure", "site", "--format", "json"])) as Array<Record<string, unknown>>;
+      expect(ensure[0]).toMatchObject({ snapshotReady: true });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

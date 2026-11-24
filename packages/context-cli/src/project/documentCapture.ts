@@ -319,10 +319,12 @@ export function fileSourceIncludeMismatchDiagnostic(input: {
     if (registration !== null) return registration;
   }
   if (input.projectRoot !== undefined && input.materializedAt !== undefined) {
+    const manifestRelative = toPosixPath(relative(input.materializedAt, sourceManifestPath(input.source)));
     return fileSnapshotLinkedAssetMismatchDiagnostic({
       projectRoot: input.projectRoot,
       materializedAt: input.materializedAt,
       manifest: input.manifest,
+      ...(!manifestRelative.startsWith("..") ? { manifestPath: manifestRelative } : {}),
     });
   }
   return null;
@@ -792,15 +794,16 @@ async function runCaptureFilePhaseUnlocked(input: {
 }
 
 /**
- * Snapshot paths a linked asset must not take: captured documents and metadata,
- * and the snapshot manifest. A document at the manifest path cannot be captured.
+ * Snapshot paths a linked asset must not take: captured documents and the
+ * snapshot manifest. A document at the manifest path cannot be captured.
  */
 function snapshotReservedPaths(
   materializedAt: string,
   manifestPath: string,
   files: { documents: readonly SourceCaptureFile[]; metadata: readonly SourceCaptureFile[] },
 ): Set<string> {
-  const reserved = new Set([...files.documents, ...files.metadata].map((file) => file.snapshotPath));
+  // Route metadata linked from a document is captured as an ordinary asset (same bytes).
+  const reserved = new Set(files.documents.map((file) => file.snapshotPath));
   const manifestRelative = toPosixPath(relative(materializedAt, manifestPath));
   if (!manifestRelative.startsWith("..")) {
     const clash = [...files.documents, ...files.metadata].find((file) => file.snapshotPath === manifestRelative);

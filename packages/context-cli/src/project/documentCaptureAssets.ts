@@ -164,9 +164,12 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
   projectRoot: string;
   materializedAt: string;
   manifest: DocumentSnapshotManifest;
+  /** Manifest location relative to the snapshot folder, when it lies inside it. */
+  manifestPath?: string;
 }): string | null {
   const layout = input.manifest.metadata?.capture?.layout ?? "flat";
-  const documentPaths = new Set(input.manifest.files.map((file) => file.path));
+  // The same paths capture reserves: documents and the manifest.
+  const documentPaths = new Set([...input.manifest.files.map((file) => file.path), input.manifestPath ?? "manifest.json"]);
   const gapPaths = new Set((input.manifest.metadata?.capture?.assetGaps ?? []).flatMap((gap) => gap.path === undefined ? [] : [gap.path]));
   const captured = new Set((input.manifest.assets ?? [])
     .filter((asset) => asset.source?.kind === "file")
@@ -181,7 +184,7 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
     }
     for (const link of markdownInlineLinks(markdown)) {
       const path = linkedAssetSnapshotPath(file.path, link.target, layout);
-      if (path === undefined || documentPaths.has(path) || path === "manifest.json") continue;
+      if (path === undefined || documentPaths.has(path)) continue;
       // A recorded gap excuses only a path that was not captured through another link.
       if (gapPaths.has(path) && !captured.has(path)) continue;
       expected.add(path);
