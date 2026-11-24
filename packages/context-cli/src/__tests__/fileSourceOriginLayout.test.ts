@@ -298,6 +298,12 @@ describe("file source layout, gaps and versioned origins", () => {
       expect((await ensure()).diagnostics?.join(" ")).toContain("snapshot layout is stale");
       await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--layout", "flat", "--document-ext", ".md", "--document-ext", ".json", "--format", "json"]);
       expect((await ensure()).diagnostics?.join(" ")).toContain("snapshot document extensions are stale");
+      // Capturing with JSON, then removing the setting, is stale again.
+      await runCliInDir(projectRoot, ["run", "capture:file:kb", "--format", "json"]);
+      expect((await ensure()).snapshotReady).toBe(true);
+      const registryPath = join(projectRoot, "sources", "file", "index.yaml");
+      writeFileSync(registryPath, readFileSync(registryPath, "utf8").replace(/\n\s*documentExtensions:\n(\s+- [^\n]+\n)+/u, "\n"), "utf8");
+      expect((await ensure()).diagnostics?.join(" ")).toContain("registry uses the default");
 
       await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--freeze", "--format", "json"]);
       expect((await ensure()).snapshotReady).toBe(true);

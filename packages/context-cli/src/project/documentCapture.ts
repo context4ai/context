@@ -340,12 +340,17 @@ function fileSourceRegistrationMismatch(source: FileSourceRegistryEntry, manifes
   const layout = source.layout ?? "flat";
   const capturedLayout = manifest.metadata?.capture?.layout ?? "flat";
   if (layout !== capturedLayout) return `snapshot layout is stale: captured ${capturedLayout}; registry ${layout}`;
+  const captured = normalizeDocumentExtensions(manifest.metadata?.capture?.documentExtensions ?? [...DEFAULT_DOCUMENT_FILE_EXTENSIONS]);
   if (source.documentExtensions !== undefined) {
     const current = normalizeDocumentExtensions(source.documentExtensions);
-    const captured = normalizeDocumentExtensions(manifest.metadata?.capture?.documentExtensions ?? [...DEFAULT_DOCUMENT_FILE_EXTENSIONS]);
     if (current.join(",") !== captured.join(",")) {
       return `snapshot document extensions are stale: captured ${captured.join(", ")}; registry ${current.join(", ")}`;
     }
+  } else {
+    // Without a registry setting the capture phase decides (.md, or .md/.mdx for document
+    // sites); other extensions can only come from a removed --document-ext setting.
+    const extra = captured.filter((extension) => extension !== ".md" && extension !== ".mdx");
+    if (extra.length > 0) return `snapshot document extensions are stale: captured ${captured.join(", ")}; registry uses the default`;
   }
   return null;
 }
