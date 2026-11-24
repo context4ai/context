@@ -85,15 +85,34 @@ export async function decideOriginalRevisions(
       next: "context review original-revisions --format json",
     });
   }
-  const next = revisions.map((revision) => {
+  // Keeping the original settles it against the code as it is now, so later
+  // checks reopen it only when that code changes again.
+  const read = [...decisions.values()].some((decision) => decision.status === "kept")
+    ? await registeredArticleSourceReader(projectRoot)
+    : undefined;
+  const next: OriginalRevision[] = [];
+  for (const revision of revisions) {
     const decision = decisions.get(revision.id);
-    if (decision === undefined) return revision;
-    return {
-      ...revision,
-      status: decision.status,
-      ...(decision.upstream !== undefined ? { upstream: decision.upstream } : {}),
-    };
-  });
+    if (decision === undefined) {
+      next.push(revision);
+      continue;
+    }
+    const rest: OriginalRevision = { ...revision };
+    delete rest.upstream;
+    const upstream = decision.upstream ?? (decision.status === "upstream" ? revision.upstream : undefined);
+    let evidence = revision.evidence;
+    if (decision.status === "kept" && read !== undefined) {
+      evidence = [];
+      for (const item of revision.evidence) {
+        try {
+          evidence.push({ ...item, content_digest: articleSourceRegionDigest(await read(item.source_ref, item.locator.path), item.locator) });
+        } catch {
+          evidence.push(item);
+        }
+      }
+    }
+    next.push({ ...rest, evidence, status: decision.status, ...(upstream !== undefined ? { upstream } : {}) });
+  }
   await atomicWriteFile(join(projectRoot, ORIGINAL_REVISIONS_PATH), YAML.stringify({ revisions: next }));
   return next;
 }
@@ -109,7 +128,7 @@ export interface OriginalRevisionView extends OriginalRevision {
 export async function inspectOriginalRevisions(projectRoot: string): Promise<OriginalRevisionView[]> {
   const revisions = await readOriginalRevisions(projectRoot);
   if (!revisions.some((revision) => revision.status === "kept")) return revisions;
-  const read = await registeredArticleSourceReader(projectRoot);
+  const read = await registeredArticleSourceReader(projectRoot).catch(() => undefined);
   const views: OriginalRevisionView[] = [];
   for (const revision of revisions) {
     if (revision.status !== "kept") {
@@ -120,6 +139,7 @@ export async function inspectOriginalRevisions(projectRoot: string): Promise<Ori
     let unreadable = false;
     for (const evidence of revision.evidence) {
       try {
+        if (read === undefined) throw new Error("source reader unavailable");
         const current = await read(evidence.source_ref, evidence.locator.path);
         if (articleSourceRegionDigest(current, evidence.locator) !== evidence.content_digest) changed = true;
       } catch {

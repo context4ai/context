@@ -69,6 +69,14 @@ describe("revisions to pages kept as written", () => {
       expect(reopened.revisions.find((item) => item.id === "limit-kept")?.reopened).toBe(true);
       expect(reopened.next_action).toBeDefined();
 
+      // Deciding "kept" again settles it against the current code.
+      const settled = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--decide", "limit-kept=kept", "--format", "json"])) as { reopened: number };
+      expect(settled.reopened).toBe(0);
+      const local = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--decide", "limit-proposed=local", "--format", "json"])) as {
+        revisions: Array<{ id: string; upstream?: string }>;
+      };
+      expect(local.revisions.find((item) => item.id === "limit-proposed")?.upstream).toBeUndefined();
+
       const bad = await invokeCliInDir(projectRoot, ["review", "original-revisions", "--decide", "missing=local", "--format", "json"]);
       expect(bad.status).not.toBe(0);
       expect(bad.stderr).toContain("Unknown original revision id");

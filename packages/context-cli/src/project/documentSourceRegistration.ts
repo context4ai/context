@@ -339,7 +339,8 @@ export async function addFileSourceUnlocked(input: AddFileSourceInput): Promise<
       flag: "--local",
     });
   }
-  const local = await normalizeFileSourceLocal(input.projectRoot, requestedLocal);
+  // An omitted --local keeps the registered path exactly, without resolving it again.
+  const local = input.local === undefined ? requestedLocal : await normalizeFileSourceLocal(input.projectRoot, requestedLocal);
   if (registry.repos.some((source) => source.name === input.name || source.id === input.name) ||
     registry.larks.some((source) => source.name === input.name || source.id === input.name)) {
     throw new ContextError(ExitCode.UserError, `source identifier already exists outside file registry: ${input.name}`, {

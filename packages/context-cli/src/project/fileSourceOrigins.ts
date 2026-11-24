@@ -36,8 +36,8 @@ const gitOrigin: FileSourceOriginAdapter = {
   kind: "git",
   identity: "id is the repository remote; version is the full commit",
   installCommand: (origin, target) =>
-    `git clone --filter=blob:none --no-checkout ${quote(origin.id)} ${quote(target)} && git -C ${quote(target)} checkout --detach ${quote(origin.version)} && rm -rf ${quote(`${target}/.git`)}`,
-  versionsCommand: (origin) => `git ls-remote ${quote(origin.id)} HEAD`,
+    `git clone --filter=blob:none --no-checkout -- ${quote(origin.id)} ${quote(target)} && git -C ${quote(target)} checkout --detach ${quote(origin.version)} -- && rm -rf ${quote(`${target}/.git`)}`,
+  versionsCommand: (origin) => `git ls-remote -- ${quote(origin.id)} HEAD`,
   fileUrl: (origin, path) => {
     const base = webBase(origin.id);
     return base === undefined ? undefined : `${base}/blob/${encodeURIComponent(origin.version)}/${encodedPath(path)}`;

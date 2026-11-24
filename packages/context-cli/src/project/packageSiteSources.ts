@@ -79,7 +79,11 @@ function fileOriginPath(file: SourcesRegistry["files"][number], snapshotPath: st
   const parts = file.local.split("/");
   const versionIndex = parts.findIndex(part => part.endsWith(`@${file.origin!.version}`));
   if (versionIndex < 0) return undefined;
-  return [...parts.slice(versionIndex + 1), snapshotPath.slice(modulePrefix.length)].filter(Boolean).join("/");
+  const within = parts.slice(versionIndex + 1);
+  // A single registered file captures as its own name; the local path already names it.
+  const relative = snapshotPath.slice(modulePrefix.length);
+  if (within.length > 0 && within.at(-1) === relative && /\.[^/]+$/u.test(relative)) return within.join("/");
+  return [...within, relative].filter(Boolean).join("/");
 }
 
 /** Project recorded provenance only; do not infer source files from prose or titles. */

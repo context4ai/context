@@ -480,7 +480,9 @@ context source add file <name> --layout tree \
   the default; add `--document-ext .json --document-ext .yaml` to cite small
   structured files as text. Images are kept as assets, not citations. A missing,
   oversized (over 5 MB), conflicting or out-of-source image is reported in
-  `asset_gaps` and stays a link; capture continues.
+  `asset_gaps` and stays a link; capture continues. Choose the layout before
+  articles cite the source: switching it later moves snapshot paths, so the
+  citations need the same treatment as a renamed file.
 - **Upgrade.** Compare the available version with `origin.version` (the
   registration output may give a `versions_command`). Same version: skip. A
   newer one: install it into a new `<name>@<new>` directory, rerun `source add

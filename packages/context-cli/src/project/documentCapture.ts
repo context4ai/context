@@ -636,11 +636,14 @@ async function runCaptureFilePhaseUnlocked(input: {
     routeHints: routeMetadata.routeHints,
   });
   const layout = fileSourceLayout(entry);
+  const manifestPath = sourceManifestPath(entry);
+  const reservedPaths = snapshotReservedPaths(entry.materializedAt, manifestPath, files);
   const { assets: linkedAssets, gaps: assetGaps } = await readLinkedCaptureAssets({
     files: files.documents,
     localRoot: resolve(input.projectRoot, entry.local),
     sourceName: resolved.sourceName,
     layout,
+    reservedPaths,
   });
   const { snapshotFiles, documents } = documentSnapshot;
   const { metadataFiles } = routeMetadata;
@@ -651,7 +654,6 @@ async function runCaptureFilePhaseUnlocked(input: {
     documentSnapshot,
   });
 
-  const manifestPath = sourceManifestPath(entry);
   const manifestAbsPath = join(input.projectRoot, manifestPath);
   const materializedAt = entry.materializedAt;
   const materializedAtAbsPath = join(input.projectRoot, materializedAt);
@@ -762,6 +764,30 @@ async function runCaptureFilePhaseUnlocked(input: {
     ],
     next_action: workspaceRouteReevaluation(input.phase.id),
   };
+}
+
+/**
+ * Snapshot paths a linked asset must not take: captured documents and metadata,
+ * and the snapshot manifest. A document at the manifest path cannot be captured.
+ */
+function snapshotReservedPaths(
+  materializedAt: string,
+  manifestPath: string,
+  files: { documents: readonly SourceCaptureFile[]; metadata: readonly SourceCaptureFile[] },
+): Set<string> {
+  const reserved = new Set([...files.documents, ...files.metadata].map((file) => file.snapshotPath));
+  const manifestRelative = toPosixPath(relative(materializedAt, manifestPath));
+  if (!manifestRelative.startsWith("..")) {
+    const clash = [...files.documents, ...files.metadata].find((file) => file.snapshotPath === manifestRelative);
+    if (clash !== undefined) {
+      throw runtimeError(`file source document ${clash.sourcePath} would overwrite the snapshot manifest ${manifestPath}`, {
+        path: clash.sourcePath,
+        next: "Exclude that file with --include or register its folder as a module, then rerun capture",
+      });
+    }
+    reserved.add(manifestRelative);
+  }
+  return reserved;
 }
 
 function fileSourceLayout(entry: FileSourceRegistryEntry): FileSourceLayout {

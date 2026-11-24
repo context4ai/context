@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { fileSourceOriginInstallHint } from "../project/fileSourceOrigins.js";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { initContextProject } from "../project/workspace.js";
@@ -150,6 +151,13 @@ describe("file source layout, gaps and versioned origins", () => {
         href: "https://example.com/team/handbook/blob/abc1234/docs/setup/install.md#L1-L3",
       });
 
+      const single = siteReferenceSource({
+        source_ref: "file:handbook",
+        locator: { path: "install.md", start_line: 2, end_line: 2 },
+      } as Parameters<typeof siteReferenceSource>[0], { ...registry, files: registry.files.map((file) =>
+        ({ ...file, local: "sources/git/handbook@abc1234/docs/setup/install.md" })) });
+      expect(single.href).toBe("https://example.com/team/handbook/blob/abc1234/docs/setup/install.md#L2-L2");
+
       // Upgrade: a new version directory, same registration otherwise.
       const next = join(projectRoot, "sources", "git", "handbook@def5678", "docs", "setup");
       await mkdir(next, { recursive: true });
@@ -192,6 +200,51 @@ describe("file source layout, gaps and versioned origins", () => {
       expect(existsSync(join(projectRoot, "sources", "file", "archive", "old.md"))).toBe(true);
       const ensure = JSON.parse(await runCliInDir(projectRoot, ["source", "ensure", "archive", "--format", "json"])) as Array<Record<string, unknown>>;
       expect(ensure[0]).toMatchObject({ snapshotReady: true });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("origins starting with a dash are rejected and git hints end options before arguments", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      const rejected = await invokeCliInDir(projectRoot, [
+        "source", "add", "file", "evil", "--local", "sources/git/evil@v1",
+        "--origin-kind", "git", "--origin-id=--upload-pack=touch /tmp/x", "--origin-version", "v1", "--format", "json",
+      ]);
+      expect(rejected.status).not.toBe(0);
+      expect(rejected.stderr).toContain("invalid origin.id");
+      const hint = fileSourceOriginInstallHint({ kind: "git", id: "https://example.com/a.git", version: "abc" }, "sources/git/a@abc");
+      expect(hint).toContain("--no-checkout -- https://example.com/a.git sources/git/a@abc");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("tree assets cannot escape through symbolic links, skip documents and never overwrite the manifest", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      const wiki = join(projectRoot, "..", "wiki-links");
+      await mkdir(wiki, { recursive: true });
+      const secret = join(projectRoot, "..", "secret.json");
+      writeFileSync(secret, "{\"token\": \"x\"}\n", "utf8");
+      symlinkSync(secret, join(wiki, "creds.json"));
+      writeFileSync(join(wiki, "rules.json"), "{\n  \"limit\": 3\n}\n", "utf8");
+      writeFileSync(join(wiki, "index.md"), "# Index\n\n[creds](creds.json) [rules](rules.json)\n", "utf8");
+      await runCliInDir(projectRoot, ["source", "add", "file", "links", "--local", wiki, "--layout", "tree",
+        "--document-ext", ".md", "--document-ext", ".json", "--format", "json"]);
+      writeCaptureProjectEntry(projectRoot, "links");
+      const output = JSON.parse(await runCliInDir(projectRoot, ["run", "capture:file:links", "--format", "json"])) as CaptureOutput;
+      expect(output.result.asset_gaps).toEqual([{ document: "index.md", target: "creds.json", reason: "outside" }]);
+      expect(existsSync(join(projectRoot, "sources", "file", "links", "creds.json"))).toBe(false);
+      const manifest = manifestFor(projectRoot, "links");
+      expect(manifest.files.map((file) => file.path)).toEqual(["index.md", "rules.json"]);
+      expect(manifest.assets ?? []).toEqual([]);
+
+      writeFileSync(join(wiki, "manifest.json"), "{}\n", "utf8");
+      const clash = await invokeCliInDir(projectRoot, ["run", "capture:file:links", "--format", "json"]);
+      expect(clash.status).not.toBe(0);
+      expect(clash.stderr).toContain("would overwrite the snapshot manifest");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

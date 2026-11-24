@@ -594,7 +594,10 @@ const assertFileSourceOrigin = (
   if (!FILE_SOURCE_ORIGIN_KIND_PATTERN.test(origin.kind) || RESERVED_FILE_SOURCE_ORIGIN_KINDS.includes(origin.kind)) {
     throw new TypeError(`file source "${name}" in ${registryPath} has invalid origin.kind: ${origin.kind}`);
   }
-  if (/[\s/\\]/u.test(origin.version) || origin.version === "." || origin.version === "..") {
+  if (origin.id.startsWith("-") || /[\r\n\0]/u.test(origin.id)) {
+    throw new TypeError(`file source "${name}" in ${registryPath} has invalid origin.id: ${origin.id}`);
+  }
+  if (/[\s/\\]/u.test(origin.version) || origin.version.startsWith("-") || origin.version === "." || origin.version === "..") {
     throw new TypeError(`file source "${name}" in ${registryPath} has invalid origin.version: ${origin.version}`);
   }
   if (local === undefined) {

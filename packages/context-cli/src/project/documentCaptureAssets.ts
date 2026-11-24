@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   computeDocumentContentHash,
@@ -86,10 +86,12 @@ export async function readLinkedCaptureAssets(input: {
   localRoot: string;
   sourceName: string;
   layout?: FileSourceLayout;
+  /** Snapshot paths already taken by documents or the manifest; links to them are not assets. */
+  reservedPaths?: ReadonlySet<string>;
 }): Promise<LinkedCaptureAssets> {
   const layout = input.layout ?? "flat";
   const rootStat = await stat(input.localRoot);
-  const boundaryRoot = rootStat.isFile() ? dirname(input.localRoot) : input.localRoot;
+  const boundaryRoot = await realpath(rootStat.isFile() ? dirname(input.localRoot) : input.localRoot);
   const bySnapshotPath = new Map<string, SourceCaptureAsset>();
   const gaps = new Map<string, DocumentCaptureAssetGap>();
   const addGap = (gap: DocumentCaptureAssetGap): void => {
@@ -109,19 +111,28 @@ export async function readLinkedCaptureAssets(input: {
         }
         continue;
       }
-      if (!isWithinPath(boundaryRoot, absolutePath)) {
+      if (input.reservedPaths?.has(snapshotPath) === true) continue;
+      let resolvedPath: string;
+      try {
+        // Resolve symbolic links so a link inside the source cannot copy a file from outside it.
+        resolvedPath = await realpath(absolutePath);
+      } catch {
+        addGap({ document: file.snapshotPath, target: link.target, path: snapshotPath, reason: "missing" });
+        continue;
+      }
+      if (!isWithinPath(boundaryRoot, resolvedPath)) {
         addGap({ document: file.snapshotPath, target: link.target, path: snapshotPath, reason: "outside" });
         continue;
       }
       let bytes: Uint8Array;
       try {
-        const assetStat = await stat(absolutePath);
+        const assetStat = await stat(resolvedPath);
         if (!assetStat.isFile()) throw new TypeError("asset target is not a file");
         if (assetStat.size > MAX_CAPTURE_ASSET_BYTES) {
           addGap({ document: file.snapshotPath, target: link.target, path: snapshotPath, reason: "too-large" });
           continue;
         }
-        bytes = await readFile(absolutePath);
+        bytes = await readFile(resolvedPath);
       } catch {
         addGap({ document: file.snapshotPath, target: link.target, path: snapshotPath, reason: "missing" });
         continue;
@@ -155,6 +166,7 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
   manifest: DocumentSnapshotManifest;
 }): string | null {
   const layout = input.manifest.metadata?.capture?.layout ?? "flat";
+  const documentPaths = new Set(input.manifest.files.map((file) => file.path));
   const gapPaths = new Set((input.manifest.metadata?.capture?.assetGaps ?? []).flatMap((gap) => gap.path === undefined ? [] : [gap.path]));
   const expected = new Set<string>();
   for (const file of input.manifest.files) {
@@ -166,7 +178,7 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
     }
     for (const link of markdownInlineLinks(markdown)) {
       const path = linkedAssetSnapshotPath(file.path, link.target, layout);
-      if (path !== undefined && !gapPaths.has(path)) expected.add(path);
+      if (path !== undefined && !gapPaths.has(path) && !documentPaths.has(path) && path !== "manifest.json") expected.add(path);
     }
   }
   const captured = new Set((input.manifest.assets ?? [])

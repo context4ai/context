@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { readFile, access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
+import { PRODUCTION_REQUIREMENTS_PATH } from "./productionRequirements.js";
 import { indexerProtocolDigest } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { safeProjectTarget } from "./durableMultiFileTransaction.js";
@@ -122,6 +123,17 @@ export function productionPlanMarkdown(stage: ProductionStage): string {
     ...productionSourceSummaryMarkdown(stage)].join("\n");
 }
 
+function preservedOriginalSources(requirements: string | undefined): Set<string> {
+  if (requirements === undefined) return new Set();
+  try {
+    const parsed = YAML.parse(requirements) as { requirements?: Array<{ preserve_original?: unknown; target_scope?: { targets?: Array<{ source_ref?: unknown }> } }> } | null;
+    return new Set((parsed?.requirements ?? []).filter(item => item.preserve_original === true)
+      .flatMap(item => item.target_scope?.targets ?? []).flatMap(target => typeof target.source_ref === "string" ? [target.source_ref] : []));
+  } catch {
+    return new Set();
+  }
+}
+
 /** Prepare directories before publishing issued state. A crash can leave an
  * unused projection, but cannot expose an issued task without its inputs. */
 export async function materializeProductionStage(input: {
@@ -143,6 +155,10 @@ export async function materializeProductionStage(input: {
     const write = async (path: string, content: string) => {
       if (await writeProductionProjection(input.projectRoot, path, content)) changed += 1;
     };
+    // Sources whose requirement keeps original pages as written; their tasks say so explicitly.
+    // Continuation must not reread shared bodies; the small requirements file is enough here.
+    const preservedSources = preservedOriginalSources(input.materials?.requirements
+      ?? await readOptional(input.projectRoot, PRODUCTION_REQUIREMENTS_PATH));
     if (input.materials) {
       await write(join(directory, "shared/requirements.md"), input.materials.requirements);
     } else if (dispatch.batches.length && !await hasReadableProjection(input.projectRoot, join(directory, "shared/requirements.md"))) {
@@ -226,6 +242,9 @@ export async function materializeProductionStage(input: {
             task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
             ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
               `Existing sections and references: ${join(taskRoot, "base-references.yaml")}`, ""] : []),
+            ...(task.sources.some(source => preservedSources.has(source.scope))
+              ? ["Keep the original page as written (preserve_original): keep its title, sections, order and wording; record contradictions with the code as proposals in src/original-revisions.yaml (see \"Pages kept as written\").", ""]
+              : []),
             `Shared requirements: ${join(directory, "shared/requirements.md")}`,
             `Relevant planned skills: ${join(directory, "indexer-usage.yaml")}`, ""].join("\n"));
           await write(join(taskRoot, "sources.md"), ["# Authorized sources", "",
