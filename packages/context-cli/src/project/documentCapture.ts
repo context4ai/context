@@ -301,7 +301,7 @@ export function fileSourceIncludeMismatchDiagnostic(input: {
   projectRoot?: string;
   materializedAt?: string;
 }): string | null {
-  if (input.source.include !== undefined) {
+  if (input.source.include !== undefined && input.source.frozen !== true) {
     const currentInclude = normalizeFileSourceIncludeForSnapshot(input.source.include);
     const capturedInclude = input.manifest.metadata?.capture?.include;
     if (capturedInclude === undefined) {
@@ -313,12 +313,37 @@ export function fileSourceIncludeMismatchDiagnostic(input: {
       return `snapshot include is stale: captured ${normalizedCaptured.join(", ")}; registry ${currentInclude.join(", ")}`;
     }
   }
+  // A frozen source keeps its snapshot whatever its registration says now.
+  if (input.source.frozen !== true) {
+    const registration = fileSourceRegistrationMismatch(input.source, input.manifest);
+    if (registration !== null) return registration;
+  }
   if (input.projectRoot !== undefined && input.materializedAt !== undefined) {
     return fileSnapshotLinkedAssetMismatchDiagnostic({
       projectRoot: input.projectRoot,
       materializedAt: input.materializedAt,
       manifest: input.manifest,
     });
+  }
+  return null;
+}
+
+/** Origin version, layout and document extensions the snapshot was captured with. */
+function fileSourceRegistrationMismatch(source: FileSourceRegistryEntry, manifest: DocumentSnapshotManifest): string | null {
+  if (source.origin !== undefined) {
+    const expected = fileSourceOriginRevision(source.origin);
+    const captured = manifest.metadata?.source?.revisionId;
+    if (captured !== expected) return `snapshot origin is stale: captured ${captured ?? "none"}; registry ${expected}`;
+  }
+  const layout = source.layout ?? "flat";
+  const capturedLayout = manifest.metadata?.capture?.layout ?? "flat";
+  if (layout !== capturedLayout) return `snapshot layout is stale: captured ${capturedLayout}; registry ${layout}`;
+  if (source.documentExtensions !== undefined) {
+    const current = normalizeDocumentExtensions(source.documentExtensions);
+    const captured = normalizeDocumentExtensions(manifest.metadata?.capture?.documentExtensions ?? [...DEFAULT_DOCUMENT_FILE_EXTENSIONS]);
+    if (current.join(",") !== captured.join(",")) {
+      return `snapshot document extensions are stale: captured ${captured.join(", ")}; registry ${current.join(", ")}`;
+    }
   }
   return null;
 }

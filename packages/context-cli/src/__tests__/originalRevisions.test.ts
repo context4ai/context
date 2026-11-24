@@ -7,6 +7,7 @@ import { articleSourceRegionDigest } from "@c4a/context";
 import { initContextProject } from "../project/workspace.js";
 import { validateProductionRequirements } from "../project/productionRequirements.js";
 import { originalRevisionReviewHtml } from "../project/originalRevisions.js";
+import { reviewNavigationChanges } from "../project/reviewSiteModel.js";
 import { invokeCliInDir, makeTmp, runCliInDir } from "./projectCaptureFileV062Helpers.js";
 
 const CODE = "export const limit = 5;\nexport const mode = \"fast\";\n";
@@ -93,5 +94,69 @@ describe("revisions to pages kept as written", () => {
     expect(html).toContain("&#60;b&#62;3&#60;/b&#62;");
     expect(html).toContain("The limit is 5.");
     expect(html).toContain("file:code limits.md L1-L1");
+  });
+
+  test("proposals are recorded by the CLI, moved code stays settled, unreadable evidence cannot be kept", async () => {
+    const { root, projectRoot, code } = await workspaceWithCode();
+    try {
+      const wiki = join(projectRoot, "..", "wiki");
+      await mkdir(wiki, { recursive: true });
+      writeFileSync(join(wiki, "limits.md"), "# Limits\n\nThe limit is 3.\n", "utf8");
+      await runCliInDir(projectRoot, ["source", "add", "file", "wiki", "--local", wiki, "--format", "json"]);
+      await runCliInDir(projectRoot, ["source", "add", "file", "wiki", "--configure", "--format", "json"]);
+      await runCliInDir(projectRoot, ["run", "capture:file:wiki", "--format", "json"]);
+      const proposals = join(projectRoot, ".tmp", "proposals.yaml");
+      await mkdir(join(projectRoot, ".tmp"), { recursive: true });
+      writeFileSync(proposals, YAML.stringify({ revisions: [{
+        id: "limit", article: "guides/limits.md", reason: "stale", revised: "The limit is 5.",
+        original: { source_ref: "file:wiki", locator: { path: "limits.md", start_line: 3, end_line: 3 } },
+        evidence: [{ source_ref: "file:code", locator: { path: "limits.md", start_line: 1, end_line: 1 } }],
+      }] }), "utf8");
+      const proposed = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--propose", proposals, "--format", "json"])) as {
+        proposed: number; revisions: Array<{ original: { text: string }; evidence: Array<{ content_digest: string }> }>;
+      };
+      expect(proposed.proposed).toBe(1);
+      expect(proposed.revisions[0]?.original.text).toBe("The limit is 3.");
+      expect(proposed.revisions[0]?.evidence[0]?.content_digest).toBe(articleSourceRegionDigest(CODE, { path: "limits.md", start_line: 1, end_line: 1 }));
+
+      const status = JSON.parse(await runCliInDir(projectRoot, ["status", "--format", "json"])) as { original_revisions?: { proposed: number } };
+      expect(status.original_revisions?.proposed).toBe(1);
+
+      await runCliInDir(projectRoot, ["review", "original-revisions", "--decide", "limit=kept", "--format", "json"]);
+      const again = await invokeCliInDir(projectRoot, ["review", "original-revisions", "--propose", proposals, "--format", "json"]);
+      expect(again.stderr).toContain("already decided");
+
+      // A new line above the cited code moves it without changing it.
+      writeFileSync(join(code, "limits.md"), `import x from "y";\n${CODE}`, "utf8");
+      await runCliInDir(projectRoot, ["run", "capture:file:code", "--format", "json"]);
+      const moved = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--format", "json"])) as { reopened: number };
+      expect(moved.reopened).toBe(0);
+
+      // Deleting the cited code (a shorter file) reopens the kept original.
+      writeFileSync(join(code, "limits.md"), "export const other = 1;\n", "utf8");
+      await runCliInDir(projectRoot, ["run", "capture:file:code", "--format", "json"]);
+      const deleted = JSON.parse(await runCliInDir(projectRoot, ["review", "original-revisions", "--format", "json"])) as {
+        reopened: number; revisions: Array<{ id: string; unreadable?: boolean }>;
+      };
+      expect(deleted.reopened).toBe(1);
+      expect(deleted.revisions.find((item) => item.id === "limit")?.unreadable).toBeUndefined();
+
+      const stored = YAML.parse(readFileSync(join(projectRoot, "src", "original-revisions.yaml"), "utf8")) as { revisions: Array<Record<string, unknown>> };
+      stored.revisions.push({ ...revision("gone", "proposed", `sha256:${"b".repeat(64)}`),
+        evidence: [{ source_ref: "file:missing", locator: { path: "x.md", start_line: 1, end_line: 1 }, content_digest: `sha256:${"b".repeat(64)}` }] });
+      writeFileSync(join(projectRoot, "src", "original-revisions.yaml"), YAML.stringify(stored), "utf8");
+      const unreadable = await invokeCliInDir(projectRoot, ["review", "original-revisions", "--decide", "gone=kept", "--format", "json"]);
+      expect(unreadable.status).not.toBe(0);
+      expect(unreadable.stderr).toContain("is unreadable");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("review navigation changes report hiding and showing entries", () => {
+    const before = [{ key: "pkg", title: "Package only", parent: null }];
+    const after = [{ key: "pkg", title: "Package only", parent: null, hidden: true }];
+    expect(reviewNavigationChanges(before, after, [])).toEqual([{ key: "pkg", title: "Package only", changes: ["hidden"] }]);
+    expect(reviewNavigationChanges(after, before, [])).toEqual([{ key: "pkg", title: "Package only", changes: ["shown"] }]);
   });
 });

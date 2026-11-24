@@ -603,14 +603,28 @@ const assertFileSourceOrigin = (
   if (local === undefined) {
     throw new TypeError(`file source "${name}" in ${registryPath} with an origin needs local: ${fileSourceOriginInstallRoot(origin.kind)}/<name>@${origin.version}`);
   }
-  const normalized = local.replaceAll("\\", "/");
-  const root = `${fileSourceOriginInstallRoot(origin.kind)}/`;
-  const versionDir = normalized.split("/").find((part) => part.endsWith(`@${origin.version}`));
-  if (!normalized.startsWith(root) || versionDir === undefined) {
+  if (fileSourceOriginVersionRoot(origin, local) === undefined) {
     throw new TypeError(
-      `file source "${name}" in ${registryPath} must install origin ${origin.kind} under ${root}<name>@${origin.version}: ${local}`,
+      `file source "${name}" in ${registryPath} must install origin ${origin.kind} under ${fileSourceOriginInstallRoot(origin.kind)}/<name>@${origin.version}[/<subdir>] without . or .. segments: ${local}`,
     );
   }
+};
+
+const FILE_SOURCE_ORIGIN_DIR_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+
+/**
+ * The version directory `sources/<kind>/<name>@<version>` that a registered
+ * `local` path must start with, or undefined when the path does not have that
+ * shape (wrong root, empty name, `.`/`..`/empty segments).
+ */
+export const fileSourceOriginVersionRoot = (origin: FileSourceOrigin, local: string): string | undefined => {
+  const parts = local.replaceAll("\\", "/").split("/");
+  if (parts.some((part) => part.length === 0 || part === "." || part === "..")) return undefined;
+  if (parts.length < 3 || parts[0] !== "sources" || parts[1] !== origin.kind) return undefined;
+  const suffix = `@${origin.version}`;
+  const dir = parts[2]!;
+  if (!dir.endsWith(suffix) || !FILE_SOURCE_ORIGIN_DIR_NAME_PATTERN.test(dir.slice(0, -suffix.length))) return undefined;
+  return parts.slice(0, 3).join("/");
 };
 
 export const parseLarkSourcesRegistry = (

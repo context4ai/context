@@ -5,12 +5,15 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
-const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const [dir, out] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--")));
+const opt = (k, d) => { const eq = args.find((a) => a.startsWith(`${k}=`)); if (eq) return eq.slice(k.length + 1); const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+const [dir, out] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && !args[i - 1].includes("=")));
 if (!dir || !out) { console.error("usage: node build.mjs <chapters-dir> <out.html> [--title T] [--subtitle S] [--labels file]"); process.exit(2); }
 const LABELS = { add: "added", mod: "revised", dir: "new section", keep: "kept unchanged", report: "Report", appendix: "Appendix", outline: "On this chapter", prev: "Previous", next: "Next", copied: "Copied", ...(opt("--labels") ? JSON.parse(readFileSync(opt("--labels"), "utf8")) : {}) };
 const C = { brand: "#2563eb", accent: "#00bec8", ok: "#16a34a", warn: "#d97706", bad: "#dc2626", gray: "#9ca3af", text: "#161e2e", muted: "#646b7c", border: "#e7e9ef" };
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const unesc = (s) => String(s).replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" })[e]);
+// Links may only be web, mail, in-page or relative; anything else (javascript:, data:) stays plain text.
+const safeUrl = (u) => { const raw = unesc(u).replace(/[\u0000-\u0020]/g, ""); const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(raw); return !scheme || ["http", "https", "mailto"].includes(scheme[1].toLowerCase()) ? u : null; };
 
 // ---------- inline ----------
 const PATH = /^(?:[\p{L}\p{N}_@.+\-]+\/)+(?:[\p{L}\p{N}_@.+\-*]+(?::\d+(?:-\d+)?)?)?$/u;
@@ -20,7 +23,7 @@ function inline(t) {
   t = t.replace(/`([^`]+)`/g, (_, c) => { codes.push(PATH.test(c) ? `<span class="pc" data-p="${esc(c)}" title="${esc(c)}">${esc(shortPath(c))}</span>` : `<code>${esc(c)}</code>`); return `\u0000${codes.length - 1}\u0000`; });
   t = esc(t)
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, x, u) => `<a href="${u}">${x}</a>`);
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, x, u) => { const safe = safeUrl(u); return safe === null ? x : `<a href="${safe}">${x}</a>`; });
   return t.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[+i]);
 }
 
@@ -35,14 +38,23 @@ function tree(src) {
   }).join("")}</pre>`;
 }
 function chart(src, where) {
-  let d; try { d = JSON.parse(src); } catch (e) { throw new Error(`${where}: invalid chart JSON (${e.message})`); } const pal = d.colors || [C.ok, C.warn, C.bad, C.gray, C.brand, C.accent];
+  let d; try { d = JSON.parse(src); } catch (e) { throw new Error(`${where}: invalid chart JSON (${e.message})`); } const COLOR = /^#[0-9a-fA-F]{3,8}$/;
+  const color = (c, f) => { if (typeof c !== "string" || !COLOR.test(c)) throw new Error(`${where}: ${f} must be a #rgb or #rrggbb colour`); return c; };
+  const num = (v, f) => { if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`${where}: ${f} must be a finite number`); return v; };
+  for (const k of ["max", "xmax", "ymax"]) if (d[k] !== undefined) num(d[k], k);
+  (d.values || []).forEach((row, i) => row.forEach((v, j) => num(v, `values[${i}][${j}]`)));
+  (d.rows || []).forEach((r, i) => (Array.isArray(r.values) ? r.values : []).forEach((v, j) => num(v, `rows[${i}].values[${j}]`)));
+  (d.points || []).forEach((p, i) => { num(p.x, `points[${i}].x`); num(p.y, `points[${i}].y`); if (p.color !== undefined) color(p.color, `points[${i}].color`); });
+  const pal = (d.colors || [C.ok, C.warn, C.bad, C.gray, C.brand, C.accent]).map((c, i) => color(c, `colors[${i}]`));
+  if ((d.type === "matrix" || d.type === undefined || d.type === "bar") && !(d.rows || []).length) throw new Error(`${where}: chart needs at least one row`);
+  if (d.type === "scatter" && !(d.points || []).length) throw new Error(`${where}: scatter needs at least one point`);
   if (d.type === "matrix") {
     const W = 160 + d.columns.length * 112, H = 50 + d.rows.length * 38;
     let s = `<svg viewBox="0 0 ${W} ${H}">`;
     d.columns.forEach((c, j) => { s += `<text x="${160 + j * 112 + 56}" y="22" font-size="11" text-anchor="middle" fill="${C.muted}">${esc(c)}</text>`; });
     const rec = new Set((d.recommend || []).map(([r, c]) => `${r},${c}`));
     d.rows.forEach((r, i) => { const mark = (v, j) => d.recommend ? rec.has(`${i},${j}`) : v === Math.max(...d.values[i]); s += `<text x="150" y="${61 + i * 38}" font-size="12" text-anchor="end">${esc(r)}</text>`;
-      d.values[i].forEach((v, j) => { const op = 0.15 + 0.85 * v / (d.max || 5); s += `<rect x="${164 + j * 112}" y="${40 + i * 38}" width="104" height="32" rx="4" fill="${C.brand}" fill-opacity="${op.toFixed(2)}" ${mark(v, j) ? `stroke="${C.text}" stroke-width="2"` : ""}/><text x="${216 + j * 112}" y="${61 + i * 38}" font-size="12" text-anchor="middle" fill="${op > 0.6 ? "#fff" : C.text}" font-weight="${mark(v, j) ? 700 : 400}">${v}</text>`; }); });
+      d.values[i].forEach((v, j) => { const op = 0.15 + 0.85 * v / ((d.max ?? 5) || 1); s += `<rect x="${164 + j * 112}" y="${40 + i * 38}" width="104" height="32" rx="4" fill="${C.brand}" fill-opacity="${op.toFixed(2)}" ${mark(v, j) ? `stroke="${C.text}" stroke-width="2"` : ""}/><text x="${216 + j * 112}" y="${61 + i * 38}" font-size="12" text-anchor="middle" fill="${op > 0.6 ? "#fff" : C.text}" font-weight="${mark(v, j) ? 700 : 400}">${v}</text>`; }); });
     return fig(s + "</svg>", d.title);
   }
   if (d.type === "scatter") {
@@ -52,7 +64,7 @@ function chart(src, where) {
     d.points.forEach((p) => { s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="8" fill="${p.color || C.brand}"/><text x="${X(p.x) + 13}" y="${Y(p.y) - 2}" font-size="12.5" font-weight="700">${esc(p.label)}</text>${p.note ? `<text x="${X(p.x) + 13}" y="${Y(p.y) + 14}" font-size="11" fill="${C.muted}">${esc(p.note)}</text>` : ""}`; });
     return fig(s + "</svg>", d.title);
   }
-  const max = d.max || Math.max(...d.rows.map((r) => r.values.reduce((a, b) => a + b, 0))); const W = 760, L = 130, R = 190, bw = W - L - R;
+  const max = (d.max ?? Math.max(...d.rows.map((r) => r.values.reduce((a, b) => a + b, 0)))) || 1; const W = 760, L = 130, R = 190, bw = W - L - R;
   let s = `<svg viewBox="0 0 ${W} ${d.rows.length * 34 + 20}">`;
   d.rows.forEach((r, i) => { const y = 10 + i * 34; let x = L; s += `<text x="${L - 10}" y="${y + 15}" font-size="12" text-anchor="end">${esc(r.label)}</text>`;
     r.values.forEach((v, j) => { const w = Math.max(v / max * bw, v > 0 ? 2 : 0); s += `<rect x="${x}" y="${y}" width="${w}" height="20" rx="3" fill="${pal[j % pal.length]}"/>`; if (d.segmentLabels && w > 22) s += `<text x="${x + w / 2}" y="${y + 14}" font-size="11" text-anchor="middle" fill="#fff">${v}</text>`; x += w; });
@@ -94,7 +106,7 @@ const files = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
 let nav = "", body = "", n = 0, inApp = false;
 try { files.forEach((f, k) => {
   const app = /^[A-Z][-_.]/.test(f); const id = `c${k + 1}`; let title = f;
-  const html = render(readFileSync(join(dir, f), "utf8"), f).replace(/<h([1-3])>(.*?)<\/h\1>/g, (m, lv, t) => { if (lv === "1") { title = t.replace(/<[^>]+>/g, ""); return m; } n++; return `<h${lv} id="${id}-${n}">${t}</h${lv}>`; });
+  const html = render(readFileSync(join(dir, f), "utf8"), f).replace(/<h([1-3])>(.*?)<\/h\1>/g, (m, lv, t) => { if (lv === "1") { title = unesc(t.replace(/<[^>]+>/g, "")); return m; } n++; return `<h${lv} id="${id}-${n}">${t}</h${lv}>`; });
   if (app && !inApp) { nav += `<div class="cap">${esc(LABELS.appendix)}</div>`; inApp = true; }
   nav += `<a href="#${id}" data-ch="${id}">${app ? "" : `<span>${k + 1}</span>`}${esc(title)}</a>`;
   body += `<article class="ch" id="${id}" data-title="${esc(title)}">${html}<div class="pager"></div></article>`;
@@ -117,13 +129,16 @@ figure{margin:18px 0;padding:14px;border:1px solid ${C.border};border-radius:10p
 @media(max-width:1200px){#out{display:none}main{margin-right:0}}@media(max-width:820px){#side{display:none}main{margin-left:0;padding:72px 16px}}
 </style></head><body><header><b>${esc(title)}</b><span>${esc(sub)}</span></header><nav id="side"><div class="cap">${esc(LABELS.report)}</div>${nav}</nav><main>${body}</main><aside id="out"></aside><script>
 const CH=[...document.querySelectorAll('.ch')],S=[...document.querySelectorAll('#side a')],O=document.getElementById('out');let H=[],A=[];
+const OUTLINE=${JSON.stringify(LABELS.outline).replace(/</g, "\\u003c")},PREV=${JSON.stringify(LABELS.prev).replace(/</g, "\\u003c")},NEXT=${JSON.stringify(LABELS.next).replace(/</g, "\\u003c")};
+// Build navigation from text nodes only; titles never become markup.
+function link(cls,id,small,text){const a=document.createElement('a');if(cls)a.className=cls;a.href='#'+id;if(small){const s=document.createElement('small');s.textContent=small;a.append(s)}a.append(document.createTextNode(text||''));return a}
 function show(h){let e=document.getElementById((h||'').slice(1)),t=null;if(!e||!e.classList.contains('ch')){t=e;e=e?e.closest('.ch'):CH[0]}
 CH.forEach(c=>c.classList.toggle('on',c===e));S.forEach(a=>a.classList.toggle('on',a.dataset.ch===e.id));H=[...e.querySelectorAll('h2,h3')];
-O.innerHTML=H.length?'<b style="font-size:13px">${esc(LABELS.outline)}</b>'+H.map(x=>'<a class="'+x.tagName.toLowerCase()+'" href="#'+x.id+'">'+x.textContent+'</a>').join(''):'';A=[...O.querySelectorAll('a')];
-const i=CH.indexOf(e),p=CH[i-1],n=CH[i+1];e.querySelector('.pager').innerHTML=(p?'<a href="#'+p.id+'"><small>${esc(LABELS.prev)}</small>'+p.dataset.title+'</a>':'<span></span>')+(n?'<a href="#'+n.id+'"><small>${esc(LABELS.next)}</small>'+n.dataset.title+'</a>':'<span></span>');
+O.replaceChildren();if(H.length){const b=document.createElement('b');b.style.fontSize='13px';b.textContent=OUTLINE;O.append(b,...H.map(x=>link(x.tagName.toLowerCase(),x.id,null,x.textContent)))}A=[...O.querySelectorAll('a')];
+const i=CH.indexOf(e),p=CH[i-1],n=CH[i+1],pg=e.querySelector('.pager');pg.replaceChildren(p?link('',p.id,PREV,p.dataset.title):document.createElement('span'),n?link('',n.id,NEXT,n.dataset.title):document.createElement('span'));
 t?t.scrollIntoView():scrollTo(0,0);spy()}
 function spy(){let k=-1;H.forEach((x,i)=>{if(x.getBoundingClientRect().top<100)k=i});A.forEach((a,i)=>a.classList.toggle('on',i===k))}
-document.addEventListener('click',e=>{const c=e.target.closest('.pc');if(!c)return;navigator.clipboard&&navigator.clipboard.writeText(c.dataset.p);const o=c.textContent;c.textContent='${esc(LABELS.copied)}';setTimeout(()=>c.textContent=o,900)});
+document.addEventListener('click',e=>{const c=e.target.closest('.pc');if(!c)return;navigator.clipboard&&navigator.clipboard.writeText(c.dataset.p);const o=c.textContent;c.textContent=${JSON.stringify(LABELS.copied).replace(/</g, "\\u003c")};setTimeout(()=>c.textContent=o,900)});
 addEventListener('hashchange',()=>show(location.hash));addEventListener('scroll',spy,{passive:true});show(location.hash);
 </script></body></html>`);
 console.log(`${out}: ${files.length} chapters`);

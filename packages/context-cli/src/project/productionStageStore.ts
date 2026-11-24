@@ -243,7 +243,7 @@ export async function materializeProductionStage(input: {
             ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
               `Existing sections and references: ${join(taskRoot, "base-references.yaml")}`, ""] : []),
             ...(task.sources.some(source => preservedSources.has(source.scope))
-              ? ["Keep the original page as written (preserve_original): keep its title, sections, order and wording; record contradictions with the code as proposals in src/original-revisions.yaml (see \"Pages kept as written\").", ""]
+              ? ["Keep the original page as written (preserve_original): keep its title, sections, order and wording; propose contradictions with the code through context review original-revisions --propose (see \"Pages kept as written\").", ""]
               : []),
             `Shared requirements: ${join(directory, "shared/requirements.md")}`,
             `Relevant planned skills: ${join(directory, "indexer-usage.yaml")}`, ""].join("\n"));

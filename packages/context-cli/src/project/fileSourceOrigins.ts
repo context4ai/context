@@ -1,4 +1,4 @@
-import type { FileSourceOrigin } from "@c4a/context";
+import { fileSourceOriginVersionRoot, type FileSourceOrigin } from "@c4a/context";
 
 /**
  * How one origin kind is installed and linked. Context never runs these commands: the
@@ -51,16 +51,22 @@ export function fileSourceOriginAdapter(kind: string): FileSourceOriginAdapter |
   return FILE_SOURCE_ORIGIN_ADAPTERS.find((adapter) => adapter.kind === kind);
 }
 
-/** Instruction for the Agent to (re)install an origin version into its registered directory. */
-export function fileSourceOriginInstallHint(origin: FileSourceOrigin, target: string): string {
+/**
+ * Instruction for the Agent to (re)install an origin version. The whole version
+ * is installed into its version directory; `local` may read a subfolder of it.
+ */
+export function fileSourceOriginInstallHint(origin: FileSourceOrigin, local: string): string {
+  const target = fileSourceOriginVersionRoot(origin, local) ?? local;
   const adapter = fileSourceOriginAdapter(origin.kind);
   const command = adapter?.installCommand?.(origin, target);
-  const base = `Install ${origin.kind} ${origin.id} version ${origin.version} as real files (no symlinks) into ${target}`;
+  const subfolder = target !== local ? ` (this source reads ${local})` : "";
+  const base = `Install ${origin.kind} ${origin.id} version ${origin.version} as real files (no symlinks) into ${target}${subfolder}`;
   return command === undefined ? `${base}, then rerun capture` : `${base}, for example: ${command}; then rerun capture`;
 }
 
+/** Web page of one file in this version, when the origin kind can address files. */
 export function fileSourceOriginFileUrl(origin: FileSourceOrigin, path: string): string | undefined {
-  return fileSourceOriginAdapter(origin.kind)?.fileUrl?.(origin, path) ?? origin.url;
+  return fileSourceOriginAdapter(origin.kind)?.fileUrl?.(origin, path);
 }
 
 /** Stable revision label stored as the snapshot's source revision. */
@@ -68,12 +74,12 @@ export function fileSourceOriginRevision(origin: FileSourceOrigin): string {
   return `${origin.kind}:${origin.id}@${origin.version}`;
 }
 
-export function fileSourceOriginView(origin: FileSourceOrigin, target: string): Record<string, unknown> {
+export function fileSourceOriginView(origin: FileSourceOrigin, local: string): Record<string, unknown> {
   const adapter = fileSourceOriginAdapter(origin.kind);
   const versions = adapter?.versionsCommand?.(origin);
   return {
     ...origin,
-    install_hint: fileSourceOriginInstallHint(origin, target),
+    install_hint: fileSourceOriginInstallHint(origin, local),
     ...(versions !== undefined ? { versions_command: versions } : {}),
     ...(adapter !== undefined ? { identity: adapter.identity } : {}),
   };

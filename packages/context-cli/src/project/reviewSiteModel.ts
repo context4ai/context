@@ -19,13 +19,15 @@ import type { ReviewCandidateView } from "./reviewShared.js";
 
 export type ReviewChange = "new" | "modify" | "unchanged";
 export interface ReviewSiteNode { key: string; parent: string | null; title: string; order: number; page?: string;
-  change: ReviewChange; oldTitle?: string; removed?: boolean }
+  change: ReviewChange; oldTitle?: string; removed?: boolean;
+  /** Kept out of website navigation (package only). */
+  hidden?: true }
 export interface ReviewSitePage { id: string; title: string; path: string; previousPath?: string; candidate_id?: string;
   change: ReviewChange; html: string; sources: string[]; revisionInstruction?: string; readVersion?: string }
 export interface ReviewNavigationTarget { id: string; title: string; path?: string }
 /** One changed menu entry against the navigation baseline, whether or not its
  * page is in this batch. */
-export interface ReviewNavigationChange { key: string; title: string; changes: Array<"added" | "removed" | "renamed" | "retargeted" | "moved">;
+export interface ReviewNavigationChange { key: string; title: string; changes: Array<"added" | "removed" | "renamed" | "retargeted" | "moved" | "hidden" | "shown">;
   old_title?: string; old_target?: ReviewNavigationTarget | null; new_target?: ReviewNavigationTarget | null }
 export interface ReviewSiteModel { storageScope: string; themeCss?: string; title: string;
   /** Interface language until the reader picks one; follows the workspace language. */
@@ -134,6 +136,7 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
     const page = n.target && pages.find(p => p.id === n.target?.artifact_ref);
     return { key: n.key, parent: n.parent ?? null, title: n.title, order: n.order ?? 0,
       ...(page ? { page: page.id } : {}), ...(old && old.title !== n.title ? { oldTitle: old.title } : {}),
+      ...(n.hidden === true ? { hidden: true as const } : {}),
       change: navigationBaseline === "empty" || !old ? "new" : JSON.stringify(old) !== JSON.stringify(n) ? "modify" : "unchanged" };
   });
   for (const n of baseline?.entries ?? []) if (!nodes.some(v => v.key === n.key)) nodes.push({ key: n.key, parent: n.parent ?? null,
@@ -153,7 +156,7 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
     ...(planned ? { retirement: { blockers: planned.blockers, retired: planned.retired.map(target => ({ path: target.path,
       title: pages.find(page => page.path === target.path)?.title ?? target.path, ...(target.replacement ? { replacement: target.replacement } : {}) })) } } : {}) };
 }
-type MapEntry = { key: string; title: string; parent?: string | null | undefined; target?: { artifact_ref: string } | null | undefined };
+type MapEntry = { key: string; title: string; parent?: string | null | undefined; hidden?: boolean | undefined; target?: { artifact_ref: string } | null | undefined };
 export function reviewNavigationChanges(before: readonly MapEntry[], after: readonly MapEntry[],
   pages: ReadonlyArray<Pick<ReviewSitePage, "id" | "title" | "path">>): ReviewNavigationChange[] {
   const target = (ref: string | undefined): ReviewNavigationTarget | null => {
@@ -169,6 +172,7 @@ export function reviewNavigationChanges(before: readonly MapEntry[], after: read
     if (old.title !== entry.title) changes.push("renamed");
     if (old.target?.artifact_ref !== entry.target?.artifact_ref) changes.push("retargeted");
     if ((old.parent ?? null) !== (entry.parent ?? null)) changes.push("moved");
+    if ((old.hidden === true) !== (entry.hidden === true)) changes.push(entry.hidden === true ? "hidden" : "shown");
     if (changes.length) result.push({ key: entry.key, title: entry.title, changes,
       ...(changes.includes("renamed") ? { old_title: old.title } : {}),
       ...(changes.includes("retargeted") ? { old_target: target(old.target?.artifact_ref), new_target: target(entry.target?.artifact_ref) } : {}) });

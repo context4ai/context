@@ -118,7 +118,9 @@ describe("file source layout, gaps and versioned origins", () => {
       };
       expect(missing.result).toMatchObject({ kind: "document.capture.warning", captured: false });
       expect(missing.result.warning.code).toBe("document.acquisition-unavailable");
-      expect(missing.result.warning.next).toContain("into sources/git/handbook@abc1234/docs");
+      // The whole version installs into its version directory; the source reads a subfolder.
+      expect(missing.result.warning.next).toContain("into sources/git/handbook@abc1234 (this source reads sources/git/handbook@abc1234/docs)");
+      expect(missing.result.warning.next).toContain("--no-checkout -- https://example.com/team/handbook.git sources/git/handbook@abc1234 ");
       expect(missing.result.warning.next).toContain("git clone");
 
       await mkdir(join(install, "docs", "setup"), { recursive: true });
@@ -245,6 +247,93 @@ describe("file source layout, gaps and versioned origins", () => {
       const clash = await invokeCliInDir(projectRoot, ["run", "capture:file:links", "--format", "json"]);
       expect(clash.status).not.toBe(0);
       expect(clash.stderr).toContain("would overwrite the snapshot manifest");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("origin install paths must be sources/<kind>/<name>@<version> without traversal", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      for (const local of ["sources/git/../../outside/evil@v1", "sources/git/@v1", "sources/other/x@v1", "sources/git/a/b@v1"]) {
+        const rejected = await invokeCliInDir(projectRoot, [
+          "source", "add", "file", "evil", "--local", local,
+          "--origin-kind", "git", "--origin-id", "https://example.com/a.git", "--origin-version", "v1", "--format", "json",
+        ]);
+        expect(rejected.status).not.toBe(0);
+      }
+      const accepted = await invokeCliInDir(projectRoot, [
+        "source", "add", "file", "ok", "--local", "sources/git/a@v1/docs/guides",
+        "--origin-kind", "git", "--origin-id", "https://example.com/a.git", "--origin-version", "v1", "--format", "json",
+      ]);
+      expect(accepted.status).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("changing the origin version, layout or document extensions makes the snapshot stale unless frozen", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      for (const version of ["v1", "v2"]) {
+        await mkdir(join(projectRoot, "sources", "git", `kb@${version}`), { recursive: true });
+        writeFileSync(join(projectRoot, "sources", "git", `kb@${version}`, "a.md"), `# A ${version}\n`, "utf8");
+      }
+      writeFileSync(join(projectRoot, "sources", "git", "kb@v1", "b.json"), "{}\n", "utf8");
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--local", "sources/git/kb@v1",
+        "--origin-kind", "git", "--origin-id", "https://example.com/kb.git", "--origin-version", "v1", "--format", "json"]);
+      writeCaptureProjectEntry(projectRoot, "kb");
+      await runCliInDir(projectRoot, ["run", "capture:file:kb", "--format", "json"]);
+      const ensure = async () => (JSON.parse(await runCliInDir(projectRoot, ["source", "ensure", "kb", "--format", "json"])) as Array<{ snapshotReady: boolean; diagnostics?: string[] }>)[0]!;
+      expect((await ensure()).snapshotReady).toBe(true);
+
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--local", "sources/git/kb@v2", "--origin-version", "v2", "--format", "json"]);
+      expect(await ensure()).toMatchObject({ snapshotReady: false });
+      expect((await ensure()).diagnostics?.join(" ")).toContain("snapshot origin is stale");
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--local", "sources/git/kb@v1", "--origin-version", "v1", "--format", "json"]);
+      expect((await ensure()).snapshotReady).toBe(true);
+
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--layout", "tree", "--format", "json"]);
+      expect((await ensure()).diagnostics?.join(" ")).toContain("snapshot layout is stale");
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--layout", "flat", "--document-ext", ".md", "--document-ext", ".json", "--format", "json"]);
+      expect((await ensure()).diagnostics?.join(" ")).toContain("snapshot document extensions are stale");
+
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--freeze", "--format", "json"]);
+      expect((await ensure()).snapshotReady).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a gap path that another link captured does not keep the snapshot stale", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      const docs = join(projectRoot, "..", "flat-docs");
+      await mkdir(join(docs, "one", "assets"), { recursive: true });
+      await mkdir(join(docs, "two"), { recursive: true });
+      writeFileSync(join(docs, "one", "assets", "p.png"), new Uint8Array([1]));
+      writeFileSync(join(docs, "one", "one.md"), "# One\n\n![p](assets/p.png)\n", "utf8");
+      writeFileSync(join(docs, "two", "two.md"), "# Two\n\n![p](assets/p.png)\n", "utf8");
+      await runCliInDir(projectRoot, ["source", "add", "file", "flat", "--local", docs, "--format", "json"]);
+      writeCaptureProjectEntry(projectRoot, "flat");
+      const output = JSON.parse(await runCliInDir(projectRoot, ["run", "capture:file:flat", "--format", "json"])) as CaptureOutput;
+      expect(output.result.asset_gaps).toEqual([{ document: "two.md", target: "assets/p.png", reason: "missing" }]);
+      const ensure = JSON.parse(await runCliInDir(projectRoot, ["source", "ensure", "flat", "--format", "json"])) as Array<Record<string, unknown>>;
+      expect(ensure[0]).toMatchObject({ snapshotReady: true });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("origins without file pages link their version page without line anchors", async () => {
+    const { root, projectRoot } = await project();
+    try {
+      await mkdir(join(projectRoot, "sources", "pkg", "kb@1.0.0"), { recursive: true });
+      await runCliInDir(projectRoot, ["source", "add", "file", "kb", "--local", "sources/pkg/kb@1.0.0", "--layout", "tree",
+        "--origin-kind", "pkg", "--origin-id", "team/kb", "--origin-version", "1.0.0", "--origin-url", "https://example.com/kb/detail", "--format", "json"]);
+      const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+      const site = siteReferenceSource({ source_ref: "file:kb", locator: { path: "a.md", start_line: 1, end_line: 2 } } as Parameters<typeof siteReferenceSource>[0], registry);
+      expect(site.href).toBe("https://example.com/kb/detail");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

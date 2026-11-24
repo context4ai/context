@@ -168,6 +168,9 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
   const layout = input.manifest.metadata?.capture?.layout ?? "flat";
   const documentPaths = new Set(input.manifest.files.map((file) => file.path));
   const gapPaths = new Set((input.manifest.metadata?.capture?.assetGaps ?? []).flatMap((gap) => gap.path === undefined ? [] : [gap.path]));
+  const captured = new Set((input.manifest.assets ?? [])
+    .filter((asset) => asset.source?.kind === "file")
+    .map((asset) => asset.path));
   const expected = new Set<string>();
   for (const file of input.manifest.files) {
     let markdown: string;
@@ -178,12 +181,12 @@ export function fileSnapshotLinkedAssetMismatchDiagnostic(input: {
     }
     for (const link of markdownInlineLinks(markdown)) {
       const path = linkedAssetSnapshotPath(file.path, link.target, layout);
-      if (path !== undefined && !gapPaths.has(path) && !documentPaths.has(path) && path !== "manifest.json") expected.add(path);
+      if (path === undefined || documentPaths.has(path) || path === "manifest.json") continue;
+      // A recorded gap excuses only a path that was not captured through another link.
+      if (gapPaths.has(path) && !captured.has(path)) continue;
+      expected.add(path);
     }
   }
-  const captured = new Set((input.manifest.assets ?? [])
-    .filter((asset) => asset.source?.kind === "file")
-    .map((asset) => asset.path));
   const missing = [...expected].filter((path) => !captured.has(path)).sort()[0];
   if (missing !== undefined) return `snapshot linked asset is stale: manifest is missing ${missing}`;
   const stale = [...captured].filter((path) => !expected.has(path)).sort()[0];

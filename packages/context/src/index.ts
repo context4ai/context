@@ -322,6 +322,7 @@ export {
   DEFAULT_REPO_SOURCES_REGISTRY_PATH,
   RESERVED_FILE_SOURCE_ORIGIN_KINDS,
   fileSourceOriginInstallRoot,
+  fileSourceOriginVersionRoot,
   loadSourcesRegistry,
   parseFileSourcesRegistryDocument,
   parseLarkSourcesRegistry,

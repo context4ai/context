@@ -118,26 +118,28 @@ Cite each section's original lines, and also cite the code a passage describes,
 so later code changes reach the article.
 
 Where a passage contradicts the cited code or describes behavior the code no
-longer has, write the corrected text in the article and add one proposal to
-`src/original-revisions.yaml` with the status `proposed`:
+longer has, write the corrected text in the article and propose the revision
+with `context review original-revisions --propose <file|-> --format json`:
 
 ```yaml
 revisions:
   - id: limits-default
     article: guides/limits.md        # knowledge path of the article
     section: limits
-    original: { source_ref: file:wiki, locator: { path: limits.md, start_line: 3, end_line: 3 }, text: "The limit is 3." }
+    original: { source_ref: file:wiki, locator: { path: limits.md, start_line: 3, end_line: 3 } }
     revised: "The limit is 5."
     reason: stale                    # wrong: never matched the code; stale: the code changed since
     evidence:
-      - { source_ref: repo:service, locator: { path: src/limits.ts, start_line: 1, end_line: 1 }, content_digest: "sha256:…" }
-    status: proposed
+      - { source_ref: repo:service, locator: { path: src/limits.ts, start_line: 1, end_line: 1 } }
 ```
 
-Take `content_digest` from the submitted reference for the same lines. Do not
-correct wording, style or structure that the code does not contradict. A
-proposal whose status is `kept` keeps the original text: do not propose it again
-while `context review original-revisions` does not report it as reopened.
+Context reads the original passage, fingerprints the evidence and records the
+proposal under the workspace write lock, so parallel writers do not overwrite
+each other; do not edit `src/original-revisions.yaml` by hand. Do not correct
+wording, style or structure that the code does not contradict. A proposal whose
+status is `kept` keeps the original text: do not propose it again while
+`context review original-revisions` does not report it as reopened. Moved lines
+with unchanged text do not reopen it.
 
 ### Locating submitted references
 

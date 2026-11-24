@@ -87,13 +87,7 @@ with their limitation, not presented as ready. In particular:
   map category so they stay out of website navigation, select them into their
   package, and link them from an entry article on the main site. Add the paths to
   the website package's `select.exclude` to leave the pages off the website.
-- Keeping pages unchanged without production needs support that may be
-  unavailable. Until then, keep them unchanged through production: register the
-  collection as a file source that keeps its folders (with its repository and
-  commit as origin when it keeps changing), state in the requirement that each
-  page is reproduced as written, cite each section's original lines, and add
-  code citations where a page describes code so code changes reach it. Each
-  page then goes through ordinary batches and review; estimate that cost.- Keeping pages unchanged goes through production with `preserve_original: true`
+- Keeping pages unchanged goes through production with `preserve_original: true`
   on the requirement: register the collection as a file source that keeps its
   folders (with its repository and commit as origin when it keeps changing).
   Writers keep each page's title, sections, order and wording, cite its lines and

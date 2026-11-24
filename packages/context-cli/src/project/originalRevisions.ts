@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { articleSourceLocatorSchema, articleSourceReferenceSchema, articleSourceRegionDigest } from "@c4a/context";
+import { articleSourceLocatorSchema, articleSourceReferenceSchema, articleSourceRegion, articleSourceRegionDigest } from "@c4a/context";
 import YAML from "yaml";
 import { z } from "zod";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -104,11 +105,17 @@ export async function decideOriginalRevisions(
     if (decision.status === "kept" && read !== undefined) {
       evidence = [];
       for (const item of revision.evidence) {
+        let text: string;
         try {
-          evidence.push({ ...item, content_digest: articleSourceRegionDigest(await read(item.source_ref, item.locator.path), item.locator) });
-        } catch {
-          evidence.push(item);
+          text = await read(item.source_ref, item.locator.path);
+        } catch (error) {
+          throw new ContextError(ExitCode.UserError, `Cannot keep ${revision.id}: its evidence ${item.source_ref} ${item.locator.path} is unreadable (${error instanceof Error ? error.message : String(error)})`, {
+            category: ErrorCategory.UserInputInvalid,
+            reason_code: "original-revision-evidence-unreadable",
+            next: "Restore the cited source, then record the decision again",
+          });
         }
+        evidence.push({ ...item, content_digest: articleSourceRegionDigest(text, item.locator) });
       }
     }
     next.push({ ...rest, evidence, status: decision.status, ...(upstream !== undefined ? { upstream } : {}) });
@@ -138,17 +145,110 @@ export async function inspectOriginalRevisions(projectRoot: string): Promise<Ori
     let changed = false;
     let unreadable = false;
     for (const evidence of revision.evidence) {
+      // Only a failed read makes evidence unreadable; cited lines that no longer
+      // exist (a shortened file) count as a change, and other errors propagate.
+      let current: string;
       try {
         if (read === undefined) throw new Error("source reader unavailable");
-        const current = await read(evidence.source_ref, evidence.locator.path);
-        if (articleSourceRegionDigest(current, evidence.locator) !== evidence.content_digest) changed = true;
+        current = await read(evidence.source_ref, evidence.locator.path);
       } catch {
         unreadable = true;
+        continue;
       }
+      if (!evidenceStillPresent(current, evidence.locator, evidence.content_digest)) changed = true;
     }
     views.push({ ...revision, ...(changed ? { reopened: true as const } : {}), ...(unreadable ? { unreadable: true as const } : {}) });
   }
   return views;
+}
+
+/**
+ * True when the cited lines are unchanged, at their recorded place or moved
+ * elsewhere in the file (for example after an added import line).
+ */
+function evidenceStillPresent(text: string, locator: { start_line: number; end_line: number }, digest: string): boolean {
+  const lines = text.replace(/\r\n/gu, "\n").split("\n");
+  const length = locator.end_line - locator.start_line + 1;
+  const regionDigest = (start: number) =>
+    `sha256:${createHash("sha256").update(lines.slice(start, start + length).join("\n"), "utf8").digest("hex")}`;
+  if (locator.end_line <= lines.length && regionDigest(locator.start_line - 1) === digest) return true;
+  for (let start = 0; start + length <= lines.length; start += 1) {
+    if (regionDigest(start) === digest) return true;
+  }
+  return false;
+}
+
+const proposalLocatorSchema = z.object({ path: text, start_line: z.number().int().min(1), end_line: z.number().int().min(1) }).strict();
+const originalRevisionProposalSchema = z.object({
+  id: originalRevisionSchema.shape.id,
+  article: text,
+  section: text.optional(),
+  original: z.object({ source_ref: text, locator: proposalLocatorSchema }).strict(),
+  revised: text,
+  reason: z.enum(["wrong", "stale"]),
+  evidence: z.array(z.object({ source_ref: text, locator: proposalLocatorSchema }).strict()).min(1),
+  note: text.optional(),
+}).strict();
+export const originalRevisionProposalsSchema = z.object({ revisions: z.array(originalRevisionProposalSchema).min(1) }).strict();
+
+/**
+ * Record proposals under the caller's write lock. Context reads the original
+ * passage and fingerprints the evidence itself; writers supply locations only.
+ * A proposal may replace one with the same id only while it is still `proposed`.
+ */
+export async function proposeOriginalRevisions(projectRoot: string, input: unknown): Promise<OriginalRevision[]> {
+  const parsed = originalRevisionProposalsSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ContextError(ExitCode.UserError, `Invalid original revision proposals: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")}`, {
+      category: ErrorCategory.UserInputInvalid,
+      reason_code: "invalid-original-revision-proposals",
+    });
+  }
+  const existing = await readOriginalRevisions(projectRoot);
+  const read = await registeredArticleSourceReader(projectRoot);
+  const region = async (sourceRef: string, locator: { path: string; start_line: number; end_line: number }) => {
+    let text: string;
+    try {
+      text = await read(sourceRef, locator.path);
+    } catch (error) {
+      throw new ContextError(ExitCode.UserError, `Cannot read ${sourceRef} ${locator.path}: ${error instanceof Error ? error.message : String(error)}`, {
+        category: ErrorCategory.UserInputInvalid,
+        reason_code: "original-revision-source-unreadable",
+      });
+    }
+    const lines = text.replace(/\r\n/gu, "\n").split("\n");
+    if (locator.end_line < locator.start_line || locator.end_line > lines.length) {
+      throw new ContextError(ExitCode.UserError, `Lines ${locator.start_line}-${locator.end_line} are outside ${sourceRef} ${locator.path}`, {
+        category: ErrorCategory.UserInputInvalid,
+        reason_code: "original-revision-locator-invalid",
+      });
+    }
+    return text;
+  };
+  const byId = new Map(existing.map((revision) => [revision.id, revision]));
+  for (const proposal of parsed.data.revisions) {
+    const previous = byId.get(proposal.id);
+    if (previous !== undefined && previous.status !== "proposed") {
+      throw new ContextError(ExitCode.UserError, `Original revision ${proposal.id} is already decided (${previous.status}); use a new id`, {
+        category: ErrorCategory.UserInputInvalid,
+        reason_code: "original-revision-decided",
+      });
+    }
+    const originalText = await region(proposal.original.source_ref, proposal.original.locator);
+    const evidence = [];
+    for (const item of proposal.evidence) {
+      evidence.push({ ...item, content_digest: articleSourceRegionDigest(await region(item.source_ref, item.locator), item.locator) });
+    }
+    byId.set(proposal.id, originalRevisionSchema.parse({
+      ...proposal,
+      original: { ...proposal.original, text: articleSourceRegion(originalText, proposal.original.locator) },
+      evidence,
+      status: "proposed",
+    }));
+  }
+  const next = [...byId.values()];
+  await atomicWriteFile(join(projectRoot, ORIGINAL_REVISIONS_PATH), YAML.stringify({ revisions: next }));
+  return next;
 }
 
 export function originalRevisionSummary(views: readonly OriginalRevisionView[]) {

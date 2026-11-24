@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -5,6 +8,7 @@ import {
   ORIGINAL_REVISION_DECISIONS,
   decideOriginalRevisions,
   inspectOriginalRevisions,
+  proposeOriginalRevisions,
   originalRevisionSummary,
   type OriginalRevisionDecision,
 } from "./originalRevisions.js";
@@ -28,6 +32,8 @@ export async function runOriginalRevisionsCommand(input: {
   cwd: string;
   decide: readonly string[];
   upstream: readonly string[];
+  /** YAML or JSON proposals: a workspace-relative file, or "-" for standard input. */
+  propose?: string;
   format: "text" | "json";
 }): Promise<void> {
   const found = findContextProjectRoot(input.cwd);
@@ -49,6 +55,19 @@ export async function runOriginalRevisionsCommand(input: {
   }
   for (const [id, outcome] of pairs(input.upstream, "--upstream")) {
     decisions.set(id, { ...(decisions.get(id) ?? { status: "upstream" }), upstream: outcome });
+  }
+  if (input.propose !== undefined) {
+    const raw = input.propose === "-"
+      ? await new Promise<string>((resolveInput, reject) => {
+          let data = "";
+          process.stdin.setEncoding("utf8");
+          process.stdin.on("data", (chunk) => { data += chunk; });
+          process.stdin.on("end", () => resolveInput(data));
+          process.stdin.on("error", reject);
+        })
+      : await readFile(resolve(input.cwd, input.propose), "utf8");
+    const value: unknown = YAML.parse(raw);
+    await withProjectWriteLock(projectRoot, "original-revisions", () => proposeOriginalRevisions(projectRoot, value));
   }
   if (decisions.size > 0) {
     await withProjectWriteLock(projectRoot, "original-revisions", () => decideOriginalRevisions(projectRoot, decisions));

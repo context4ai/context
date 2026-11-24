@@ -60,8 +60,10 @@ export function siteReferenceSource(reference: ArticleSourceReference, registry:
   const file = registry.files.find(entry => entry.origin !== undefined && (ref === `file:${entry.id}` || ref === `file:${entry.name}`));
   if (file?.origin) {
     const originPath = fileOriginPath(file, locator.path);
-    const url = webUrl(originPath === undefined ? file.origin.url : fileSourceOriginFileUrl(file.origin, originPath));
-    const href = url && originPath !== undefined && !url.includes("#") ? `${url}#L${locator.start_line}-L${locator.end_line}` : url;
+    // Line anchors only make sense on a file page; otherwise link the version page.
+    const fileUrl = originPath === undefined ? undefined : webUrl(fileSourceOriginFileUrl(file.origin, originPath));
+    const href = fileUrl !== undefined && !fileUrl.includes("#")
+      ? `${fileUrl}#L${locator.start_line}-L${locator.end_line}` : webUrl(file.origin.url);
     const owner = `${file.origin.id}@${file.origin.version}`;
     return { label: `${owner} · ${originPath ?? locator.path} ${region}`, ...(href ? { href } : {}), kind: "other", owner };
   }
