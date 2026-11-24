@@ -81,8 +81,9 @@ export function createSiteNavigation(pkg: PackageDefinition, selected: readonly 
       invalidSiteExtension(`Website page ${entry.target.artifact_ref} does not support knowledge section_key targets`);
     }
   }
-  const projection = structure ? projectKnowledgeMap(structure, targets) : { entries: [], warnings: [] };
-  const linked = new Set<string>();
+  const projection = structure ? projectKnowledgeMap(structure, targets, { omitHidden: true }) : { entries: [], warnings: [], hidden: [] };
+  // Hidden entries keep their pages reachable by link but out of the menus and "All articles".
+  const linked = new Set<string>(projection.hidden.map(href => href.split("#")[0]!));
   const visit = (entries: ProjectedKnowledgeMapEntry[]) => entries.forEach(entry => {
     if (entry.href) linked.add(entry.href.split("#")[0]!);
     visit(entry.children);

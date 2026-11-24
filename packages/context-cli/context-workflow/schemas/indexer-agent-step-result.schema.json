@@ -347,6 +347,9 @@
                         "type": "number",
                         "default": 0
                       },
+                      "hidden": {
+                        "type": "boolean"
+                      },
                       "target": {
                         "type": "object",
                         "properties": {

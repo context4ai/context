@@ -109,6 +109,43 @@ To cancel that pause explicitly, use `context run --resume-writing --format json
 It preserves approved articles, candidates and existing task input handles.
 Partial delivery must include the approved articles needed by its local links.
 
+### Pages kept as written
+
+When the task's requirement in `shared/requirements.md` has
+`preserve_original: true`, reproduce each original page as an article: keep its
+title, section headings and the main order of its content, and keep its wording.
+Cite each section's original lines, and also cite the code a passage describes
+from the requirement's `evidence_source_scope`, so later code changes reach the
+article.
+
+Where a passage contradicts the cited code or describes behavior the code no
+longer has, write the corrected text in the article and propose the revision
+with `context review original-revisions --propose <file|-> --format json`:
+
+```yaml
+revisions:
+  - id: limits-default
+    article: guides/limits.md        # knowledge path of the article
+    section: limits
+    original: { source_ref: file:wiki, locator: { path: limits.md, start_line: 3, end_line: 3 } }
+    revised: "The limit is 5."
+    reason: stale                    # wrong: never matched the code; stale: the code changed since
+    evidence:
+      - { source_ref: repo:service, locator: { path: src/limits.ts, start_line: 1, end_line: 1 } }
+```
+
+Context reads the original passage and keeps the proposal with the current
+batch under the workspace write lock, so parallel writers do not overwrite each
+other. Proposals are temporary: once the user decides, the article carries the
+decision. Do not correct wording, style or structure that the code does not
+contradict.
+
+Before proposing a correction for an existing article, read its Git history and
+the workspace changelog: a contradiction the user already chose to keep stays
+kept and is not proposed again unless the cited code changed since that
+decision. Keep the code citation on a kept passage, so a later change to that
+code reaches the article through the ordinary source update.
+
 ### Locating submitted references
 
 Submission locators also accept `{path, heading}` or `{path, quote}` instead of

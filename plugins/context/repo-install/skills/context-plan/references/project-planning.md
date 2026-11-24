@@ -125,6 +125,11 @@ an unrelated source. Keep approved pages, pending drafts, older package output
 and previous PLAN deliveries distinct; a draft is pending work, not an approved
 answer or a reason to produce the same page again.
 
+When the incoming material is an existing knowledge collection (a wiki or
+knowledge repository, documentation directory, another workspace or a published
+package), also identify its kind, real upstreams and quality as described in
+[knowledge-migration.md](knowledge-migration.md) and [quality-audit.md](quality-audit.md).
+
 Record a compact coverage-and-relationship map in the PLAN, grouping related
 sources where useful. For each proposed topic, identify the existing page or
 section, the new material, the actual overlap or gap, useful connections and

@@ -25,8 +25,13 @@ export const taskSourceAdjustmentSchema = z.union([schema, z.object({ knowledge_
 /** Adjust current source work without restoring retired Provider ledgers.
  * Accepted candidates and unrelated source tasks stay in the same temporary run. */
 export async function adjustCurrentTaskSources(projectRoot: string, value: unknown) {
-  const reading = z.object({ knowledge_map: knowledgeMapUpdateSchema }).strict().safeParse(value);
-  if (reading.success) return applyKnowledgeMapUpdate(projectRoot, reading.data.knowledge_map);
+  if (value && typeof value === "object" && "knowledge_map" in value) {
+    // Report the map's own errors instead of the source-adjustment fields.
+    const mapSchema = z.object({ knowledge_map: knowledgeMapUpdateSchema }).strict();
+    const input = await withProductionFeedback({ operation: "knowledge-map-adjustment", schema: mapSchema },
+      async () => mapSchema.parse(value));
+    return applyKnowledgeMapUpdate(projectRoot, input.knowledge_map);
+  }
   return withProductionFeedback({ operation: "source-adjustment", schema }, async () => {
     const input = schema.parse(value);
     return withProjectWriteLock(projectRoot, "adjust-current-task-sources", async () => {

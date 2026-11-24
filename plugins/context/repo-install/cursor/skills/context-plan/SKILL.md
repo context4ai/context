@@ -42,7 +42,14 @@ an audience enters production; do not count registration as completed research.
    knowledge depends on it, which shortens inventory. The `context` Skill carries
    a template under `references/source-checklist.md`. It is never required —
    without one, continue and register material from the conversation.
-3. Read [project-planning.md](references/project-planning.md). Review the existing
+3. Establish the purpose and constraints before deep research, using
+   [stakeholder-intake.md](references/stakeholder-intake.md). Read supplied
+   meeting notes, proposals and checklists first and ask only what is still
+   missing: where existing knowledge lives and who maintains it, where it should
+   be maintained afterwards, what must not be rewritten, who uses the result,
+   how packages should be split, and structural constraints. Record the answers
+   as the evaluation criteria for the research.
+4. Read [project-planning.md](references/project-planning.md). Review the existing
    knowledge workspace and relevant approved articles before grouping new material.
    Map overlaps, gaps and relationships between documents, repositories and pages;
    distinguish reuse, revision, consolidation and new coverage in the PLAN.
@@ -53,18 +60,29 @@ an audience enters production; do not count registration as completed research.
    evidence already available; do not wait for a complete PLAN. Follow the early
    scope rules in project-planning.md, including previously confirmed choices.
    Reuse accessible local checkouts and saved research before fetching again.
-4. Create or update `PLAN-YYYYMMDD-slug.md` at that project's Git root using
+   When the request brings in existing knowledge collections — knowledge or
+   wiki repositories, documentation directories, other workspaces or published
+   knowledge packages — also follow [knowledge-migration.md](references/knowledge-migration.md):
+   identify each collection's kind and real upstreams, audit a bounded sample of
+   its claims with [quality-audit.md](references/quality-audit.md), and choose an
+   integration approach per collection.
+5. Create or update `PLAN-YYYYMMDD-slug.md` at that project's Git root using
    [the report template](templates/PLAN.md). Keep downloaded research under
    `.tmp/context-plans/YYYYMMDD-slug/`; the layout is a working convention,
    not a new CLI validation rule.
-5. Present the first report and complete its review before production. By default,
+6. When stakeholders must choose between approaches, or the research covers
+   existing knowledge collections, present a research report before or with the
+   first PLAN, following [research-report.md](references/research-report.md):
+   conclusions first, then the analysis and evidence. Record each decision made
+   during the discussion in the PLAN before asking for approval.
+7. Present the first report and complete its review before production. By default,
    obtain the user's approval; only an authorized `plan_review: delegate` override
    permits Agent review as described below.
    Resolve the reporting preference: report after all stages, or after each
    stage; for stage reports, explicitly establish whether to wait for a reply.
    Preserve already supplied choices. This project approval does not approve
    candidate articles or grant missing source, Git or publishing permissions.
-5. If the user requested only research or comparison, finish with the report;
+8. If the user requested only research or comparison, finish with the report;
    production needs explicit authorization to execute the plan; review delegation
    alone does not authorize production for a research-only request. After that approval,
    follow the authorized Git collaboration process. Hand only

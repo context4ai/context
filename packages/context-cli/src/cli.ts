@@ -271,6 +271,27 @@ export function createCliProgram(): Command {
     });
 
   review
+    .command("original-revisions")
+    .description("Propose, list or resolve revisions for pages kept as written (temporary, per review batch)")
+    .option("--propose <file>", "add proposals from a YAML/JSON file or - (stdin); Context reads the original passage")
+    .option("--resolve <id>", "remove a proposal whose decision was applied to the article, or all; repeatable", (value: string, previous: string[] = []) => [...previous, value])
+    .option("--format <format>", "output format: text | json", "text")
+    .action(async (options: Record<string, unknown>) => {
+      if (options.format !== "text" && options.format !== "json") {
+        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
+          category: ErrorCategory.UserInputInvalid,
+        });
+      }
+      const { runOriginalRevisionsCommand } = await import("./project/originalRevisionsCommand.js");
+      await runOriginalRevisionsCommand({
+        cwd: process.cwd(),
+        ...(typeof options.propose === "string" ? { propose: options.propose } : {}),
+        resolve: Array.isArray(options.resolve) ? options.resolve as string[] : [],
+        format: options.format === "json" ? "json" : "text",
+      });
+    });
+
+  review
     .command("apply <payload-file>")
     .description("Apply scoped JSON/JSONL decisions and revision instructions")
     .option("--format <format>", "output format: text | json", "text")

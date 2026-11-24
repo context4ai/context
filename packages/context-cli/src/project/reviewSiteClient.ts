@@ -20,6 +20,7 @@ const words = {
   retiredPages: ['本批次退役的页面', 'Pages retired in this batch'], replacedBy: ['替代页', 'Replaced by'],
   retireBlockers: ['仍链接到退役页面的草稿（批准前需修改）', 'Drafts still linking to a retired page (update before approval)'],
   renamed: ['改名', 'Renamed'], retargeted: ['改指向', 'Points to'], moved: ['移动', 'Moved'], noTarget: ['无页面', 'no page'], unplaced: ['待落位文章', 'Unplaced articles'],
+  hiddenNav: ['仅进包，不进网站导航', 'package only, hidden from website navigation'], shownNav: ['改为显示在网站导航', 'now shown in website navigation'], hiddenTag: ['仅进包', 'package only'],
   sources: ['来源引用', 'Sources'], feedbackTag: ['修订', 'Notes'],
   previousPage: ['上一页 −', 'Previous −'], nextPage: ['下一页 +', 'Next +'],
   previousHint: ['上一页（快捷键 -）', 'Previous article (key -)'], nextHint: ['下一页（快捷键 +）', 'Next article (key +)'],
@@ -93,7 +94,7 @@ function nodeChange(node) {
     ...[node, ...nested].map(child => pagesById.get(child.page)?.change)];
   return nested.some(child => child.removed) || changes.includes('modify') ? 'modify' : changes.includes('new') ? 'new' : 'unchanged';
 }
-function nodeTitle(node) { return node.key === 'review-unplaced' ? t('unplaced') : node.title; }
+function nodeTitle(node) { return node.key === 'review-unplaced' ? t('unplaced') : node.hidden ? node.title + ' · ' + t('hiddenTag') : node.title; }
 function nodeLabel(node) {
   const title = escape(nodeTitle(node));
   return (node.removed ? \`<del>\${title}</del>\` : title)
@@ -223,7 +224,8 @@ function navigationChanges() {
   return \`<h2>\${t('navChanges')}</h2><ul class="nav-changes">\` + changes.map(change => {
     const parts = change.changes.map(kind => kind === 'renamed' ? \`\${t('renamed')}: \${escape(change.old_title)} → \${escape(change.title)}\`
       : kind === 'retargeted' ? \`\${t('retargeted')}: \${targetLabel(change.old_target)} → \${targetLabel(change.new_target)}\`
-      : kind === 'removed' ? t('removedEntry') : kind === 'added' ? t('added') : t('moved'));
+      : kind === 'removed' ? t('removedEntry') : kind === 'added' ? t('added')
+      : kind === 'hidden' ? t('hiddenNav') : kind === 'shown' ? t('shownNav') : t('moved'));
     const label = change.changes.includes('removed') ? \`<del>\${escape(change.title)}</del>\` : escape(change.title);
     return \`<li class="\${change.changes.includes('removed') ? 'removed' : ''}">\${label} — \${parts.join('; ')}</li>\`;
   }).join('') + '</ul>';

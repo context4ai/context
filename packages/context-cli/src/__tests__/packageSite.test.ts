@@ -62,6 +62,18 @@ test("navigation uses stable identities, multiple placements and a complete unma
   expect(() => createSiteNavigation(pkg, [selected[0]!, selected[0]!])).toThrow("Duplicate");
 });
 
+test("hidden map entries keep pages reachable but out of website navigation and the fallback", () => {
+  const hidden = updateKnowledgeMap(structure, { expected_revision: structure.revision, upsert: [
+    { key: "package-only", parent: null, title: "Package only", hidden: true },
+    { key: "next", parent: "package-only", title: "Next", target: { artifact_ref: "article:next" } },
+  ] });
+  const result = createSiteNavigation(pkg, selected, hidden);
+  expect(result.pages).toHaveLength(2);
+  expect(result.entries.map(entry => entry.title)).toEqual(["Business"]);
+  expect(JSON.stringify(result.entries)).not.toContain("Next");
+  expect(result.warnings.map(warning => warning.code)).toEqual(["knowledge-map-target-unavailable"]);
+});
+
 test("website rewrites selected references, anchors and delivered assets without touching code", () => {
   const mapping = createSiteNavigation(pkg, selected);
   const pages = new Map(mapping.pages.map(page => [page.package_path, page]));

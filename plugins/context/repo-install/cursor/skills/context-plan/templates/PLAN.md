@@ -12,6 +12,16 @@ it in. It is a working report, not a machine-validated schema.
 - Last confirmed result:
 - Next action:
 
+## Purpose, constraints and decisions
+
+- Stated purpose, readers and uses (source: user / derived from documents):
+- Where existing knowledge lives, who maintains it, and where it will be maintained afterwards:
+- Content that must not be rewritten; structural constraints (for example keeping top-level sections):
+- Package split and audiences:
+- Decision log (date or "date unknown" with its source, decision, who decided; ambiguous answers record the interpretation applied):
+- Content conflicts awaiting adjudication and who decides:
+- Open decisions:
+
 ## Research scope and findings
 
 | Source or subject | Kind and identity | Resolved version / capture context | Scale and coverage | Access or evidence gaps |
@@ -28,6 +38,16 @@ it in. It is a working report, not a machine-validated schema.
 - Additional sources/links discovered, excluded scope and unresolved coverage:
 - Scratch research location and reusable checkpoints:
 
+## Existing knowledge collections (omit when none)
+
+| Collection | Kind and evidence | Maintenance (owner, last update) | Upstreams: registered / new / low value | Unique content estimate | Audit: consistent / partial / inconsistent / unverifiable | Chosen approach, mode (follow / absorb once) and reason |
+| --- | --- | --- | --- | --- | --- | --- |
+| | | | | | | |
+
+- Approaches considered per collection with their scores, benefit and cost; capability limits of the installed Context:
+- Quality findings: representative problems, written wrong or went stale, and their consequence for readers:
+- Research report location and the discussion rounds held:
+
 ## Existing knowledge and material relationships
 
 - Workspace organization and relevant approved sections actually inspected:
@@ -43,6 +63,11 @@ Group related material where useful; this is not a one-row-per-source inventory.
 Support decisions with sections actually read. For new coverage, suggest an
 existing section or explain the needed addition. Consolidation here is a proposal,
 not permission to modify or retire approved articles during research.
+
+## Target structure and packages
+
+- Navigation impact: pruned tree of existing sections with added, revised, new-section and kept-unchanged marks; new topics placed inside existing sections where possible:
+- Packages: name, audience, selection rule (path patterns or explicit list), and each package's article list or the report chapter that holds it:
 
 ## Proposed stages
 

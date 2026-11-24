@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { fileSourceOriginView } from "./fileSourceOrigins.js";
 import { join } from "node:path";
 import type {
   FileSourceRegistryEntry,
@@ -47,6 +48,12 @@ export function fileSourceAgentView(source: FileSourceRegistryEntry): Record<str
     materializedAt: source.materializedAt,
     ...(source.local !== undefined ? { local: source.local } : {}),
     ...(source.include !== undefined ? { include: source.include } : {}),
+    ...(source.documentExtensions !== undefined ? { documentExtensions: source.documentExtensions } : {}),
+    ...(source.layout !== undefined ? { layout: source.layout } : {}),
+    ...(source.frozen === true ? { frozen: true } : {}),
+    ...(source.origin !== undefined && source.local !== undefined
+      ? { origin: fileSourceOriginView(source.origin, source.local) }
+      : {}),
     ...(source.snapshot !== undefined ? { snapshot: source.snapshot } : {}),
   };
 }

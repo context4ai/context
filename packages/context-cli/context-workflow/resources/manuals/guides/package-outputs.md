@@ -149,6 +149,14 @@ return the missing article list plus a navigation-only task adjustment input.
 Category nodes can remain empty while future articles are planned. The builder
 does not infer business categories or alter article content.
 
+An entry with `hidden: true` keeps itself and its descendants out of the website
+sidebar, top navigation and the "All articles" fallback. Articles bound under it
+count as placed, keep their pages and URLs on the website when the package
+selects them, and stay listed in knowledge-package navigation and LLMS. Use it for
+content that belongs in packages but not in website navigation, linked from an
+entry article; add `select.exclude` to the website package as well to leave the
+pages out of the website entirely.
+
 Top navigation contains the first-level reading directories. Selecting
 a section shows only its descendants in the left sidebar; opening an article
 directly selects its section. Skills and their Markdown references remain

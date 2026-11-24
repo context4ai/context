@@ -231,6 +231,8 @@ production or after completion through the same adjustment; no active Indexer
 task, source recapture or new mode choice is required. Finish or revoke active
 worker assignments before changing the map. Preserve unrelated entries and page
 identities. The map controls website navigation and LLMS organization together.
+Mark a category entry `hidden: true` to keep its articles in packages and LLMS but
+out of website navigation; they still count as placed.
 
 For each new or changed article, the Agent decides whether to retain its current
 placement, add another placement, move it, or create a warranted category. Check
@@ -453,6 +455,51 @@ locations when the update settles.
 Before importing a `note`, read [note source preparation](note.md).
 Before importing `sessions`, read [development summary preparation](sessions.md).
 Choose the reference for the actual input; do not read both by default.
+
+## Versioned external content and archived collections
+
+Published content that another team versions, such as a documentation
+repository, a released knowledge package or a released Skill, can be a `file`
+source with an origin. Context never installs it: you install the exact version
+as real files, Context checks the directory, records each file's fingerprint in
+the snapshot and cites it like any local document.
+
+```bash
+context source add file <name> --layout tree \
+  --local sources/<kind>/<name>@<version>[/<subdir>] \
+  --origin-kind <kind> --origin-id <id> --origin-version <version> [--origin-url <url>]
+```
+
+- Install outside the workspace with the origin's own tool so it cannot write
+  locks or tool configuration into the workspace, then copy the real files into
+  `sources/<kind>/<name>@<version>/`. Do not link them. Registration adds
+  `sources/<kind>/` to `.gitignore`; only the registry and the captured snapshot
+  are committed. The registration output's `origin.install_hint` gives the
+  command for known kinds (`git` is built in).
+- `--layout tree` keeps folders and the images documents link to. Markdown is
+  the default; add `--document-ext .json --document-ext .yaml` to cite small
+  structured files as text. Images are kept as assets, not citations. A missing,
+  oversized (over 5 MB), conflicting or out-of-source image is reported in
+  `asset_gaps` and stays a link; capture continues. Choose the layout before
+  articles cite the source: switching it later moves snapshot paths, so the
+  citations need the same treatment as a renamed file.
+- **Upgrade.** Compare the available version with `origin.version` (the
+  registration output may give a `versions_command`). Same version: skip. A
+  newer one: install it into a new `<name>@<new>` directory, rerun `source add
+  file <name> --local <new dir> --origin-version <new>`, then capture. The
+  snapshot fingerprints show which files changed; revise the pages citing them as
+  for any document change, then delete the old version directory.
+- **Restore.** In a fresh clone the install directory is absent. Capture then
+  reports a deferred acquisition gap whose `next` is the install command for the
+  registered version; install that exact version, not the latest.
+- Register content as a source only when articles cite it. Content that readers
+  only need to find stays an import.
+
+To absorb a collection once instead of following it, register its folder with
+`--layout tree`, capture it, write the author's own judgments as notes, and
+produce articles. When the original is archived, run `context source add file
+<name> --freeze`: the snapshot stays citable and capture no longer reads the
+local path. `--unfreeze` allows capturing again.
 
 ## Save text without an external file
 

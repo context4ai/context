@@ -191,10 +191,13 @@ test("updating a document does not require an unrelated repository checkout", as
     materializedAt: "sources/repo/unavailable", git: { remote: "https://example.test/unavailable.git", ref: "a".repeat(40) } }] }] }));
   const structurePath = join(root, "knowledge/structure.yaml");
   const structure = YAML.parse(await readFile(structurePath, "utf8"));
-  structure.articles[0].sections[0].references.push(createArticleSourceReference("repo:20261107/unavailable", { path: "index.ts", start_line: 1, end_line: 1 }, "export const answer = 42;"));
+  structure.articles[0].sections[0].references.push(createArticleSourceReference("repo:20261107/unavailable", { path: "index.ts", start_line: 1, end_line: 1 }, "export const answer = 42;"),
+    createArticleSourceReference("repo:20261107/unavailable", { path: "other.ts", start_line: 1, end_line: 1 }, "export const other = 1;"));
   await writeFile(structurePath, YAML.stringify(structure));
   await capture(root, true);
   expect((await beginKnowledgeUpdate(root, { scopes: [scope] })).outcome).toBe("update-prepared");
   const request = (await readKnowledgeUpdate(root))!;
-  expect(request.outside_scope).toContainEqual(expect.objectContaining({ source_ref: "repo:20261107/unavailable", state: "unavailable", reason: expect.stringContaining("context source recovery-plan") }));
+  // An unreadable source is listed once, with its citation count.
+  expect(request.outside_scope?.filter(item => item.source_ref === "repo:20261107/unavailable")).toEqual([
+    { source_ref: "repo:20261107/unavailable", state: "unavailable", citations: 2, reason: expect.stringContaining("context source recovery-plan") }]);
 });

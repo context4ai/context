@@ -103,6 +103,10 @@ export interface DocumentSnapshotManifestMetadata {
       route: string;
       metadataPath: string;
     }>;
+    /** File sources: `tree` keeps folder paths and captures linked images anywhere inside the source. */
+    layout?: "flat" | "tree";
+    /** Linked assets that were not captured; their links stay as written in the snapshot. */
+    assetGaps?: DocumentCaptureAssetGap[];
     report?: {
       path: string;
       fidelityStatus: DocumentCaptureFidelityReport["status"];
@@ -113,6 +117,42 @@ export interface DocumentSnapshotManifestMetadata {
     fidelity?: DocumentCaptureFidelityReport;
     resourceMaterialization?: DocumentResourceMaterializationReport;
   };
+}
+
+export interface DocumentCaptureAssetGap {
+  /** Snapshot document containing the link. */
+  document: string;
+  /** Link target as written. */
+  target: string;
+  /** Snapshot path the asset would have used, when it maps to one. */
+  path?: string;
+  reason: "missing" | "outside" | "conflict" | "too-large";
+}
+
+const DOCUMENT_CAPTURE_ASSET_GAP_REASONS = new Set<DocumentCaptureAssetGap["reason"]>(["missing", "outside", "conflict", "too-large"]);
+
+function optionalAssetGaps(value: unknown, field: string): DocumentCaptureAssetGap[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError(`${field} must be an array`);
+  const result = value.map((item, index) => {
+    if (!isRecord(item)) throw new TypeError(`${field}[${index}] must be an object`);
+    const document = optionalMetadataString(item.document, `${field}[${index}].document`);
+    const target = optionalMetadataString(item.target, `${field}[${index}].target`);
+    const path = optionalMetadataString(item.path, `${field}[${index}].path`);
+    if (document === undefined || target === undefined) {
+      throw new TypeError(`${field}[${index}] must include document and target`);
+    }
+    if (!DOCUMENT_CAPTURE_ASSET_GAP_REASONS.has(item.reason as DocumentCaptureAssetGap["reason"])) {
+      throw new TypeError(`${field}[${index}].reason is invalid`);
+    }
+    return {
+      document: normalizeSnapshotRelativePath(document),
+      target,
+      ...(path !== undefined ? { path: normalizeSnapshotRelativePath(path) } : {}),
+      reason: item.reason as DocumentCaptureAssetGap["reason"],
+    };
+  });
+  return result.length > 0 ? result : undefined;
 }
 
 type DocumentRouteFileMetadata = NonNullable<NonNullable<DocumentSnapshotManifestMetadata["capture"]>["routeFiles"]>;
@@ -716,6 +756,11 @@ function parseManifestMetadata(value: unknown): DocumentSnapshotManifestMetadata
     );
     const routeFiles = optionalRouteFiles(value.capture.routeFiles, "snapshot manifest metadata.capture.routeFiles");
     const routeHints = optionalRouteHints(value.capture.routeHints, "snapshot manifest metadata.capture.routeHints");
+    const layout = value.capture.layout;
+    if (layout !== undefined && layout !== "flat" && layout !== "tree") {
+      throw new TypeError("snapshot manifest metadata.capture.layout must be flat or tree");
+    }
+    const assetGaps = optionalAssetGaps(value.capture.assetGaps, "snapshot manifest metadata.capture.assetGaps");
     const report = captureReportMetadata(value.capture.report);
     const fidelity = parseDocumentCaptureFidelity(value.capture.fidelity, "snapshot manifest metadata.capture.fidelity");
     const resourceMaterialization = parseDocumentResourceMaterialization(
@@ -727,6 +772,8 @@ function parseManifestMetadata(value: unknown): DocumentSnapshotManifestMetadata
       ...(documentExtensions !== undefined ? { documentExtensions } : {}),
       ...(routeFiles !== undefined ? { routeFiles } : {}),
       ...(routeHints !== undefined ? { routeHints } : {}),
+      ...(layout !== undefined ? { layout } : {}),
+      ...(assetGaps !== undefined ? { assetGaps } : {}),
       ...(report !== undefined ? { report } : {}),
       ...(fidelity !== undefined ? { fidelity } : {}),
       ...(resourceMaterialization !== undefined ? { resourceMaterialization } : {}),

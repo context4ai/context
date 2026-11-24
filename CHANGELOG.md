@@ -2,6 +2,17 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.101 - 2026-11-24
+
+- `context-plan` now standardizes research for existing knowledge collections: a stakeholder intake, identifying each collection's kind and real upstream, a sampled quality audit against code, scored approaches with feasibility and risk, navigation impact and package design, and a conclusions-first research report built with the bundled zero-dependency `templates/research-report/build.mjs`. The PLAN template records purpose, constraints, decisions, existing collections and the target structure.
+- A `file` source can follow versioned external content: `context source add file <name> --local sources/<kind>/<name>@<version> --origin-kind <kind> --origin-id <id> --origin-version <version>` records an origin, adds `sources/<kind>/` to `.gitignore` and stores the version in the snapshot. Context never installs it; registration returns an install hint (built in for `git`), a missing install is a deferred acquisition gap whose next step installs the registered version, and symbolic links are rejected. Site provenance links to the origin version.
+- `--layout tree` keeps a file source's folders and the images and small data files its documents link to. `--document-ext` captures JSON, YAML or other text files as citable documents. `--freeze` keeps a source's snapshot and stops capturing it, for example after its original is archived.
+- A knowledge map entry can be `hidden: true`: it and its descendants stay out of website navigation and the "All articles" fallback while their articles count as placed and remain in package navigation and LLMS, so content can be delivered in a package with only an entry article on the main site.
+- Requirements can set `preserve_original: true` to keep target pages as written: articles keep each page's title, sections, order and wording, and contradictions with the code are proposed with `context review original-revisions --propose` (Context reads the original passage). Proposals are temporary per review batch: the review report shows them above their articles, `context status` reminds about them, and `--resolve` removes them once the decision is applied to the article and recorded in the changelog.
+- File capture no longer stops on a missing, out-of-source, conflicting or oversized (over 5 MB) linked asset: the link stays as written and is reported in `asset_gaps`.
+- A source update lists an unreadable source outside its scope once, with its citation count, instead of once per citation, and lists only the missing Lark resources of its own sources (`context status` still lists all). Updating one repository in a workspace with many unrestored checkouts produced a Route over 1 MB.
+- `context task adjust` with `knowledge_map` now reports the map's own input errors, such as a root entry without `parent: null`. It previously reported the unrelated source-adjustment fields.
+
 ## 0.7.100 - 2026-11-16
 
 - Before production requirements exist (`src/indexers.yaml` missing), the Route's resource commands such as `context resource materialize context.source-boundary` now carry a valid workflow revision. Previously they carried `requirements-configuration` and always failed with "workflow revision is invalid".

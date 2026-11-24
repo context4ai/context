@@ -86,7 +86,9 @@ workspace targets or the delivery configuration.
    For each document, compare its current revision with the captured one when
    the host exposes a reliable revision; for a Lark document the captured
    revision is `metadata.source.revisionId` in its snapshot's `manifest.json`.
-   Otherwise read it and compare content. Changes in cited files and documents
+   Otherwise read it and compare content. For a file source with an origin,
+   compare the origin's latest available version with its registered
+   `origin.version`; a frozen source never changes. Changes in cited files and documents
    lead to revisions; changes no article cites are assessed in step 7. Ignore
    generated code, lock files and third-party directories. An unreadable source
    is a gap, not a change: never retire or take down pages because of it.
@@ -112,8 +114,13 @@ workspace targets or the delivery configuration.
    source the candidate pages cite, not only this repository: a page that cites
    a missing source cannot be submitted. `context source recovery-plan --format
    json` lists them with a fill-in restore input. Re-capture changed documents
-   through their normal capture Route. Do not start a new batch after the time
-   budget; finish or checkpoint the current one.
+   through their normal capture Route; for a newer origin version, install it
+   into a new version directory and move the registration first, as in the
+   knowledge-updates guide's versioned external content section. For pages kept
+   as written, keep revisions of code contradictions locally, list them in the
+   run report, and do not raise again a contradiction the history shows was
+   kept unless its cited code changed. Do not
+   start a new batch after the time budget; finish or checkpoint the current one.
 7. **Cover uncited changes.** In the source-update decision, go through
    `uncited_changes` by directory, new directories first. Skip tests, lock
    files, generated code and third-party directories, and read the diff only for

@@ -405,9 +405,17 @@ Resume performs registration only unless --configure is explicitly supplied.
     .description("Register a file module under a YYYYMMDD batch in sources/file/index.yaml without reading contents")
     .option("--configure", "Also declare this source and default capture in a simple src/index.ts; does not capture")
     .option("--module <name>", "document module name; derived from --local when omitted")
-    .option("--local <path>", "local Markdown directory or file path used as a refresh hint")
+    .option("--local <path>", "local Markdown directory or file path used as a refresh hint; an existing source keeps its path when omitted")
     .option("--include <glob>", "Markdown include glob relative to --local; repeatable", collectRepeated, undefined)
     .option("--include-list <file>", "newline-delimited include globs relative to --local; blank lines and # comments are ignored")
+    .option("--document-ext <ext>", "document extension read as citable text, such as .md, .json or .yaml; repeatable", collectRepeated, undefined)
+    .option("--layout <layout>", "snapshot layout: flat (file names only, default) | tree (keep folders and linked images)")
+    .option("--freeze", "keep the current snapshot and stop capturing this source, for example after its original is archived")
+    .option("--unfreeze", "allow capturing this source again")
+    .option("--origin-kind <kind>", "versioned origin kind of the installed content, such as git; installs under sources/<kind>/")
+    .option("--origin-id <id>", "origin identity, such as a repository remote or package name")
+    .option("--origin-version <version>", "exact installed origin version: tag, release or commit")
+    .option("--origin-url <url>", "web page of this origin version")
     .option("--format <format>", "output format: json | yaml | table", "table")
     .action(async (name: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
@@ -415,23 +423,42 @@ Resume performs registration only unless --configure is explicitly supplied.
       const projectRoot = requireProjectRoot(process.cwd(), "source add file");
       const sourceNamespace = resolveSourceName(name);
       const local = optionalString(options.local);
-      if (local === undefined) {
+      const requestedModule = optionalString(options.module);
+      const batchMode = sourceNamespace.generated || isDateSourceNamespace(sourceNamespace.name) || requestedModule !== undefined;
+      if (local === undefined && (sourceNamespace.generated || (batchMode && requestedModule === undefined))) {
         throw new ContextError(ExitCode.UserError, "source add file requires --local <path>", {
           category: ErrorCategory.UserInputInvalid,
           flag: "--local",
         });
       }
-      const requestedModule = optionalString(options.module);
-      const batchMode = sourceNamespace.generated || isDateSourceNamespace(sourceNamespace.name) || requestedModule !== undefined;
-      const module = batchMode ? requestedModule ?? defaultFileModule(local) : undefined;
+      const module = batchMode ? requestedModule ?? defaultFileModule(local!) : undefined;
       const sourceName = module === undefined ? sourceNamespace.name : `${sourceNamespace.name}/${module}`;
       const include = await fileIncludesFromOptions(projectRoot, options);
+      if (options.freeze === true && options.unfreeze === true) {
+        throw new ContextError(ExitCode.UserError, "use only one of --freeze and --unfreeze", {
+          category: ErrorCategory.UserInputInvalid,
+          flags: ["--freeze", "--unfreeze"],
+        });
+      }
+      const layout = optionalString(options.layout);
+      if (layout !== undefined) assertChoice(layout, ["flat", "tree"] as const, "--layout");
+      const documentExtensions = Array.isArray(options.documentExt) ? options.documentExt as string[] : undefined;
+      const origin = {
+        ...(optionalString(options.originKind) !== undefined ? { kind: optionalString(options.originKind)! } : {}),
+        ...(optionalString(options.originId) !== undefined ? { id: optionalString(options.originId)! } : {}),
+        ...(optionalString(options.originVersion) !== undefined ? { version: optionalString(options.originVersion)! } : {}),
+        ...(optionalString(options.originUrl) !== undefined ? { url: optionalString(options.originUrl)! } : {}),
+      };
       const result = await addFileSource({
         projectRoot,
         name: sourceName,
         ...(module !== undefined ? { namespace: sourceNamespace.name, module } : {}),
-        local,
+        ...(local !== undefined ? { local } : {}),
         ...(include !== undefined ? { include } : {}),
+        ...(documentExtensions !== undefined ? { documentExtensions } : {}),
+        ...(layout !== undefined ? { layout: layout as "flat" | "tree" } : {}),
+        ...(options.freeze === true ? { frozen: true } : options.unfreeze === true ? { frozen: false } : {}),
+        ...(Object.keys(origin).length > 0 ? { origin } : {}),
       });
       writeFormatted(options.configure ? { ...result, configuration: await configureRegisteredSources(projectRoot,
         [{ type: "file", name: sourceName }]) } : result, format);

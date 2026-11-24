@@ -51,7 +51,11 @@ const updateSchema = z.object({
   reference_evidence: z.array(z.custom<ReferenceEvidence>()).optional(),
   uncited_changes: z.array(z.custom<UncitedChanges>()).optional(),
   reference_groups: z.object({ automatic: z.array(z.string()), needs_decision: z.array(z.string()), unavailable: z.array(z.string()) }).strict().optional(),
-  outside_scope: z.array(z.object({ path: z.string(), section_id: z.string(), source_ref: z.string(), state: z.string(), reason: z.string().optional() }).strict()).optional(),
+  outside_scope: z.array(z.union([
+    z.object({ path: z.string(), section_id: z.string(), source_ref: z.string(), state: z.string(), reason: z.string().optional() }).strict(),
+    // An unreadable source is listed once with its citation count, not per citation.
+    z.object({ source_ref: z.string(), state: z.literal("unavailable"), citations: z.number().int().positive(), reason: z.string().optional() }).strict(),
+  ])).optional(),
   expand_scope: z.object({ command: z.string(), source_refs: z.array(z.string()) }).strict().optional(),
   missing_resources: z.array(z.unknown()).optional(),
   format_only_proposals: z.array(z.custom<FormatOnlyProposal>()).optional(),
@@ -196,7 +200,9 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     const outsideScopes = allScopes.filter(source => !scopes.some(scope => repoContentScopeMatches(scope.source_ref, source)));
     const outside = outsideScopes.length ? await inspectSettledReferences(projectRoot, articles, outsideScopes, settled, { advisory: true }) : undefined;
     const outsideReferences = outside?.observations.filter(item => item.state !== "current") ?? [];
-    const missingResources = await readMissingLarkResources(projectRoot);
+    // Status reports every missing resource; the update lists only those of its own sources.
+    const missingResources = (await readMissingLarkResources(projectRoot))
+      .filter(item => scopes.some(scope => repoContentScopeMatches(scope.source_ref, item.source)));
     const unavailable = new Set(inspected.unresolved.filter(item => item.state === "unavailable").map(item => item.path));
     const groups = { automatic: scopePages, needs_decision: candidates.filter(item => !unavailable.has(item.path)).map(item => item.path),
       unavailable: [...unavailable].sort() };
@@ -210,8 +216,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
       format_only_proposals: await proposeFormatOnlyReferences(projectRoot, cited, scopes, settled),
       reference_groups: groups,
       ...(missingResources.length ? { missing_resources: missingResources } : {}),
-      ...(outsideReferences.length ? { outside_scope: outsideReferences.map(item => ({ path: item.path, section_id: item.section_id,
-        source_ref: item.reference.source_ref, state: item.state, ...(item.reason ? { reason: item.reason } : {}) })),
+      ...(outsideReferences.length ? { outside_scope: outsideScopeEntries(outsideReferences),
         expand_scope: { command: "context update --schema --format json", source_refs: [...new Set(outsideReferences.map(item => item.reference.source_ref))] } } : {}),
       ...(repoContent === undefined ? {} : { repo_content: repoContent }),
       ...(scopePages.length === 0 ? {} : { scope_pages: scopePages }),
@@ -227,6 +232,22 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown, 
     return { outcome: "update-prepared", revision: request.revision, ...(pendingIssues.length ? { diagnostics: pendingIssues } : {}),
       next_action: { command: "context status --format json" } };
   });
+}
+
+function outsideScopeEntries(references: ReadonlyArray<{ path: string; section_id: string; state: string; reason?: string | undefined; reference: { source_ref: string } }>) {
+  const unavailable = new Map<string, { source_ref: string; state: "unavailable"; citations: number; reason?: string }>();
+  const entries: Array<Record<string, unknown>> = [];
+  for (const item of references) {
+    const source_ref = item.reference.source_ref;
+    if (item.state !== "unavailable") {
+      entries.push({ path: item.path, section_id: item.section_id, source_ref, state: item.state, ...(item.reason ? { reason: item.reason } : {}) });
+      continue;
+    }
+    const entry = unavailable.get(source_ref);
+    if (entry) entry.citations += 1;
+    else unavailable.set(source_ref, { source_ref, state: "unavailable", citations: 1, ...(item.reason ? { reason: item.reason } : {}) });
+  }
+  return [...unavailable.values(), ...entries];
 }
 
 /** A receipt for decisions already accepted, not a gate: kept pages whose cited
