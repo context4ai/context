@@ -56,7 +56,9 @@ During an approved stage, use the existing plan-amendment path for in-scope
 additions and preserve completed work. Do not restart planning solely because
 another article is ready to write. Keep remaining investigation explicit; a small
 current task does not mean other authorized work is finished. New source or purpose
-authorization still follows the current Route.
+authorization still follows the current Route. When an amendment replaces a task,
+its result lists `previous_drafts`: copy each `from` directory's draft files into
+its `to` directory, then revise them for the new task instead of starting over.
 
 Write results under the returned Agent directory. All submission paths are
 relative to `.tmp/agent-work/production-stages/<stage>/`, even when the manifest is in `submissions/`. They are never relative to `.tmp/context-runtime/` or to the manifest location. Each task lists the complete workspace-relative Markdown and reference output paths.

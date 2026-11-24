@@ -56,7 +56,9 @@ async function completeCurrentIndexerActionInternal(input: {
     throw new ContextError(ExitCode.UserError, "Use the current production file submission or the active revision action.", {
       category: ErrorCategory.UserInputInvalid, reason_code: "unsupported-current-action",
       ...(await readApprovedRevision(found.projectRoot) ? { expected_stage: "approved-revision",
-        hint: "Submit the active revision with stage: approved-revision and its current revision token. Do not clear the task or remove sources to repair a payload." } : {}),
+        hint: "Submit the active revision with stage: approved-revision and its current revision token. Do not clear the task or remove sources to repair a payload." }
+        : await readKnowledgeUpdate(found.projectRoot) ? { expected_stage: "source-update",
+          hint: "Submit the source update decision with stage: source-update, decisions, scope_summary and new_topics, as in the Route's output schema." } : {}),
       next_action: { command: "context status --format json" },
     });
   }

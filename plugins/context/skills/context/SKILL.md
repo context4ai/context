@@ -140,7 +140,7 @@ without the user's authorization.
 
 ### Check the CLI first
 
-This Skill ships with Context 0.7.101.
+This Skill ships with Context 0.7.102.
 
 When entering production in a workspace, align the CLI, this Skill and the
 workspace SDK once per session with [version alignment](references/version-alignment.md):

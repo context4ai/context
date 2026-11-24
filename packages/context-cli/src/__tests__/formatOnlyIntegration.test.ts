@@ -8,6 +8,7 @@ import { createDocumentSnapshotManifest } from "@c4a/extract";
 import type { LarkRunner } from "../lib/feishu.js";
 import { createLarkCaptureProject, makeLarkCaptureTmp } from "./projectCaptureLarkV062.fixtures.js";
 import { runCaptureLarkPhase } from "../project/documentCaptureLark.js";
+import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { beginKnowledgeUpdate, completeKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { currentScopeSourceVersion } from "../project/processedScopeStorage.js";
 import { inspectWorkspaceVersion, recordWorkspaceVersion } from "../project/workspaceChangelog.js";
@@ -197,6 +198,8 @@ test("updating a document does not require an unrelated repository checkout", as
   await capture(root, true);
   expect((await beginKnowledgeUpdate(root, { scopes: [scope] })).outcome).toBe("update-prepared");
   const request = (await readKnowledgeUpdate(root))!;
+  await expect(completeCurrentIndexerAction({ cwd: root, revision: request.revision, value: { decisions: [] } })).rejects.toMatchObject({
+    detail: { reason_code: "unsupported-current-action", expected_stage: "source-update" } });
   // An unreadable source is listed once, with its citation count.
   expect(request.outside_scope?.filter(item => item.source_ref === "repo:20261107/unavailable")).toEqual([
     { source_ref: "repo:20261107/unavailable", state: "unavailable", citations: 2, reason: expect.stringContaining("context source recovery-plan") }]);

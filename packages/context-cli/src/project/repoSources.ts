@@ -241,8 +241,9 @@ async function ensureMaterializedSymlink(input: {
 }): Promise<boolean> {
   const linkPath = join(input.projectRoot, input.materializedAt);
   await mkdir(dirname(linkPath), { recursive: true });
-  if (existsSync(linkPath)) {
-    const stats = await lstat(linkPath);
+  // lstat, not existsSync: a link left pointing at a removed checkout must be replaced.
+  const stats = await lstat(linkPath).catch(() => null);
+  if (stats !== null) {
     if (!stats.isSymbolicLink()) {
       input.diagnostics.push(`materialized path exists and is not a symlink: ${input.materializedAt}`);
       return false;
