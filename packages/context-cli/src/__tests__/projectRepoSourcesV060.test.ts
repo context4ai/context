@@ -269,6 +269,28 @@ describe("0.6.0 repository source behavior", () => {
     }
   });
 
+  test("source add repo replaces a link left pointing at a removed checkout", async () => {
+    const root = makeTmp();
+    const project = join(root, "kb");
+    try {
+      await mkdir(join(root, "old-lib"), { recursive: true });
+      const head = initGitRepo(join(root, "old-lib"));
+      await runCliInDir(root, ["init", "kb"]);
+      await writeSampleLibProjectEntry(project);
+      const source = { projectRoot: project, namespace: REPO_NAMESPACE, module: "sample-lib", remote: "https://git.example.com/sample-lib.git", ref: head };
+      await addRepoSource({ ...source, local: "../old-lib" });
+      const link = join(project, "sources", "repo", REPO_NAMESPACE, "sample-lib");
+      expect(lstatSync(link).isSymbolicLink()).toBe(true);
+
+      execFileSync("mv", [join(root, "old-lib"), join(root, "new-lib")]);
+      expect(existsSync(link)).toBe(false);
+      await addRepoSource({ ...source, local: "../new-lib" });
+      expect(realpathSync(link)).toBe(realpathSync(join(root, "new-lib")));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("project status diagnoses repo sources without materializing symlinks", async () => {
     const root = makeTmp();
     const repo = join(root, "sample-lib");

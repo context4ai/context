@@ -2,6 +2,12 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.102 - 2026-11-24
+
+- `context source add repo --local <new path>` replaces the committed `sources/repo/<batch>/<module>` link when it still points at a checkout that no longer exists. It previously failed with `EEXIST`, and `source ensure` and `update --pending` then reported the source as inaccessible.
+- Submitting a source update decision without `stage: source-update` now says which stage is expected, as an approved revision already did.
+- The production stage guide says what to do with `previous_drafts` after a plan amendment replaces a task: copy each draft into the new task's directory and revise it.
+
 ## 0.7.101 - 2026-11-24
 
 - `context-plan` now standardizes research for existing knowledge collections: a stakeholder intake, identifying each collection's kind and real upstream, a sampled quality audit against code, scored approaches with feasibility and risk, navigation impact and package design, and a conclusions-first research report built with the bundled zero-dependency `templates/research-report/build.mjs`. The PLAN template records purpose, constraints, decisions, existing collections and the target structure.
