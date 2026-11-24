@@ -83,8 +83,17 @@ with their limitation, not presented as ready. In particular:
   link), so a very large collection grows the workspace repository; select the
   folders articles need with include rules. Installed origin content itself is
   not committed.
-- Keeping pages unchanged and package-only content need support that may be
-  unavailable; when unavailable, record the approach as a future option.
+- Package-only content is available: bind the articles under a hidden knowledge
+  map category so they stay out of website navigation, select them into their
+  package, and link them from an entry article on the main site. Add the paths to
+  the website package's `select.exclude` to leave the pages off the website.
+- Keeping pages unchanged without production needs support that may be
+  unavailable. Until then, keep them unchanged through production: register the
+  collection as a file source that keeps its folders (with its repository and
+  commit as origin when it keeps changing), state in the requirement that each
+  page is reproduced as written, cite each section's original lines, and add
+  code citations where a page describes code so code changes reach it. Each
+  page then goes through ordinary batches and review; estimate that cost.
 
 When the user chooses an approach the installation cannot perform yet, keep the
 choice, mark the affected stage as blocked by that capability, propose an interim
@@ -148,6 +157,8 @@ individually with their navigation location and status (added, revised, kept
 unchanged, unchanged). Include existing unchanged articles from the navigation
 subtrees the package covers and the articles its new or revised articles link to;
 a large unchanged module may be listed as one row with its page count.
+Content that should appear only in a package, not in website navigation, goes
+under a hidden knowledge map category.
 
 State the basis of every overlap figure (pages or characters) and use the same
 basis across collections where possible.

@@ -7,6 +7,8 @@ export const knowledgeMapEntrySchema = z.object({
   parent: z.string().min(1).nullable(),
   title: z.string().min(1),
   order: z.number().finite().default(0),
+  /** Kept out of website navigation with its descendants; packages and LLMS still list it. */
+  hidden: z.boolean().optional(),
   target: z.object({
     artifact_ref: z.string().min(1),
     section_key: z.string().min(1).optional(),
@@ -72,12 +74,23 @@ export interface ProjectedKnowledgeMapEntry {
 
 /** Target availability belongs to each channel. Omit pending/excluded entries and
  * empty groups without mutating shared organization or another channel's map. */
-export function projectKnowledgeMap(structure: KnowledgeMap, targets: ReadonlyMap<string, string>) {
+export function projectKnowledgeMap(structure: KnowledgeMap, targets: ReadonlyMap<string, string>, options: { omitHidden?: boolean } = {}) {
   const children = new Map<string | null, KnowledgeMap["entries"]>();
   for (const entry of structure.entries) children.set(entry.parent, [...children.get(entry.parent) ?? [], entry]);
   const warnings: Array<{ entry: string; code: "knowledge-map-target-unavailable"; target: string }> = [];
+  /** Available targets of omitted hidden entries: placed on purpose, so not "unplaced". */
+  const hidden: string[] = [];
+  function collectHidden(entry: KnowledgeMap["entries"][number]): void {
+    const href = entry.target === undefined ? undefined : targets.get(knowledgeMapTargetKey(entry.target));
+    if (href !== undefined) hidden.push(href);
+    for (const child of children.get(entry.key) ?? []) collectHidden(child);
+  }
   function project(parent: string | null): ProjectedKnowledgeMapEntry[] {
     return (children.get(parent) ?? []).sort((a, b) => a.order - b.order || a.key.localeCompare(b.key)).flatMap(entry => {
+      if (options.omitHidden === true && entry.hidden === true) {
+        collectHidden(entry);
+        return [];
+      }
       const descendants = project(entry.key);
       const identity = entry.target === undefined ? undefined : knowledgeMapTargetKey(entry.target);
       const href = identity === undefined ? undefined : targets.get(identity);
@@ -86,7 +99,8 @@ export function projectKnowledgeMap(structure: KnowledgeMap, targets: ReadonlyMa
       return [{ key: entry.key, title: entry.title, ...(href === undefined ? {} : { href }), children: descendants }];
     });
   }
-  return { entries: project(null), warnings };
+  const entries = project(null);
+  return { entries, warnings, hidden };
 }
 
 export function knowledgeMapTargetKey(target: { artifact_ref: string; section_key?: string | undefined }): string {

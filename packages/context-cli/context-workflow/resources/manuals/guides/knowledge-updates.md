@@ -231,6 +231,8 @@ production or after completion through the same adjustment; no active Indexer
 task, source recapture or new mode choice is required. Finish or revoke active
 worker assignments before changing the map. Preserve unrelated entries and page
 identities. The map controls website navigation and LLMS organization together.
+Mark a category entry `hidden: true` to keep its articles in packages and LLMS but
+out of website navigation; they still count as placed.
 
 For each new or changed article, the Agent decides whether to retain its current
 placement, add another placement, move it, or create a warranted category. Check

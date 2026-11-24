@@ -42,3 +42,16 @@ test("invalid parent references, cycles, duplicate identities and content tamper
     upsert: [{ key: "x", parent: null, title: "One" }, { key: "x", parent: null, title: "Two" }] })).toThrow("identities");
   expect(() => validateKnowledgeMap({ ...current, revision: "stale" })).toThrow("revision");
 });
+
+test("hidden entries are omitted only when a channel asks, with their available targets reported", () => {
+  const shared = updateKnowledgeMap(structure(), { expected_revision: structure().revision, upsert: [
+    { key: "business", parent: null, title: "Business", hidden: true },
+  ] });
+  const targets = new Map([["artifact:entry", "/business/start"], ["artifact:later", "/business/later"]]);
+  expect(projectKnowledgeMap(shared, targets).entries.map(entry => entry.key)).toEqual(["business", "later"]);
+  const website = projectKnowledgeMap(shared, targets, { omitHidden: true });
+  expect(website.entries.map(entry => entry.key)).toEqual(["later"]);
+  expect(website.hidden).toEqual(["/business/start"]);
+  expect(website.warnings).toEqual([]);
+  expect(validateKnowledgeMap(shared)).toEqual(shared);
+});
