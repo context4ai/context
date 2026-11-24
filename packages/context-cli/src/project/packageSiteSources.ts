@@ -1,4 +1,5 @@
 import { parseRepoContentRef, type ArticleSourceReference, type ArticleStructureEntry, type SourcesRegistry } from "@c4a/context";
+import { fileSourceOriginFileUrl } from "./fileSourceOrigins.js";
 import { repoContentWebUrl } from "./repoContentPages.js";
 
 export interface SiteSource { label: string; href?: string }
@@ -56,7 +57,29 @@ export function siteReferenceSource(reference: ArticleSourceReference, registry:
     const href = webUrl(doc.url);
     return { label: `${doc.title ?? doc.name} · ${locator.path} ${region}`, ...(href ? { href } : {}), kind: "lark", owner: doc.title ?? doc.name };
   }
+  const file = registry.files.find(entry => entry.origin !== undefined && (ref === `file:${entry.id}` || ref === `file:${entry.name}`));
+  if (file?.origin) {
+    const originPath = fileOriginPath(file, locator.path);
+    const url = webUrl(originPath === undefined ? file.origin.url : fileSourceOriginFileUrl(file.origin, originPath));
+    const href = url && originPath !== undefined && !url.includes("#") ? `${url}#L${locator.start_line}-L${locator.end_line}` : url;
+    const owner = `${file.origin.id}@${file.origin.version}`;
+    return { label: `${owner} · ${originPath ?? locator.path} ${region}`, ...(href ? { href } : {}), kind: "other", owner };
+  }
   return { label: `${ref} · ${locator.path} ${region}`, kind: ref.startsWith("note:") ? "note" : "other", owner: ref };
+}
+
+/**
+ * Path of a snapshot file inside its origin version, when the snapshot keeps folders: the
+ * registered subdirectory after `<name>@<version>` plus the path under the module folder.
+ */
+function fileOriginPath(file: SourcesRegistry["files"][number], snapshotPath: string): string | undefined {
+  if (file.layout !== "tree" || file.local === undefined || file.origin === undefined) return undefined;
+  const modulePrefix = file.module !== undefined ? `${file.module}/` : "";
+  if (modulePrefix && !snapshotPath.startsWith(modulePrefix)) return undefined;
+  const parts = file.local.split("/");
+  const versionIndex = parts.findIndex(part => part.endsWith(`@${file.origin!.version}`));
+  if (versionIndex < 0) return undefined;
+  return [...parts.slice(versionIndex + 1), snapshotPath.slice(modulePrefix.length)].filter(Boolean).join("/");
 }
 
 /** Project recorded provenance only; do not infer source files from prose or titles. */

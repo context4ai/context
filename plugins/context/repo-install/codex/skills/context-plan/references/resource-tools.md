@@ -98,3 +98,16 @@ Respect uncommitted work in reused checkouts. Do not reset, replace, rebase or
 switch a user's active worktree just to change the planning baseline. Use an
 available read-only view or an authorized separate research checkout when the
 required revision is unavailable locally.
+
+## Read research material with indexer reading rules
+
+Before any source is registered, research may borrow the installed indexers'
+reading methods to explore saved material under `.tmp/context-plans/<slug>/`:
+for documents, start from titles, bounded opening excerpts and the complete
+H2/H3 outline, then read selected full text; for code, start from entry points,
+module boundaries and public interfaces, then read what the quality audit needs.
+This is a reading method only. Do not run indexer production commands, invoke
+indexer Skills as if a production stage were active, register sources, or create
+review candidates during research. Production uses the indexers after the PLAN
+is approved, through the `context` Skill's Route.
+

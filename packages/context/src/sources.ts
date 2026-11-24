@@ -103,9 +103,30 @@ export type FileSourceRegistryEntry = {
   local?: string;
   materializedAt: string;
   include?: readonly string[];
+  /** Document file extensions read as citable text; defaults to Markdown. */
+  documentExtensions?: readonly string[];
+  /** `tree` keeps the folder layout under `local`; the default `flat` keeps file names only. */
+  layout?: FileSourceLayout;
+  /** A frozen source keeps its last snapshot and is never captured again. */
+  frozen?: boolean;
+  /** Versioned external content installed as real files under `sources/<kind>/`. */
+  origin?: FileSourceOrigin;
   snapshot?: {
     manifest: string;
   };
+};
+
+export type FileSourceLayout = "flat" | "tree";
+
+export type FileSourceOrigin = {
+  /** Lowercase origin kind such as `git`; also the install directory `sources/<kind>/`. */
+  kind: string;
+  /** Identity within the origin kind, for example a repository URL or a package name. */
+  id: string;
+  /** Exact installed version: a tag, release or commit. */
+  version: string;
+  /** Web page of this version, when the origin kind has one. */
+  url?: string;
 };
 
 export type LarkSourceRegistryEntry = {
@@ -241,11 +262,22 @@ const sourceSnapshotSchema = z.object({
   manifest: z.string().min(1),
 }).strict();
 
+const fileSourceOriginSchema = z.object({
+  kind: z.string().min(1),
+  id: z.string().min(1),
+  version: z.string().min(1),
+  url: z.string().min(1).optional(),
+}).strict();
+
 const fileSourceRegistryEntrySchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().min(1),
   local: z.string().min(1).optional(),
   include: z.array(z.string().min(1)).optional(),
+  documentExtensions: z.array(z.string().min(1)).min(1).optional(),
+  layout: z.enum(["flat", "tree"]).optional(),
+  frozen: z.boolean().optional(),
+  origin: fileSourceOriginSchema.optional(),
   materializedAt: z.string().min(1).optional(),
   snapshot: sourceSnapshotSchema.optional(),
 }).strict();
@@ -482,6 +514,16 @@ const parseFileSourcesRegistry = (
     for (const [index, include] of (entry.include ?? []).entries()) {
       assertDocumentIncludePath("file", name, `include[${index}]`, include, registryPath);
     }
+    const documentExtensions = entry.documentExtensions === undefined
+      ? undefined
+      : normalizeFileDocumentExtensions(entry.documentExtensions, name, registryPath);
+    const origin: FileSourceOrigin | undefined = entry.origin === undefined ? undefined : {
+      kind: entry.origin.kind,
+      id: entry.origin.id,
+      version: entry.origin.version,
+      ...(entry.origin.url !== undefined ? { url: entry.origin.url } : {}),
+    };
+    if (origin !== undefined) assertFileSourceOrigin(name, origin, entry.local, registryPath);
     const snapshot = entry.snapshot ?? (namespace !== undefined
       ? { manifest: `sources/file/${namespace}/manifest.json` }
       : undefined);
@@ -503,10 +545,69 @@ const parseFileSourcesRegistry = (
       materializedAt,
       ...(entry.local !== undefined ? { local: entry.local } : {}),
       ...(entry.include !== undefined ? { include: entry.include } : {}),
+      ...(documentExtensions !== undefined ? { documentExtensions } : {}),
+      ...(entry.layout !== undefined ? { layout: entry.layout } : {}),
+      ...(entry.frozen === true ? { frozen: true } : {}),
+      ...(origin !== undefined ? { origin } : {}),
       ...(snapshot !== undefined ? { snapshot } : {}),
     };
     });
   });
+};
+
+/** Validate a raw `sources/file/index.yaml` document as the loader would. */
+export const parseFileSourcesRegistryDocument = (
+  input: unknown,
+  registryPath: string,
+): readonly FileSourceRegistryEntry[] => parseFileSourcesRegistry(input, registryPath);
+
+const FILE_DOCUMENT_EXTENSION_PATTERN = /^\.[a-z0-9][a-z0-9_-]*$/u;
+const FILE_SOURCE_ORIGIN_KIND_PATTERN = /^[a-z][a-z0-9-]*$/u;
+
+/** Directory names under `sources/` that belong to built-in source types. */
+export const RESERVED_FILE_SOURCE_ORIGIN_KINDS: readonly string[] = [...SOURCE_TYPES, "notes", "skills"];
+
+const normalizeFileDocumentExtensions = (
+  extensions: readonly string[],
+  name: string,
+  registryPath: string,
+): string[] => {
+  const normalized = [...new Set(extensions.map((extension) => {
+    const value = (extension.startsWith(".") ? extension : `.${extension}`).toLowerCase();
+    if (!FILE_DOCUMENT_EXTENSION_PATTERN.test(value)) {
+      throw new TypeError(`file source "${name}" in ${registryPath} has invalid documentExtensions entry: ${extension}`);
+    }
+    return value;
+  }))];
+  return normalized;
+};
+
+/** The install directory a versioned origin must use: `sources/<kind>/.../<name>@<version>`. */
+export const fileSourceOriginInstallRoot = (kind: string): string => `sources/${kind}`;
+
+const assertFileSourceOrigin = (
+  name: string,
+  origin: FileSourceOrigin,
+  local: string | undefined,
+  registryPath: string,
+): void => {
+  if (!FILE_SOURCE_ORIGIN_KIND_PATTERN.test(origin.kind) || RESERVED_FILE_SOURCE_ORIGIN_KINDS.includes(origin.kind)) {
+    throw new TypeError(`file source "${name}" in ${registryPath} has invalid origin.kind: ${origin.kind}`);
+  }
+  if (/[\s/\\]/u.test(origin.version) || origin.version === "." || origin.version === "..") {
+    throw new TypeError(`file source "${name}" in ${registryPath} has invalid origin.version: ${origin.version}`);
+  }
+  if (local === undefined) {
+    throw new TypeError(`file source "${name}" in ${registryPath} with an origin needs local: ${fileSourceOriginInstallRoot(origin.kind)}/<name>@${origin.version}`);
+  }
+  const normalized = local.replaceAll("\\", "/");
+  const root = `${fileSourceOriginInstallRoot(origin.kind)}/`;
+  const versionDir = normalized.split("/").find((part) => part.endsWith(`@${origin.version}`));
+  if (!normalized.startsWith(root) || versionDir === undefined) {
+    throw new TypeError(
+      `file source "${name}" in ${registryPath} must install origin ${origin.kind} under ${root}<name>@${origin.version}: ${local}`,
+    );
+  }
 };
 
 export const parseLarkSourcesRegistry = (

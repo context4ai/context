@@ -1,12 +1,13 @@
 import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import type { CaptureFilePhaseDefinition, FileSourceRegistryEntry } from "@c4a/context";
+import type { CaptureFilePhaseDefinition, FileSourceLayout, FileSourceRegistryEntry } from "@c4a/context";
 import {
   createDocumentSnapshotManifest,
   normalizeMarkdownDocument,
   normalizeSnapshotRelativePath,
+  type DocumentCaptureAssetGap,
   type DocumentSnapshotManifest,
   type DocumentSnapshotFileInput,
 } from "@c4a/extract";
@@ -14,10 +15,12 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
+  captureAssetGapDiagnostics,
   fileSnapshotLinkedAssetMismatchDiagnostic,
   readLinkedCaptureAssets,
   writeCaptureAssetIfChanged,
 } from "./documentCaptureAssets.js";
+import { fileSourceOriginInstallHint, fileSourceOriginRevision } from "./fileSourceOrigins.js";
 import { MDX_COMPONENT_EVIDENCE_DOCUMENT_PATH, renderMdxComponentEvidence, type MdxSourceFile } from "./documentMdxEvidence.js";
 import { readRouteMetadataFiles, routeEvidenceSnapshot, routeForDocument, type RouteHint } from "./documentCaptureRoutes.js";
 import { detectDocumentSiteFiles, documentSiteConfigHint } from "./documentSiteDetection.js";
@@ -50,6 +53,9 @@ export interface CaptureFileRunResult {
     name: string;
     local: string;
     include: readonly string[];
+    layout?: FileSourceLayout;
+    frozen?: true;
+    origin?: NonNullable<FileSourceRegistryEntry["origin"]>;
   };
   snapshot: {
     manifest: string;
@@ -68,6 +74,8 @@ export interface CaptureFileRunResult {
     path: string;
     routes: string[];
   }>;
+  /** Linked assets kept as links only (missing, outside the source, conflicting or too large). */
+  asset_gaps?: Array<{ document: string; target: string; reason: string }>;
   diagnostics: string[];
   next_action: WorkspaceRouteReevaluation;
 }
@@ -183,15 +191,34 @@ function assignFlatSnapshotPaths(files: readonly SourceCaptureFile[], module?: s
   });
 }
 
+function assignTreeSnapshotPaths(files: readonly SourceCaptureFile[], module?: string): SourceCaptureFile[] {
+  return files.map((file) => ({
+    ...file,
+    snapshotPath: normalizeSnapshotRelativePath(module === undefined ? file.sourcePath : `${module}/${file.sourcePath}`),
+  }));
+}
+
+function assignSnapshotPaths(files: readonly SourceCaptureFile[], layout: FileSourceLayout, module?: string): SourceCaptureFile[] {
+  return layout === "tree" ? assignTreeSnapshotPaths(files, module) : assignFlatSnapshotPaths(files, module);
+}
+
 async function walkMarkdownFiles(input: {
   localRoot: string;
   include: readonly string[];
   documentExtensions: readonly string[];
   routeMetadataFile?: string;
+  /** Reject symbolic links instead of skipping them (versioned origins must be real files). */
+  rejectSymlinks?: boolean;
 }): Promise<{
   documents: SourceCaptureFile[];
   metadata: SourceCaptureFile[];
 }> {
+  if (input.rejectSymlinks === true && (await lstat(input.localRoot)).isSymbolicLink()) {
+    throw new ContextError(ExitCode.UserError, `file source local path is a symbolic link: ${input.localRoot}`, {
+      category: ErrorCategory.UserInputInvalid,
+      next: "Install the origin version as real files instead of linking it, then rerun capture",
+    });
+  }
   const rootStat = await stat(input.localRoot);
   if (rootStat.isFile()) {
     const sourcePath = normalizeSnapshotRelativePath(basename(input.localRoot));
@@ -217,7 +244,14 @@ async function walkMarkdownFiles(input: {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = join(dir, entry.name);
+      if (entry.isSymbolicLink() && input.rejectSymlinks === true) {
+        throw new ContextError(ExitCode.UserError, `file source contains a symbolic link: ${toPosixPath(relative(input.localRoot, absolutePath))}`, {
+          category: ErrorCategory.UserInputInvalid,
+          next: "Install the origin version as real files instead of linking them, then rerun capture",
+        });
+      }
       if (entry.isDirectory()) {
+        if (entry.name === ".git") continue;
         await visit(absolutePath);
         continue;
       }
@@ -305,10 +339,13 @@ function captureRulesForPhase(input: {
 } {
   const mdxJson = input.phase.processors?.find((processor) => processor.kind === "file.capture.processor.mdx-json-docs");
   const routeMetadataFile = mdxJson?.routeMetadataFile ?? (mdxJson !== undefined ? "_meta.json" : undefined);
+  const sourceExtensions = input.source.documentExtensions;
   const include = input.source.include ?? mdxJson?.include ?? (
-    routeMetadataFile !== undefined ? ["**/*.md", "**/*.mdx", `**/${routeMetadataFile}`] : DEFAULT_FILE_SOURCE_INCLUDE
+    routeMetadataFile !== undefined ? ["**/*.md", "**/*.mdx", `**/${routeMetadataFile}`]
+      : sourceExtensions !== undefined ? sourceExtensions.map((extension) => `**/*${extension}`)
+      : DEFAULT_FILE_SOURCE_INCLUDE
   );
-  const documentExtensions = normalizeDocumentExtensions(mdxJson?.documentExtensions ?? (
+  const documentExtensions = normalizeDocumentExtensions(sourceExtensions ?? mdxJson?.documentExtensions ?? (
     mdxJson !== undefined ? [".md", ".mdx"] : DEFAULT_DOCUMENT_FILE_EXTENSIONS
   ));
   return {
@@ -440,6 +477,26 @@ async function prepareFileCaptureInput(input: {
 }> {
   const captureRules = captureRulesForPhase({ phase: input.phase, source: input.entry });
   const localRoot = resolve(input.projectRoot, input.entry.local);
+  const origin = input.entry.origin;
+  if (origin !== undefined) {
+    let present = true;
+    try {
+      await lstat(localRoot);
+    } catch {
+      present = false;
+    }
+    if (!present) {
+      const next = fileSourceOriginInstallHint(origin, input.entry.local);
+      throw runtimeError(`file source ${input.sourceName} origin ${fileSourceOriginRevision(origin)} is not installed at ${input.entry.local}`, {
+        sourceName: input.sourceName,
+        local: input.entry.local,
+        origin,
+        reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE,
+        next,
+        agent_hints: [next],
+      });
+    }
+  }
   const siteDetection = await detectDocumentSiteFiles({
     projectRoot: input.projectRoot,
     local: input.entry.local,
@@ -456,6 +513,7 @@ async function prepareFileCaptureInput(input: {
       include: captureRules.include,
       documentExtensions: captureRules.documentExtensions,
       ...(captureRules.routeMetadataFile !== undefined ? { routeMetadataFile: captureRules.routeMetadataFile } : {}),
+      ...(origin !== undefined ? { rejectSymlinks: true } : {}),
     });
   } catch (error) {
     if (error instanceof ContextError) throw error;
@@ -483,23 +541,25 @@ async function prepareFileCaptureInput(input: {
     captureRules,
     siteConfigHint,
     files: {
-      documents: assignFlatSnapshotPaths(files.documents, input.entry.module),
-      metadata: assignFlatSnapshotPaths(files.metadata, input.entry.module),
+      documents: assignSnapshotPaths(files.documents, input.entry.layout ?? "flat", input.entry.module),
+      metadata: assignSnapshotPaths(files.metadata, input.entry.layout ?? "flat", input.entry.module),
     },
   };
 }
 
 function appendGeneratedCaptureEvidence(input: {
   module?: string;
+  layout?: FileSourceLayout;
   routeMetadata: Awaited<ReturnType<typeof readRouteMetadataFiles>>;
   documentSnapshot: Awaited<ReturnType<typeof readDocumentFiles>>;
 }): void {
   const { snapshotFiles, documents } = input.documentSnapshot;
+  const separator = input.layout === "tree" ? "/" : "--";
   const routeEvidence = routeEvidenceSnapshot(input.routeMetadata.routeHints);
   if (routeEvidence !== null) {
     const path = input.module === undefined
       ? routeEvidence.file.path
-      : `${input.module}--${routeEvidence.file.path}`;
+      : `${input.module}${separator}${routeEvidence.file.path}`;
     snapshotFiles.push({ ...routeEvidence.file, path });
     documents.push({ ...routeEvidence.document, path });
   }
@@ -507,7 +567,7 @@ function appendGeneratedCaptureEvidence(input: {
   if (mdxComponentEvidence === null) return;
   const path = input.module === undefined
     ? MDX_COMPONENT_EVIDENCE_DOCUMENT_PATH
-    : `${input.module}--${MDX_COMPONENT_EVIDENCE_DOCUMENT_PATH}`;
+    : `${input.module}${separator}${MDX_COMPONENT_EVIDENCE_DOCUMENT_PATH}`;
   snapshotFiles.push({
     path,
     bytes: mdxComponentEvidence.markdown,
@@ -541,6 +601,9 @@ async function runCaptureFilePhaseUnlocked(input: {
   await assertSourceInputMutable(input.projectRoot, `file:${resolved.sourceName}`);
   const entry = resolved.entry as FileSourceRegistryEntry;
   assertFileSnapshotMaterializedAt(entry);
+  if (entry.frozen === true) {
+    return frozenCaptureResult({ projectRoot: input.projectRoot, entry, sourceName: resolved.sourceName, phaseId: input.phase.id });
+  }
   if (entry.local === undefined || entry.local.trim().length === 0) {
     throw runtimeError(`file source ${resolved.sourceName} is missing local refresh hint`, {
       sourceName: resolved.sourceName,
@@ -572,15 +635,18 @@ async function runCaptureFilePhaseUnlocked(input: {
     local: entry.local,
     routeHints: routeMetadata.routeHints,
   });
-  const linkedAssets = await readLinkedCaptureAssets({
+  const layout = fileSourceLayout(entry);
+  const { assets: linkedAssets, gaps: assetGaps } = await readLinkedCaptureAssets({
     files: files.documents,
     localRoot: resolve(input.projectRoot, entry.local),
     sourceName: resolved.sourceName,
+    layout,
   });
   const { snapshotFiles, documents } = documentSnapshot;
   const { metadataFiles } = routeMetadata;
   appendGeneratedCaptureEvidence({
     ...(entry.module !== undefined ? { module: entry.module } : {}),
+    layout,
     routeMetadata,
     documentSnapshot,
   });
@@ -595,9 +661,11 @@ async function runCaptureFilePhaseUnlocked(input: {
     capturedAt: (input.now ?? new Date()).toISOString(),
     files: snapshotFiles,
     metadata: {
+      ...originSnapshotMetadata(entry),
       capture: {
         include: normalizeFileSourceIncludeForSnapshot(include),
         documentExtensions: [...captureRules.documentExtensions],
+        ...captureLayoutMetadata(layout, assetGaps),
         ...(metadataFiles.length > 0 ? { routeFiles: metadataFiles } : {}),
         ...(routeMetadata.routeHints.size > 0
           ? {
@@ -677,12 +745,7 @@ async function runCaptureFilePhaseUnlocked(input: {
 
   return {
     kind: "document.capture.file.result",
-    source: {
-      type: "file",
-      name: resolved.sourceName,
-      local: entry.local,
-      include,
-    },
+    source: { type: "file", name: resolved.sourceName, local: entry.local, include, ...captureSourceOptions(entry) },
     snapshot: {
       manifest: manifestPath,
       materializedAt,
@@ -691,8 +754,93 @@ async function runCaptureFilePhaseUnlocked(input: {
     },
     documents,
     ...(metadataFiles.length > 0 ? { metadata_files: metadataFiles } : {}),
-    diagnostics: [...(siteConfigHint !== null ? [siteConfigHint] : []), ...(recovery === undefined ? [] : [recovery.diagnostic])],
+    ...captureAssetGapResult(assetGaps),
+    diagnostics: [
+      ...(siteConfigHint !== null ? [siteConfigHint] : []),
+      ...captureAssetGapDiagnostics(resolved.sourceName, assetGaps),
+      ...(recovery === undefined ? [] : [recovery.diagnostic]),
+    ],
     next_action: workspaceRouteReevaluation(input.phase.id),
+  };
+}
+
+function fileSourceLayout(entry: FileSourceRegistryEntry): FileSourceLayout {
+  return entry.layout ?? "flat";
+}
+
+function captureSourceOptions(entry: FileSourceRegistryEntry): Pick<CaptureFileRunResult["source"], "layout" | "origin"> {
+  return {
+    ...(entry.layout === "tree" ? { layout: "tree" as const } : {}),
+    ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
+  };
+}
+
+function captureLayoutMetadata(layout: FileSourceLayout, assetGaps: readonly DocumentCaptureAssetGap[]) {
+  return {
+    ...(layout === "tree" ? { layout } : {}),
+    ...(assetGaps.length > 0 ? { assetGaps: [...assetGaps] } : {}),
+  };
+}
+
+function captureAssetGapResult(assetGaps: readonly DocumentCaptureAssetGap[]): Pick<CaptureFileRunResult, "asset_gaps"> {
+  return assetGaps.length > 0
+    ? { asset_gaps: assetGaps.map(({ document, target, reason }) => ({ document, target, reason })) }
+    : {};
+}
+
+function originSnapshotMetadata(entry: FileSourceRegistryEntry): { source?: { title: string; revisionId: string; url?: string } } {
+  if (entry.origin === undefined) return {};
+  return {
+    source: {
+      title: entry.origin.id,
+      revisionId: fileSourceOriginRevision(entry.origin),
+      ...(entry.origin.url !== undefined ? { url: entry.origin.url } : {}),
+    },
+  };
+}
+
+/** A frozen source keeps its last snapshot: report it unchanged without reading `local`. */
+async function frozenCaptureResult(input: {
+  projectRoot: string;
+  entry: FileSourceRegistryEntry;
+  sourceName: string;
+  phaseId: string;
+}): Promise<CaptureFileRunResult> {
+  const manifestPath = sourceManifestPath(input.entry);
+  const { previous } = await readDocumentManifestForCapture({
+    projectRoot: input.projectRoot, manifestPath, sourceType: "file", sourceName: input.sourceName,
+  });
+  if (previous === null) {
+    throw runtimeError(`file source ${input.sourceName} is frozen but has no captured snapshot`, {
+      sourceName: input.sourceName,
+      manifest: manifestPath,
+      next: `${documentSourceAddCommand("file", input.sourceName)} --unfreeze, capture it once, then freeze it again`,
+    });
+  }
+  return {
+    kind: "document.capture.file.result",
+    source: {
+      type: "file",
+      name: input.sourceName,
+      local: input.entry.local ?? "",
+      include: previous.metadata?.capture?.include ?? [],
+      ...(input.entry.layout === "tree" ? { layout: "tree" as const } : {}),
+      frozen: true,
+      ...(input.entry.origin !== undefined ? { origin: input.entry.origin } : {}),
+    },
+    snapshot: {
+      manifest: manifestPath,
+      materializedAt: input.entry.materializedAt,
+      snapshot_hash: previous.snapshot_hash,
+      changed: false,
+    },
+    documents: previous.files.map((file) => ({
+      path: file.path,
+      title: file.title ?? file.path,
+      line_count: file.line_count,
+    })),
+    diagnostics: [`file source ${input.sourceName} is frozen; its snapshot was kept and the local path was not read`],
+    next_action: workspaceRouteReevaluation(input.phaseId),
   };
 }
 

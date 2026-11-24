@@ -178,6 +178,11 @@ Before choosing a local Markdown capture route, honor the surrounding task conte
   is empty or only mounts runtime-rendered content, tell the user that capture
   found a document-site shell and ask for the rendered-site or data-source
   boundary instead of inventing body text.
+- A documentation folder whose folders matter, versioned external content (a
+  documentation repository, a released package or Skill), or a collection to
+  absorb once and archive → register a file source with `--layout tree`, plus
+  `--origin-*` for versioned content or `--freeze` after archiving. Follow
+  [Versioned external content](../manuals/guides/knowledge-updates.md#versioned-external-content-and-archived-collections).
 - A Lark/Feishu URL, doc token, or wiki token → register one Lark source:
   `context source add lark [YYYYMMDD] --module <module> --url <url>` or the
   matching token flag. Register every requested document under the same date;

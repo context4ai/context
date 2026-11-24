@@ -8,6 +8,10 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+- `context-plan` now standardizes research for existing knowledge collections: a stakeholder intake, identifying each collection's kind and real upstream, a sampled quality audit against code, scored approaches with feasibility and risk, navigation impact and package design, and a conclusions-first research report built with the bundled zero-dependency `templates/research-report/build.mjs`. The PLAN template records purpose, constraints, decisions, existing collections and the target structure.
+- A `file` source can follow versioned external content: `context source add file <name> --local sources/<kind>/<name>@<version> --origin-kind <kind> --origin-id <id> --origin-version <version>` records an origin, adds `sources/<kind>/` to `.gitignore` and stores the version in the snapshot. Context never installs it; registration returns an install hint (built in for `git`), a missing install is a deferred acquisition gap whose next step installs the registered version, and symbolic links are rejected. Site provenance links to the origin version.
+- `--layout tree` keeps a file source's folders and the images and small data files its documents link to. `--document-ext` captures JSON, YAML or other text files as citable documents. `--freeze` keeps a source's snapshot and stops capturing it, for example after its original is archived.
+- File capture no longer stops on a missing, out-of-source, conflicting or oversized (over 5 MB) linked asset: the link stays as written and is reported in `asset_gaps`.
 - The routine update example now starts the scheduled task content with a plain line naming the Context Skill instead of a slash command. Some schedulers expand a leading slash command into the Skill text and drop the rest, so the run never saw its paragraph and `ROUTINE_POLICY` and stopped to ask what to do.
 
 ## 0.7.99 - 2026-11-13

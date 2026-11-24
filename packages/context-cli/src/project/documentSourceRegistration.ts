@@ -4,7 +4,11 @@ import { basename, extname, isAbsolute, join, relative, resolve } from "node:pat
 import {
   DEFAULT_FILE_SOURCES_REGISTRY_PATH,
   DEFAULT_LARK_SOURCES_REGISTRY_PATH,
+  fileSourceOriginInstallRoot,
   loadSourcesRegistry,
+  parseFileSourcesRegistryDocument,
+  type FileSourceLayout,
+  type FileSourceOrigin,
 } from "@c4a/context";
 import YAML from "yaml";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -245,17 +249,97 @@ export interface AddFileSourceInput {
   name: string;
   namespace?: string;
   module?: string;
-  local: string;
+  /** Required for a new source; an existing source keeps its registered path when omitted. */
+  local?: string;
   include?: readonly string[];
+  documentExtensions?: readonly string[];
+  layout?: FileSourceLayout;
+  /** `true` freezes, `false` unfreezes, undefined keeps the registered state. */
+  frozen?: boolean;
+  /** Merged into the registered origin; a new origin needs kind, id and version. */
+  origin?: Partial<FileSourceOrigin>;
+}
+
+/** Keep installed origin content out of Git: only the registry and snapshots are committed. */
+async function ensureOriginInstallRootIgnored(projectRoot: string, kind: string): Promise<boolean> {
+  const line = `${fileSourceOriginInstallRoot(kind)}/`;
+  const path = join(projectRoot, ".gitignore");
+  let current = "";
+  try {
+    current = await readFile(path, "utf8");
+  } catch {
+    current = "";
+  }
+  const lines = current.split(/\r?\n/u).map((value) => value.trim());
+  if (lines.includes(line) || lines.includes(`/${line}`)) return false;
+  await atomicWriteFile(path, `${current}${current.length === 0 || current.endsWith("\n") ? "" : "\n"}${line}\n`);
+  return true;
+}
+
+function mergedFileSourceOrigin(
+  existing: Record<string, unknown> | undefined,
+  requested: Partial<FileSourceOrigin> | undefined,
+): FileSourceOrigin | undefined {
+  if (requested === undefined) return existing as FileSourceOrigin | undefined;
+  const merged = { ...(existing ?? {}), ...Object.fromEntries(Object.entries(requested).filter(([, value]) => value !== undefined)) };
+  // A different kind or id is another origin; do not keep the old version or page.
+  if (existing !== undefined && ((requested.kind !== undefined && requested.kind !== existing.kind) ||
+    (requested.id !== undefined && requested.id !== existing.id))) {
+    if (requested.version === undefined) delete merged.version;
+    if (requested.url === undefined) delete merged.url;
+  } else if (existing !== undefined && requested.version !== undefined && requested.version !== existing.version && requested.url === undefined) {
+    delete merged.url;
+  }
+  for (const field of ["kind", "id", "version"] as const) {
+    if (typeof merged[field] !== "string" || (merged[field] as string).length === 0) {
+      throw new ContextError(ExitCode.UserError, `file source origin needs --origin-${field}`, {
+        category: ErrorCategory.UserInputInvalid,
+        flag: `--origin-${field}`,
+      });
+    }
+  }
+  return merged as FileSourceOrigin;
+}
+
+function nextFileSourceEntry(input: {
+  existingEntry: Record<string, unknown>;
+  name: string;
+  local: string;
+  input: AddFileSourceInput;
+}): { entry: Record<string, unknown>; origin: FileSourceOrigin | undefined } {
+  const { existingEntry, input: request } = input;
+  const origin = mergedFileSourceOrigin(
+    existingEntry.origin !== null && typeof existingEntry.origin === "object" ? existingEntry.origin as Record<string, unknown> : undefined,
+    request.origin,
+  );
+  const entry: Record<string, unknown> = {
+    ...existingEntry,
+    name: input.name,
+    local: input.local,
+    ...(request.include !== undefined ? { include: request.include } : {}),
+    ...(request.documentExtensions !== undefined ? { documentExtensions: request.documentExtensions } : {}),
+    ...(request.layout !== undefined ? { layout: request.layout } : {}),
+    ...(origin !== undefined ? { origin } : {}),
+  };
+  if (request.frozen === true) entry.frozen = true;
+  if (request.frozen === false) delete entry.frozen;
+  return { entry, origin };
 }
 
 export async function addFileSourceUnlocked(input: AddFileSourceInput): Promise<Record<string, unknown>> {
   assertDocumentBatchIdentity({ sourceType: "file", ...input });
-  const local = await normalizeFileSourceLocal(input.projectRoot, input.local);
   for (const include of input.include ?? []) assertSafeFileInclude(include);
 
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   const existing = registry.files.find((source) => source.name === input.name || source.id === input.name);
+  const requestedLocal = input.local ?? existing?.local;
+  if (requestedLocal === undefined) {
+    throw new ContextError(ExitCode.UserError, "source add file requires --local <path>", {
+      category: ErrorCategory.UserInputInvalid,
+      flag: "--local",
+    });
+  }
+  const local = await normalizeFileSourceLocal(input.projectRoot, requestedLocal);
   if (registry.repos.some((source) => source.name === input.name || source.id === input.name) ||
     registry.larks.some((source) => source.name === input.name || source.id === input.name)) {
     throw new ContextError(ExitCode.UserError, `source identifier already exists outside file registry: ${input.name}`, {
@@ -274,12 +358,12 @@ export async function addFileSourceUnlocked(input: AddFileSourceInput): Promise<
     ? { ...(existingRaw as Record<string, unknown>) }
     : {};
   if (existing !== undefined && existing.id !== existing.name && existingEntry.id === undefined) existingEntry.id = existing.id;
-  const nextEntry = {
-    ...existingEntry,
+  const { entry: nextEntry, origin } = nextFileSourceEntry({
+    existingEntry,
     name: input.module ?? existing?.module ?? existing?.name ?? input.name,
     local,
-    ...(input.include !== undefined ? { include: input.include } : {}),
-  };
+    input,
+  });
   const nextSources = input.namespace !== undefined && input.module !== undefined
     ? upsertDocumentBatchModule({ sources, namespace: input.namespace, module: input.module, entry: nextEntry })
     : [...sources.filter((entry) => {
@@ -288,7 +372,17 @@ export async function addFileSourceUnlocked(input: AddFileSourceInput): Promise<
         return record.name !== input.name && record.id !== input.name;
       }), nextEntry];
 
+  // Validate the whole registry (including origin install paths) before writing it.
+  try {
+    parseFileSourcesRegistryDocument({ sources: nextSources }, DEFAULT_FILE_SOURCES_REGISTRY_PATH);
+  } catch (error) {
+    throw new ContextError(ExitCode.UserError, error instanceof Error ? error.message : String(error), {
+      category: ErrorCategory.UserInputInvalid,
+      sourceName: input.name,
+    });
+  }
   await atomicWriteFile(join(input.projectRoot, DEFAULT_FILE_SOURCES_REGISTRY_PATH), YAML.stringify({ sources: nextSources }));
+  const gitignoreUpdated = origin !== undefined && await ensureOriginInstallRootIgnored(input.projectRoot, origin.kind);
   const updated = await loadSourcesRegistry({ rootDir: input.projectRoot });
   const entry = updated.files.find((source) => source.name === input.name || source.id === input.name);
   if (entry === undefined) {
@@ -297,7 +391,8 @@ export async function addFileSourceUnlocked(input: AddFileSourceInput): Promise<
       sourceName: input.name,
     });
   }
-  return fileSourceAgentViewWithNextAction({ projectRoot: input.projectRoot, source: entry });
+  const view = await fileSourceAgentViewWithNextAction({ projectRoot: input.projectRoot, source: entry });
+  return gitignoreUpdated ? { ...view, gitignore_added: `${fileSourceOriginInstallRoot(origin!.kind)}/` } : view;
 }
 
 function larkIdentityFlags(input: {

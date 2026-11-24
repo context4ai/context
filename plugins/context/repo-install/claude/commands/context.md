@@ -74,7 +74,9 @@ Classify a request in this order:
 A registration or association is an entrance, not evidence: it does not show that
 the content was read, verified or is usable by the reader. Links from knowledge to
 imports are navigation; a conclusion that depends on external content requires
-capturing that content into `sources`.
+capturing that content into `sources`. Versioned content such as a released
+package, Skill or documentation repository is captured as a `file` source with
+an origin, described in the knowledge-updates guide.
 
 For long-term association of external knowledge, Skills or plugins, maintain
 `imports.yaml` through [imports](../resources/context/imports.md); registration alone does
