@@ -26,6 +26,8 @@ const requirement = z.object({
   evidence_source_scope: scope.optional(),
   exclusions: z.array(z.object({ scope, reason: text, paths: z.array(localPath).min(1).optional(),
     source_baselines: z.record(text).optional() }).strict()).optional(),
+  /** Keep each target page's title, sections and order; record code contradictions in src/original-revisions.yaml. */
+  preserve_original: z.boolean().optional(),
 }).strict();
 
 export const productionRequirementsSchema = z.object({ requirements: z.array(requirement).min(1) }).strict();

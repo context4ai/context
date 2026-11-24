@@ -271,6 +271,27 @@ export function createCliProgram(): Command {
     });
 
   review
+    .command("original-revisions")
+    .description("List or decide revisions proposed for pages kept as written (src/original-revisions.yaml)")
+    .option("--decide <id=decision>", "record a decision: upstream | local | kept; repeatable", (value: string, previous: string[] = []) => [...previous, value])
+    .option("--upstream <id=outcome>", "record the outcome of an upstream correction; repeatable", (value: string, previous: string[] = []) => [...previous, value])
+    .option("--format <format>", "output format: text | json", "text")
+    .action(async (options: Record<string, unknown>) => {
+      if (options.format !== "text" && options.format !== "json") {
+        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
+          category: ErrorCategory.UserInputInvalid,
+        });
+      }
+      const { runOriginalRevisionsCommand } = await import("./project/originalRevisionsCommand.js");
+      await runOriginalRevisionsCommand({
+        cwd: process.cwd(),
+        decide: Array.isArray(options.decide) ? options.decide as string[] : [],
+        upstream: Array.isArray(options.upstream) ? options.upstream as string[] : [],
+        format: options.format === "json" ? "json" : "text",
+      });
+    });
+
+  review
     .command("apply <payload-file>")
     .description("Apply scoped JSON/JSONL decisions and revision instructions")
     .option("--format <format>", "output format: text | json", "text")

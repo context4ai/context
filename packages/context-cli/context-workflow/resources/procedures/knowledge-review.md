@@ -37,6 +37,20 @@ No review code or special approval phrase is required. When the report's
 `navigation.changes` is not empty, name those menu changes (added, removed,
 renamed, pointing elsewhere) in the confirmation request.
 
+When the report returns `original_revisions`, the batch revised pages kept as
+written. Run `context review original-revisions --format json` and present each
+proposed or reopened item with its original text, revision and evidence. The
+user chooses per item: `upstream` (keep the revision and propose the correction
+to the original document through the knowledge-updates guide's optional
+upstream correction; a remote write still needs its own authorization),
+`local` (keep the revision only here) or `kept` (restore the original passage
+in the article and keep it). Record the choices with
+`context review original-revisions --decide <id>=<decision>`, restore the
+original text of `kept` items before approval, and record an upstream outcome
+with `--upstream <id>=<outcome>`. In fully managed and routine runs, record
+`local` for every proposal and list them in the run report so the user can
+change a decision later.
+
 For old automation, `review approve-all --force` remains a deprecated explicit
 approval alias and applies the current candidate scope without requiring a new
 report. Prefer `--confirmed` for new calls. The CLI also accepts existing legacy

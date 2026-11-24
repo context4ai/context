@@ -109,6 +109,36 @@ To cancel that pause explicitly, use `context run --resume-writing --format json
 It preserves approved articles, candidates and existing task input handles.
 Partial delivery must include the approved articles needed by its local links.
 
+### Pages kept as written
+
+When the task's requirement in `shared/requirements.md` has
+`preserve_original: true`, reproduce each original page as an article: keep its
+title, section headings and the main order of its content, and keep its wording.
+Cite each section's original lines, and also cite the code a passage describes,
+so later code changes reach the article.
+
+Where a passage contradicts the cited code or describes behavior the code no
+longer has, write the corrected text in the article and add one proposal to
+`src/original-revisions.yaml` with the status `proposed`:
+
+```yaml
+revisions:
+  - id: limits-default
+    article: guides/limits.md        # knowledge path of the article
+    section: limits
+    original: { source_ref: file:wiki, locator: { path: limits.md, start_line: 3, end_line: 3 }, text: "The limit is 3." }
+    revised: "The limit is 5."
+    reason: stale                    # wrong: never matched the code; stale: the code changed since
+    evidence:
+      - { source_ref: repo:service, locator: { path: src/limits.ts, start_line: 1, end_line: 1 }, content_digest: "sha256:…" }
+    status: proposed
+```
+
+Take `content_digest` from the submitted reference for the same lines. Do not
+correct wording, style or structure that the code does not contradict. A
+proposal whose status is `kept` keeps the original text: do not propose it again
+while `context review original-revisions` does not report it as reopened.
+
 ### Locating submitted references
 
 Submission locators also accept `{path, heading}` or `{path, quote}` instead of
