@@ -98,6 +98,7 @@ export function renderReadme(projectName: string, language: ProjectLanguage): st
       "- `node_modules/@c4a/context/docs/README.md`",
       "- `node_modules/@c4a/context/docs/reference/project-api.md`",
       "- `node_modules/@c4a/context/docs/reference/package-templates.md`",
+      "- 这些文档随工作区 SDK 安装；`context status` 报告 `version_alignment` 时先按其说明升级 SDK，否则文档可能落后于运行中的 CLI。",
       "",
     ].join("\n");
   }
@@ -138,6 +139,7 @@ export function renderReadme(projectName: string, language: ProjectLanguage): st
     "- `node_modules/@c4a/context/docs/README.md`",
     "- `node_modules/@c4a/context/docs/reference/project-api.md`",
     "- `node_modules/@c4a/context/docs/reference/package-templates.md`",
+    "- These docs come with the workspace SDK; when `context status` reports `version_alignment`, upgrade the SDK as it says first, or they may lag the running CLI.",
     "",
   ].join("\n");
 }
@@ -188,6 +190,7 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
       "- SDK 总入口：`node_modules/@c4a/context/docs/README.md`。",
       "- 项目声明：`node_modules/@c4a/context/docs/reference/project-api.md`。",
       "- 包模板：`node_modules/@c4a/context/docs/reference/package-templates.md`。",
+      "- 这些文档随工作区 SDK 安装；`context status` 报告 `version_alignment` 时先按其说明升级 SDK，否则文档可能落后于运行中的 CLI。",
       "",
     ].join("\n");
   }
@@ -235,6 +238,7 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
     "- General SDK index: `node_modules/@c4a/context/docs/README.md`.",
     "- Project declarations: `node_modules/@c4a/context/docs/reference/project-api.md`.",
     "- Package templates: `node_modules/@c4a/context/docs/reference/package-templates.md`.",
+    "- These docs come with the workspace SDK; when `context status` reports `version_alignment`, upgrade the SDK as it says first, or they may lag the running CLI.",
     "",
   ].join("\n");
 }

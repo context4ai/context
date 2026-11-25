@@ -161,7 +161,7 @@ unchanged, unchanged). Include existing unchanged articles from the navigation
 subtrees the package covers and the articles its new or revised articles link to;
 a large unchanged module may be listed as one row with its page count.
 Content that should appear only in a package, not in website navigation, goes
-under a hidden knowledge map category.
+under a hidden knowledge map category, set with `context task adjust`.
 
 State the basis of every overlap figure (pages or characters) and use the same
 basis across collections where possible.

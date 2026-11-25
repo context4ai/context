@@ -79,15 +79,28 @@ import SupportPanel from '../components/SupportPanel.vue'
 
 Place it using the existing knowledge-map entry structure, with
 `target: { artifact_ref: "site:support" }`. Set `parent`, `title` and `order`
-as for other directory entries; do not create a second menu configuration.
+as for other directory entries, and change the map with `context task adjust`
+(never by editing `src/knowledge-map.yaml` or its revision); do not create a
+second menu configuration such as `site.nav` entries for these pages.
 The `site:` namespace is reserved for website pages; do not use `section_key`
 on these targets. Undeclared targets fail website building with a diagnostic.
 Pages without directory entries remain directly accessible. Multiple entries
 can reference one page without duplicating content.
 
 These pages are website-only: they are not approved articles and do not enter
-the knowledge package or LLM Docs. Update formal articles through the existing
-knowledge revision workflow, not through a custom page that shadows their URLs.
+the knowledge package or LLM Docs. Use them for presentation, such as a support
+page, an introduction or an entry to a tool. Knowledge content belongs in
+articles: material from another team, such as a released knowledge package or a
+wiki, is registered as a versioned `file` source and produced (or kept as
+written) through the workflow, not copied into custom pages by a script. Update
+formal articles through the existing knowledge revision workflow, not through a
+custom page that shadows their URLs.
+
+The website build checks the internal links and anchors in custom pages and
+fails, listing them, when one has no target. A link to a heading uses the
+website's heading ID: lower case, spaces and punctuation such as `.` or `_`
+become `-`, and an ID starting with a digit gets a leading `_` (`3V架构` becomes
+`_3v架构`).
 
 ## Build and delivery
 

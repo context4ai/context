@@ -43,10 +43,15 @@ and wait for the user instead of crossing the major.
 3. Workspace SDK below the target: set the `@c4a/context` dependency in
    `package.json` to the target, install with the workspace's package manager
    (`bun install` for a Bun lockfile) and check the installed version. Keep the
-   change with the next delivery: commit it with that batch and add an
-   "Upgrade Context SDK to <target>" line to its version entry. Do not commit or
-   publish it on its own. In a fresh sandbox the next run repeats it until a
-   delivery includes it.
+   change with the next delivery: commit `package.json` together with the lock
+   file in that batch (check both are staged; staging only knowledge paths drops
+   them) and add an "Upgrade Context SDK to <target>" line to its version entry.
+   When a routine update finds no knowledge change, deliver the upgrade on its
+   own instead: record a patch version with a `dist` trigger and submit it like
+   any delivery, so the workspace does not stay behind. Otherwise do not commit or
+   publish it on its own; in a fresh sandbox the next run repeats it until a
+   delivery includes it. `context status` and `context version inspect` report a
+   pinned SDK older than the running CLI as `version_alignment`.
 
 If the release list cannot be read or an installation fails, do not retry: keep
 the current versions, report the problem once and continue when they still work.

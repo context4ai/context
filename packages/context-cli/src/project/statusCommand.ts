@@ -37,6 +37,8 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
   const originalRevisions = await readOriginalRevisionProposals(projectRoot).then(
     revisions => ({ proposed: revisions.length }),
     (error: unknown) => ({ problem: error instanceof Error ? error.message : String(error) }));
+  const { inspectSdkAlignment } = await import("./sdkAlignment.js");
+  const sdkAlignment = await inspectSdkAlignment(projectRoot);
   // The shared serializer either returns the intact Route inline or points to
   // it on disk. Summary fields never become a partial executable contract.
   return {
@@ -54,6 +56,7 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
     ...("problem" in originalRevisions || originalRevisions.proposed > 0 ? { original_revisions: { ...originalRevisions,
       next_action: { command: "context review original-revisions --format json",
         message: "Revisions proposed for pages kept as written await a decision; apply it to the article, record it in the changelog, then resolve the proposal. Fully managed and routine runs keep the revisions locally." } } } : {}),
+    ...(sdkAlignment ? { version_alignment: sdkAlignment } : {}),
     ...(status.executionMode !== undefined
       ? { executionMode: status.executionMode }
       : {}),
