@@ -96,6 +96,8 @@ export interface ProjectStatus {
   packages: PackageFreshness[];
   packageTemplateReviews: PackageTemplateReviewStatus[];
   pendingCapturePhases: string[];
+  /** Registered documents still waiting for capture that the current production request does not need. */
+  deferredCaptureSources?: string[];
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;
   close: ProjectCloseStatus;

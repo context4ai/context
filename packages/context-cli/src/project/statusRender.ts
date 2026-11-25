@@ -63,6 +63,7 @@ export function formatProjectStatus(status: ProjectStatus, options: { full?: boo
       `- dist files: ${status.distFiles}`,
       `- phases: ${options.full ? status.phases.join(", ") || "none" : status.phases.length}`,
       `- pending capture phases: ${status.pendingCapturePhases.length}`,
+      ...(status.deferredCaptureSources?.length ? [`- deferred capture: ${status.deferredCaptureSources.join(", ")}`] : []),
       `- indexer registry: ${status.indexerRegistry.state}`,
       `- indexer candidate compile: ${status.indexerCandidateCompile.state}`,
       `- close: ${status.close.state}`,

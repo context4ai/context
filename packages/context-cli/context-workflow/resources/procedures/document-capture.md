@@ -99,11 +99,17 @@ If `docs +fetch` lacks the required `--doc-format`
 capability, follow the returned `lark-cli update` recovery and rerun the same
 Route command; do not replace the capture with a hand-written export.
 
-An active production stage can continue planning and writing articles whose sources
-are available while another capture remains pending. Keep unresolved sources in
-`pending_scopes`; do not cite their unavailable snapshots. The Route returns to
-pending capture after the active production/review work, before delivery completes.
-This does not mark failed captures as complete or waive source-read authorization.
+Production waits only for its own documents. When a stage exists, capture is
+gated on the sources it requested; other registered documents still waiting for
+capture are listed in status as `deferredCaptureSources` and do not block its
+planning, writing, Review or delivery. Before a stage exists, the capture Gate
+also returns the exact `context action prepare-current --revision … --source …`
+command for requirements whose documents are all captured: run it to start that
+request now, or capture first. Report the deferred documents to the user; they
+stay registered and are captured when their read permission is given. A stage
+whose own sources are still waiting keeps them in `pending_scopes`; do not cite
+unavailable snapshots. This does not mark failed captures as complete or waive
+source-read authorization.
 
 ## Image acquisition before capture
 

@@ -23,7 +23,7 @@ import {
 import { evidenceStatusForStatus, evidenceWarningState } from "./statusEvidence.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { inspectPackageTemplateReviews } from "./packageTemplateReview.js";
-import type { ProjectStatus } from "./statusTypes.js";
+import type { DocumentSourceStatus, ProjectStatus } from "./statusTypes.js";
 import {
   evaluateContextWorkflow,
   projectContextWorkflowStatus,
@@ -31,6 +31,7 @@ import {
 import { contextWorkflowAuthorities } from "./workflow/workflowFacts.js";
 import { withContentAddressedWorkflowResources } from "./workflow/workflowResourceFreshness.js";
 import type {
+  ContextResolvedWorkflowRoute,
   ContextWorkflowAuthority,
   ContextWorkflowObservation,
 } from "./workflow/workflowTypes.js";
@@ -49,6 +50,9 @@ import {
 } from "./statusRouting.js";
 import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
 import { readProductionStage } from "./productionStageStore.js";
+import { capturedRequirementTargets, documentSourceMatches, productionCaptureDocuments } from "./productionCaptureScope.js";
+import { inspectProductionRequirements } from "./productionRequirements.js";
+import { productionPlanningRequest } from "./productionPlanning.js";
 import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
 import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 
@@ -167,12 +171,12 @@ async function collectProjectStatusSnapshotInternal(
   // A page revision owns only its declared evidence, not every registered
   // document. Preserve global inventory counts while routing its capture gates
   // and submission revision through the same bounded source set.
+  // Production likewise routes capture through its own request's documents;
+  // another request's documents still waiting for capture are deferred.
+  const productionCapture = !localRevision && production ? productionCaptureDocuments(production, documentSources) : undefined;
   const revisionDocuments = localRevision
-    ? documentSources.filter(source => localRevision.target.source_refs.some(ref =>
-      [source.name, source.id].filter(Boolean).some(name =>
-        ref === `${source.type}:${name}` || ref === `docs:${name}` ||
-        ref.startsWith(`${source.type}:${name}#`) || ref.startsWith(`${source.type}:${name}/`))))
-    : documentSources;
+    ? documentSources.filter(source => localRevision.target.source_refs.some(ref => documentSourceMatches(source, ref)))
+    : productionCapture?.documents ?? documentSources;
   const pendingCapture = pendingDocumentCaptureCommands({
     phases,
     documentSources: revisionDocuments,
@@ -292,12 +296,16 @@ async function collectProjectStatusSnapshotInternal(
   });
   const statusProjectionStarted = performance.now();
   const baseWorkflow = projectContextWorkflowStatus(workflowSnapshot);
-  const currentRoute = await projectCurrentIndexerWorkflowRoute({
+  const indexerRoute = await projectCurrentIndexerWorkflowRoute({
       projectRoot,
       route: baseWorkflow.current,
       authorities,
       managed: options.managed === true,
     });
+  const capturePlanning = !production && !localRevision && !localUpdate
+    ? await productionStartForCapturedSources(projectRoot, indexerRoute, documentSources) : undefined;
+  const currentRoute = capturePlanning?.route ?? indexerRoute;
+  const deferredCaptureSources = productionCapture?.deferred ?? capturePlanning?.deferred ?? [];
   const workflow = {
     ...baseWorkflow,
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
@@ -338,6 +346,7 @@ async function collectProjectStatusSnapshotInternal(
     packages: packageFreshness,
     packageTemplateReviews,
     pendingCapturePhases: pendingCapture.phaseIds,
+    ...(deferredCaptureSources.length ? { deferredCaptureSources } : {}),
     evidenceStatus,
     evidenceWarnings,
     close: closeStatus,
@@ -485,4 +494,23 @@ async function navigationOnlyChange(projectRoot: string, packages: Parameters<ty
   const freshness = await readPackageFreshnessStatus(projectRoot, packages);
   return freshness.diagnostics.length > 0 || freshness.packages.length < packages.length ||
     freshness.packages.some(item => item.state !== "ready");
+}
+
+/** At the capture Gate with no production stage, requirements whose documents
+ * are all captured may start production now: the Route adds the exact
+ * prepare-current command, and the waiting documents are captured later. */
+async function productionStartForCapturedSources(projectRoot: string, route: ContextResolvedWorkflowRoute | undefined,
+  documents: readonly DocumentSourceStatus[]) {
+  if (!route || !["authorize-document-capture", "capture-next"].includes(route.node)) return undefined;
+  const inspected = await inspectProductionRequirements(projectRoot).catch(() => undefined);
+  if (!inspected) return undefined;
+  const { targets, deferred } = capturedRequirementTargets(inspected.requirements, documents);
+  if (targets.length === 0 || deferred.length === 0) return undefined;
+  const request = await productionPlanningRequest(projectRoot).catch(() => undefined);
+  if (!request) return undefined;
+  const command = `context action prepare-current --revision ${request.revision} ${targets.map(target => `--source ${target}`).join(" ")} --format json`;
+  return { deferred, route: { ...route,
+    summary: [route.summary, `To start production now for requirements whose documents are already captured, run ${command}. ` +
+      `These documents stay registered and are captured when their read permission is given: ${deferred.join(", ")}.`].filter(Boolean).join(" "),
+    commands: [...route.commands, { command, effect: "write" as const, availability: "immediate" as const, managed_execution: "agent-required" as const }] } };
 }

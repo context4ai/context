@@ -80,6 +80,7 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
         }),
     progress: {
       pendingCapturePhases: status.pendingCapturePhases.length,
+      ...(status.deferredCaptureSources?.length ? { deferredCaptureSources: status.deferredCaptureSources } : {}),
       indexerRegistry: status.indexerRegistry.state,
       indexerCandidateCompile: status.indexerCandidateCompile.state,
     },

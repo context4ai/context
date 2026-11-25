@@ -361,7 +361,11 @@ test("approved maintenance ignores unrelated uncaptured documents without removi
   await buildProjectPackages(root);
   expect((await readMaintenance(root)).active).toBeUndefined();
   expect(await readFile(join(root, "sources/lark/index.yaml"), "utf8")).toBe(registry);
-  expect((await collectProjectStatus(root)).workflow.current?.reason_code).toBe("route.capture.permission-required");
+  // Production resumes its own writing; the unrelated document stays registered
+  // and is listed as deferred instead of blocking it.
+  const resumed = await collectProjectStatus(root);
+  expect(resumed.workflow.current?.reason_code).toBe("route.production.writing-required");
+  expect(resumed.deferredCaptureSources).toEqual(["lark:unrelated"]);
   await runLarkCapturePhase({ cwd: root, phaseId: "capture:lark:unrelated", format: "json",
     larkRunner: async args => args.includes("--help")
       ? { stdout: "--api-version --doc-format", stderr: "", exitCode: 0 }
