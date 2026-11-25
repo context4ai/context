@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.103 - 2026-11-25
+
+- A production stage waits only for its own documents. Other registered documents still waiting for capture are listed as `deferredCaptureSources` in `context status` and no longer block planning, writing, Review or delivery. Before a stage exists, the capture Gate also returns the exact `context action prepare-current --revision … --source …` command for requirements whose documents are all captured, so that request can start while the other documents wait for read permission.
+- `context status`, `context version inspect` and `context version record` report a workspace SDK pinned below the running CLI (same major version) as `version_alignment`, with the upgrade instruction. The version alignment guide now requires committing `package.json` with the lock file, and a routine update without knowledge changes may deliver the SDK upgrade on its own.
+- The website build checks internal links and anchors on custom pages and fails, listing them, when one has no target. The page customization guide documents the heading ID rule and states that custom pages are for presentation; knowledge from another team is registered as a versioned `file` source.
+- The `context` Skill routes "bring in another team's package or wiki and follow it" to a versioned `file` source, with keeping the pages as written or rewriting them as the user's choice. Guides that mention the knowledge map point to `context task adjust`, and verification claims state the check and its result. The generated `AGENTS.md` notes that its SDK docs follow the workspace SDK.
+
 ## 0.7.102 - 2026-11-24
 
 - `context source add repo --local <new path>` replaces the committed `sources/repo/<batch>/<module>` link when it still points at a checkout that no longer exists. It previously failed with `EEXIST`, and `source ensure` and `update --pending` then reported the source as inaccessible.
