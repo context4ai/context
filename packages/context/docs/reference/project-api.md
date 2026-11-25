@@ -193,7 +193,9 @@ accepts `title`, `slogan`, `description`, hero `actions`, and `resources` shown
 below the generated site map. Each resource needs an `href`, a copyable
 `command`, or both. Omit unknown resources; the builder never invents service
 or repository links. Knowledge map is projected from
-`src/knowledge-map.yaml` independently of KB directories; see
+`src/knowledge-map.yaml` independently of KB directories; change it with
+`context task adjust` (the file carries a revision the CLI computes; never edit
+it by hand); see
 [Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 
 `site.extensions` optionally names a trusted `src/site` root, homepage, footer,

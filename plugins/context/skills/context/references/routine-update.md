@@ -94,7 +94,8 @@ workspace targets or the delivery configuration.
    is a gap, not a change: never retire or take down pages because of it.
 4. **No change.** If nothing in scope changed, or the only changes are uncited
    ones that hold no lasting knowledge (step 7), report "no knowledge changes
-   this run" and stop without commits or publication.
+   this run" and stop without publication. The only commit allowed then is a
+   workspace SDK upgrade from version alignment, delivered on its own.
 5. **Size the work.** One repository with at most 30 affected articles: update it
    directly. Otherwise use `context-plan` with one repository per stage. One
    source update always covers all affected articles of that repository; to keep

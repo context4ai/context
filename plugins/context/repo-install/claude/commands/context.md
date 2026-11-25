@@ -142,7 +142,7 @@ without the user's authorization.
 
 ### Check the CLI first
 
-This Skill ships with Context 0.7.102.
+This Skill ships with Context 0.7.103.
 
 When entering production in a workspace, align the CLI, this Skill and the
 workspace SDK once per session with [version alignment](../resources/context/version-alignment.md):
@@ -258,10 +258,11 @@ Within an active Context workflow, requests include, but are not limited to:
 | Preserve conversation insights | Save or use a summary of supplied discussion, not an entire session history. Code-change links are optional. |
 | Plan a large knowledge project or source refresh | Use `context-plan` for investigation, an approved PLAN and one bounded production stage at a time. |
 | Update knowledge from source changes | Assess a selected commit, MR/PR or document change against a fixed source version; route multi-repository or broad scans through `context-plan`, then update the selected stage's affected pages. |
+| Bring in another team's knowledge and follow it | A released knowledge package, Skill, documentation repository or wiki that another team maintains, shown here and kept current: register it as a `file` source with its origin and version (knowledge-updates guide, "Versioned external content"), then let the user choose between keeping its pages as written (`preserve_original`) and rewriting them as this knowledge base's articles. Do not copy it into custom website pages or write sync scripts; to only point readers to it, register an import. |
 | Run a routine update | Refresh all registered sources (or the named subset) on a schedule without repeating task instructions: read [routine update](../resources/context/routine-update.md). |
 | Revise existing content | Correct current drafts or approved pages, including several pages or supported API-table regeneration. |
 | Organize pages and sources | Move pages within a collection, rename supported sources or remove unused sources with reference checks. |
-| Customize the knowledge map | At any time, reorganize the existing site's top navigation, left directory, labels, order or article placements; the same map organizes LLMS. Preserve current production work. |
+| Customize the knowledge map | At any time, reorganize the existing site's top navigation, left directory, labels, order or article placements through `context task adjust`; the same map organizes LLMS. Never edit `src/knowledge-map.yaml` or its revision by hand, and do not add a separate `site.nav` menu. Preserve current production work. |
 | Select or customize indexing | Choose compatible indexing Skills and adjust guidance or templates through the configuration flow. |
 | Deliver a batch early | Review and build complete newly authored pages before all writing finishes. |
 | Package knowledge or adjust output | Build approved content for Agents or LLMs, rebuild a package or change its output template. Rebuilding does not rewrite pages. |
@@ -721,6 +722,11 @@ availability separately from whether knowledge has already been approved.
 ### Final outcome
 
 Distinguish saved sources, accepted drafts and delivered pages.
+
+When the outcome, an MR description or a task result says something was
+verified, state the check and its result (for example "website build passed;
+link check: 195 anchors, 0 broken"), not only that it was verified. Compare what
+a check printed with what it should show before calling it passed.
 
 Keep the exact HTML review report links the user actually used in this
 conversation. Include those links in a compact final `Review reports` section

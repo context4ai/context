@@ -10,6 +10,7 @@ import { collectProjectStatus } from "../project/status.js";
 import { workflowAuthorities } from "../project/workflow/workflowCommandOptions.js";
 import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
 import { workflowStatusCommand } from "../project/workflow/workflowExecutionContext.js";
+import { inspectSdkAlignment } from "../project/sdkAlignment.js";
 
 export function registerVersionCommands(program: Command) {
   const command = program.command("version").description("Inspect formal changes and record a knowledge workspace SemVer and changelog");
@@ -22,7 +23,8 @@ export function registerVersionCommands(program: Command) {
     const first = status.version === "0.0.0";
     const [major, minor, patch] = status.version.split(".").map(Number);
     const suggested = status.reusable_version ?? (first ? "0.1.0" : `${major}.${minor}.${patch! + 1}`);
-    process.stdout.write(JSON.stringify({ ...status, next_action: { command: "context version record --input <file> --format json" },
+    const sdkAlignment = await inspectSdkAlignment(root);
+    process.stdout.write(JSON.stringify({ ...status, ...(sdkAlignment ? { version_alignment: sdkAlignment } : {}), next_action: { command: "context version record --input <file> --format json" },
       input_example: { expected_digest: status.expected_digest, ...(options.base ? { base_ref: options.base } : {}), version: suggested, title: "Summary", changes: ["Reader-visible changes"],
         triggers: [first ? { kind: "initial", description: "User requested initial knowledge production" } : { kind: "other", description: "What caused this change" }] } }, null, 2) + "\n");
   });
@@ -59,7 +61,8 @@ export function registerVersionCommands(program: Command) {
         const status = await collectProjectStatus(root, {
           ...execution, ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
         });
-        result = { version: recorded.version, outcome: recorded.outcome ?? "recorded", workflow: status.workflow };
+        const sdkAlignment = await inspectSdkAlignment(root);
+        result = { version: recorded.version, outcome: recorded.outcome ?? "recorded", ...(sdkAlignment ? { version_alignment: sdkAlignment } : {}), workflow: status.workflow };
       } catch (error) {
         result = { ...recorded, next_action: { command: workflowStatusCommand(execution) }, outcome: recorded.outcome ?? "recorded", next_preparation: {
           message: error instanceof Error ? error.message : String(error),

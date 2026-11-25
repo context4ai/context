@@ -130,7 +130,7 @@ function resolveContextSdkImportAlias(entryPath: string): string {
   return "@c4a/context";
 }
 
-function readCurrentPackageVersion(): string {
+export function readCurrentPackageVersion(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let index = 0; index < 8; index++) {
     const packagePath = join(dir, "package.json");

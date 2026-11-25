@@ -433,6 +433,12 @@ export async function writePackageSite(input: {
       await cp(join(root, path), destination);
     }
     await compileSite(temporary, output);
+    const customPages = Object.keys(options.extensions?.pages ?? {});
+    if (customPages.length) {
+      const { customPageLinkProblems } = await import("./siteCustomPageLinks.js");
+      const problems = await customPageLinkProblems(output, base, customPages);
+      if (problems.length) throw new Error(`Custom website pages contain ${problems.length} broken link(s). Existing package was preserved. Fix the links in the custom pages (heading anchors follow the website's rule, for example "_3v架构" for "3V架构") and rerun context build.\n${problems.slice(0, 50).join("\n")}${problems.length > 50 ? `\n… and ${problems.length - 50} more` : ""}`);
+    }
     const originLinks = [...navigation.nav, ...navigation.more].filter(item => item.origin).map(item => item.link);
     // Some deployment stores reject zero-byte objects. Preserve URLs and only
     // fill formats where a comment is valid; never invent JSON or binary data.
