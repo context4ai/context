@@ -142,7 +142,7 @@ without the user's authorization.
 
 ### Check the CLI first
 
-This Skill ships with Context 0.7.103.
+This Skill ships with Context 0.7.104.
 
 When entering production in a workspace, align the CLI, this Skill and the
 workspace SDK once per session with [version alignment](../resources/context/version-alignment.md):
@@ -265,7 +265,7 @@ Within an active Context workflow, requests include, but are not limited to:
 | Customize the knowledge map | At any time, reorganize the existing site's top navigation, left directory, labels, order or article placements through `context task adjust`; the same map organizes LLMS. Never edit `src/knowledge-map.yaml` or its revision by hand, and do not add a separate `site.nav` menu. Preserve current production work. |
 | Select or customize indexing | Choose compatible indexing Skills and adjust guidance or templates through the configuration flow. |
 | Deliver a batch early | Review and build complete newly authored pages before all writing finishes. |
-| Package knowledge or adjust output | Build approved content for Agents or LLMs, rebuild a package or change its output template. Rebuilding does not rewrite pages. |
+| Package knowledge or adjust output | Build approved content for Agents or LLMs, rebuild a package or change its output template. Rebuilding does not rewrite pages. When a package summary has a `rules` report, the build still succeeded: read the listed rule articles, propose to the user which are binding rules (`rules.alwaysApply`, kept short) and which are reference material (`rules.exclude`, shipped under `guides/`), change `src/index.ts` only after they agree (when the report has `version_alignment`, upgrade the workspace SDK first), then rebuild (Package outputs guide, "Package rules"). |
 | Prepare the workspace for a new task | Explicitly discard unfinished task state, retain approved work and restore registered source access. |
 | Commit workspace results | Save selected workspace files in local Git, without pushing or including unrelated changes. |
 | Restore a historical workspace version | Select a saved commit, restore only the agreed workspace scope and make its sources usable again. |

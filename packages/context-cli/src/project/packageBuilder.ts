@@ -61,6 +61,7 @@ import {
   type PackageBuildSummary,
   type PackageOutputFile,
 } from "./packageBuildReceipt.js";
+import { inspectPackageRules } from "./packageRulesSize.js";
 import {
   appendLlmsKnowledge,
   approvedKnowledgeTimestamp,
@@ -269,6 +270,8 @@ async function packageInputFingerprint(input: {
       name: input.pkg.name,
       select: input.pkg.select ?? null,
       navigation: input.pkg.kind === "package.kb" ? packageNavigation(input.pkg) : null,
+      // Only present when declared, so packages without `rules` keep their earlier fingerprint.
+      ...(input.pkg.kind === "package.kb" && input.pkg.rules !== undefined ? { rules: input.pkg.rules } : {}),
       assets: input.pkg.kind === "package.kb" ? input.pkg.assets ?? null : null,
       ...(input.pkg.kind === "package.kb" && input.pkg.site ? { site: { ...input.pkg.site, renderer: PACKAGE_SITE_VERSION } } : {}),
       template: input.pkg.template,
@@ -574,8 +577,10 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         previousManifest.fingerprint === fingerprint && previousManifest.assetDelivery !== undefined) {
       const existingOutput = await packageOutputFingerprint(projectRoot, pkg);
       if (existingOutput.fingerprint === previousManifest.outputFingerprint) {
+        const unchangedRules = await inspectPackageRules(projectRoot, pkg);
         summaries.push({ name: pkg.name, kind: packageKind(pkg), outDir: pkg.outDir,
           ...(pkg.kind === "package.kb" && pkg.site ? { siteOutDir: packageSiteOutputDir(pkg) } : {}),
+          ...(unchangedRules ? { rules: unchangedRules } : {}),
           inputs: selected.length, files: existingOutput.files, state: "unchanged",
           linkWarnings: previousManifest.linkWarnings,
           changes: { added: [], updated: [], removed: [] }, resources: {
@@ -680,9 +685,11 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       assetDelivery: writtenKnowledge.assetDelivery,
       linkWarnings: writtenKnowledge.linkWarnings,
     });
+    const rulesReport = await inspectPackageRules(projectRoot, pkg);
     summaries.push({
       name: pkg.name,
       ...(pkg.kind === "package.kb" && pkg.site ? { siteOutDir: packageSiteOutputDir(pkg) } : {}),
+      ...(rulesReport ? { rules: rulesReport } : {}),
       kind: packageKind(pkg),
       outDir: pkg.outDir,
       inputs: selected.length,

@@ -418,9 +418,24 @@ export type BasePackageDefinition = {
   outDir: string;
 };
 
+/** Which approved rule articles (`standards`, `test`) ship as package rules. AI tools may
+ * load `rules/` into every session, so long reference material belongs in `guides/`.
+ * Paths are knowledge paths such as `standards/config-keys.md`; `*` and `**` are globs. */
+export type PackageRulesDefinition = {
+  /** Rule articles shipped under `guides/` instead of `rules/`. */
+  exclude?: readonly string[];
+  /** Rule articles marked `alwaysApply: true`, for tools that honor it. */
+  alwaysApply?: readonly string[];
+  /** Size thresholds for `rules/` in KB; exceeding them only produces a build warning. */
+  limits?: { fileKb?: number; totalKb?: number };
+};
+
+export const DEFAULT_PACKAGE_RULE_LIMITS = { fileKb: 16, totalKb: 64 } as const;
+
 export type KbPackageDefinition = BasePackageDefinition & {
   kind: "package.kb";
   navigation: PackageNavigationDefinition;
+  rules?: PackageRulesDefinition;
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
@@ -610,6 +625,35 @@ const normalizePackageAssetOptimization = (
   };
 };
 
+const normalizePackageRules = (rules: PackageRulesDefinition | undefined): PackageRulesDefinition | undefined => {
+  if (rules === undefined) return undefined;
+  if (rules === null || typeof rules !== "object" || Object.keys(rules).some(key => !["exclude", "alwaysApply", "limits"].includes(key))) {
+    throw new TypeError("rules accepts only exclude, alwaysApply and limits");
+  }
+  const patterns = (name: "exclude" | "alwaysApply") => {
+    const value = rules[name];
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || value.some(item => typeof item !== "string" || item.trim() === "")) {
+      throw new TypeError(`rules.${name} must be a list of knowledge paths`);
+    }
+    return value.map(item => item.trim().replace(/^knowledge\//u, ""));
+  };
+  const limits = rules.limits;
+  if (limits !== undefined) {
+    if (limits === null || typeof limits !== "object" || Object.keys(limits).some(key => !["fileKb", "totalKb"].includes(key)) ||
+        Object.values(limits).some(value => typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
+      throw new TypeError("rules.limits accepts positive fileKb and totalKb");
+    }
+  }
+  const exclude = patterns("exclude");
+  const alwaysApply = patterns("alwaysApply");
+  return {
+    ...(exclude === undefined ? {} : { exclude }),
+    ...(alwaysApply === undefined ? {} : { alwaysApply }),
+    ...(limits === undefined ? {} : { limits: { ...limits } }),
+  };
+};
+
 const normalizePackageAssets = (
   assets: PackageAssetDefinition | undefined,
 ): PackageAssetDefinition => {
@@ -705,6 +749,7 @@ export const kbPackage = (definition: {
   template: PackageTemplateInput;
   select?: PackageSelectDefinition;
   navigation?: Partial<PackageNavigationDefinition>;
+  rules?: PackageRulesDefinition;
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
@@ -713,6 +758,7 @@ export const kbPackage = (definition: {
 }): KbPackageDefinition => {
   const base = createPackageDefinitionBase("kb", definition);
   const distribution = normalizePackageDistribution(definition.distribution);
+  const rules = normalizePackageRules(definition.rules);
   const assets = normalizePackageAssets(definition.assets);
   const site = normalizePackageSite(definition.site);
   if (definition.importsPage !== undefined && typeof definition.importsPage !== "boolean" &&
@@ -735,6 +781,7 @@ export const kbPackage = (definition: {
     kind: "package.kb",
     ...base,
     navigation: normalizePackageNavigation(definition.navigation),
+    ...(rules === undefined ? {} : { rules }),
     ...(distribution === undefined ? {} : { distribution }),
     assets,
     ...(site === undefined ? {} : { site }),

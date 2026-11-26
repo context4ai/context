@@ -1,4 +1,5 @@
 import { KNOWLEDGE_COLLECTIONS, type KnowledgeCollection } from "@c4a/context";
+import { matchesKnowledgePattern } from "./knowledgePathPatterns.js";
 
 export { KNOWLEDGE_COLLECTIONS };
 
@@ -46,13 +47,16 @@ export function okfRootForCollection(collection: KnowledgeCollection): OkfOutput
   return OKF_ROOT_BY_COLLECTION[collection];
 }
 
-export function okfPackagePathForKnowledgePath(relPath: string): string {
+/** Package path of an approved article. A package's `rules.exclude` ships matching
+ * rule articles under `guides/` instead of `rules/`. */
+export function okfPackagePathForKnowledgePath(relPath: string, rules?: { exclude?: readonly string[] }): string {
   const parts = relPath.split(/[\\/]+/u).filter(Boolean);
   const hasKnowledgeRoot = parts[0] === "knowledge";
   const collection = hasKnowledgeRoot ? parts[1] : parts[0];
   if (!isKnowledgeCollection(collection)) return relPath;
   const rest = hasKnowledgeRoot ? parts.slice(2) : parts.slice(1);
-  const root = okfRootForCollection(collection);
+  let root = okfRootForCollection(collection);
+  if (root === "rules" && matchesKnowledgePattern([collection, ...rest].join("/"), rules?.exclude)) root = "guides";
   return root === collection
     ? [root, ...rest].join("/")
     : [root, collection, ...rest].join("/");
