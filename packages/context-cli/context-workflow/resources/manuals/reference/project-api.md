@@ -186,6 +186,14 @@ llmsPackage({
 Package selection reads approved `knowledge/` only. `dist/` is generated and
 may be rebuilt; it is not an authoring source.
 
+`kbPackage.rules` decides which approved rule articles (`standards`, `test`) ship
+under `rules/`: `exclude` ships matching articles under `guides/` instead,
+`alwaysApply` marks matching rules `alwaysApply: true`, and `limits`
+(`fileKb`, `totalKb`, default 16 and 64) set the size above which the build
+reports a `rules` warning. Patterns are knowledge paths with `*`/`**` globs. The
+build only warns, and older workspace SDKs ignore `rules`; see
+[Package Outputs](../guides/package-outputs.md#package-rules).
+
 `kbPackage.site` optionally adds a VitePress website at `dist/<base>-site/` in
 the same build, beside the KB directory. `<base>` removes one trailing `-kb`
 from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,

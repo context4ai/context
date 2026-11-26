@@ -43,6 +43,8 @@ export function parsePackageLinkWarnings(value: unknown): PackageBuildLinkWarnin
 
 export interface PackageBuildSummary {
   linkWarnings?: PackageBuildLinkWarning[];
+  /** Present only when the package's rules exceed their size limits. */
+  rules?: import("./packageRulesSize.js").PackageRulesReport;
   name: string;
   kind: "kb" | "llms";
   outDir: string;
@@ -226,6 +228,13 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
         ? "has an unresolved section anchor; check the target heading or explicit anchor"
         : "has no matching Markdown page in this package; check the selected navigation";
     lines.push(`  warning: ${warning.path} references ${warning.target}, which ${explanation}.`);
+  }
+  if (pkg.rules) {
+    lines.push(`  warning: ${pkg.rules.message}`);
+    for (const path of pkg.rules.oversized) {
+      lines.push(`    ${path}: ${pkg.rules.files.find(file => file.path === path)?.kb ?? "?"} KB`);
+    }
+    lines.push(`    next: ${pkg.rules.next_action.instruction}`);
   }
   const optimization = pkg.resources.delivery.optimization;
   for (const warning of optimization?.warnings ?? []) {

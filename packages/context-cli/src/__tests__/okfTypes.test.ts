@@ -33,6 +33,16 @@ describe("OKF type mapping", () => {
     expect(okfTypeForKnowledgePath("unknown/product/onboarding.md")).toBeNull();
   });
 
+  test("a package's rules.exclude ships matching rule articles under guides", () => {
+    const rules = { exclude: ["standards/config-keys.md", "test/fixtures/**"] };
+    expect(okfPackagePathForKnowledgePath("standards/config-keys.md", rules)).toBe("guides/standards/config-keys.md");
+    expect(okfPackagePathForKnowledgePath("knowledge/test/fixtures/a/b.md", rules)).toBe("guides/test/fixtures/a/b.md");
+    expect(okfPackagePathForKnowledgePath("standards/red-lines.md", rules)).toBe("rules/standards/red-lines.md");
+    // Only rule articles move; other collections keep their roots.
+    expect(okfPackagePathForKnowledgePath("architecture/config-keys.md", { exclude: ["architecture/**"] })).toBe("guides/architecture/config-keys.md");
+    expect(okfPackagePathForKnowledgePath("product/a.md", { exclude: ["product/**"] })).toBe("wikis/product/a.md");
+  });
+
   test("maps approved knowledge paths to package OKF paths", () => {
     expect(okfPackagePathForKnowledgePath("architecture/product/onboarding.md")).toBe("guides/architecture/product/onboarding.md");
     expect(okfPackagePathForKnowledgePath("knowledge/architecture/product/onboarding.md")).toBe("guides/architecture/product/onboarding.md");

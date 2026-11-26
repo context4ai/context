@@ -283,7 +283,7 @@ export function knowledgeInventory(
     const productionFrontmatter = parseKnowledgeFrontmatter(file.content);
     const frontmatter = packageKnowledgeFrontmatter(productionFrontmatter);
     const productionMetadata = packageKnowledgeMetadata(productionFrontmatter);
-    const logicalOutputRelPath = okfPackagePathForKnowledgePath(file.relPath);
+    const logicalOutputRelPath = okfPackagePathForKnowledgePath(file.relPath, pkg?.kind === "package.kb" ? pkg.rules : undefined);
     const outputRelPath = pkg === undefined
       ? logicalOutputRelPath
       : packageKnowledgeOutputPath(pkg, file.relPath);

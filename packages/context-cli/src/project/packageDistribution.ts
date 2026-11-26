@@ -17,7 +17,7 @@ function namespaceOkfPath(pkg: PackageDefinition, relPath: string): string {
 }
 
 export function packageKnowledgeOutputPath(pkg: PackageDefinition, approvedRelPath: string): string {
-  return namespaceOkfPath(pkg, okfPackagePathForKnowledgePath(approvedRelPath));
+  return namespaceOkfPath(pkg, okfPackagePathForKnowledgePath(approvedRelPath, pkg.kind === "package.kb" ? pkg.rules : undefined));
 }
 
 export function packageTemplateOutputPath(pkg: PackageDefinition, logicalRelPath: string): string {

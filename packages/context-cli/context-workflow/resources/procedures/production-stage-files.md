@@ -25,6 +25,10 @@ an explicit gap. For a required repository, read the
 name, not every repository. Never claim missing material was checked.
 
 Plan article paths are relative to `knowledge/`, for example `business/example.md`.
+The first folder is the collection. Use `standards/` and `test/` for short binding
+rules and acceptance checks: packages ship them under `rules/`, which AI tools may
+load into every session. Put reference material such as configuration
+dictionaries, enum tables or a methodology in `product/` or `architecture/`.
 `indexer_usage.scopes` contains stage source refs, not collection names. Declare
 selected skills through the plan; no separate Indexer registration is required.
 

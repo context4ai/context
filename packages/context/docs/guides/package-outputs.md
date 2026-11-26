@@ -368,6 +368,42 @@ Current collection mapping:
 `rules/` may explain, operationalize, or constrain that knowledge; their
 placement does not create a relationship unless Context includes a typed edge.
 
+### Package rules
+
+AI tools that install a package may copy `rules/` into their own rule folders,
+and some load those files into every session. Keep `rules/` for short, binding
+rules. Reference material, such as configuration dictionaries, enum tables or a
+methodology, belongs in a reference collection (`product`, `architecture`), or
+stays in `standards` and ships under `guides/` through the package declaration:
+
+```ts
+kbPackage({
+  name: "team-kb",
+  template: "src/package-templates/kb",
+  rules: {
+    exclude: ["standards/config-keys.md", "standards/metrics/**"], // shipped under guides/standards/
+    alwaysApply: ["standards/red-lines.md"],                     // marked alwaysApply: true
+    limits: { fileKb: 16, totalKb: 64 },                          // the defaults
+  },
+})
+```
+
+Paths are knowledge paths (`standards/…`, `test/…`); `*` and `**` are globs.
+`alwaysApply` only adds that flag to the package copy; tools that honor it load
+the rule in every session, and the others treat it like any rule. Directory
+index pages in `rules/` are navigation, not rules.
+
+`context build` never moves, drops or blocks rules because of their size or
+content. When a rule file or the `rules/` total exceeds the limits, the package
+summary carries a `rules` report: the files, their sizes and the instruction.
+Then read the listed articles and decide with the user which are binding rules.
+List the binding rules every session needs in `alwaysApply` and keep them short;
+move reference material with `exclude`; raise `limits` when larger rules are
+intended. Change `src/index.ts` only after the user agrees, then rebuild.
+
+A workspace SDK older than the running CLI may not know `rules` and ignores it.
+When the report includes `version_alignment`, upgrade the workspace SDK first.
+
 `index.md` is reserved for OKF bundle and directory indexes. Source documents
 may be named `index.md`, but generated concept pages must use a non-reserved
 name such as `index-page.md`; `context build` rejects copied knowledge that

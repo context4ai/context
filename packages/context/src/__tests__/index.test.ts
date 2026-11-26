@@ -122,6 +122,12 @@ describe("@c4a/context SDK bootstrap", () => {
     expect(() => kbPackage({ name: "../bad", template: "src/package-templates/kb" })).toThrow(/Package name/);
     expect(() => llmsPackage({ name: "bad/pkg", template: "src/package-templates/llms" })).toThrow(/Package name/);
     expect(() => kbPackage({ name: "safe-kb", template: "../templates/skills" })).toThrow(/template path/);
+    const rules = kbPackage({ name: "rules-kb", template: "src/package-templates/kb",
+      rules: { exclude: ["knowledge/standards/keys.md"], alwaysApply: ["standards/red-lines.md"], limits: { fileKb: 8 } } }).rules;
+    expect(rules).toEqual({ exclude: ["standards/keys.md"], alwaysApply: ["standards/red-lines.md"], limits: { fileKb: 8 } });
+    expect(() => kbPackage({ name: "rules-kb", template: "src/package-templates/kb", rules: { exclude: [""] } })).toThrow(/rules.exclude/);
+    expect(() => kbPackage({ name: "rules-kb", template: "src/package-templates/kb", rules: { limits: { fileKb: 0 } } })).toThrow(/rules.limits/);
+    expect(() => kbPackage({ name: "rules-kb", template: "src/package-templates/kb", rules: { move: [] } as never })).toThrow(/rules accepts only/);
     expect(kbPackage({
       name: "namespaced-kb",
       template: "src/package-templates/kb",

@@ -24,7 +24,8 @@ import {
 } from "./packageDistribution.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { packageNavigation } from "./packageNavigation.js";
-import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
+import { isKnowledgeCollection, okfPackagePathForKnowledgePath, okfRootForCollection } from "./okfTypes.js";
+import { matchesKnowledgePattern, matchingKnowledgePatterns } from "./knowledgePathPatterns.js";
 import { cachedPackageKnowledgeMarkdown } from "./packageRenderCache.js";
 import {
   projectPackageKnowledgeAssets,
@@ -43,40 +44,26 @@ import {
   assertSafeRenderedPath,
   packageKind,
   renderTemplateText,
-  toPosixPath,
   type TemplateFile,
 } from "./packageTemplateUtils.js";
 
-function globToRegExp(pattern: string): RegExp {
-  const normalized = toPosixPath(pattern);
-  if (normalized.endsWith("/**")) {
-    const prefix = normalized.slice(0, -3).replace(/[.+^${}()|[\]\\]/gu, "\\$&");
-    return new RegExp(`^${prefix}(?:/.*)?$`, "u");
-  }
-  let out = "^";
-  for (let index = 0; index < normalized.length; index++) {
-    const char = normalized[index];
-    const next = normalized[index + 1];
-    if (char === "*" && next === "*") {
-      out += ".*";
-      index++;
-    } else if (char === "*") {
-      out += "[^/]*";
-    } else if (char === "?") {
-      out += "[^/]";
-    } else {
-      out += char?.replace(/[.+^${}()|[\]\\]/gu, "\\$&") ?? "";
-    }
-  }
-  return new RegExp(`${out}$`, "u");
+/** Sets `alwaysApply: true` in a page's frontmatter, replacing a value the article declared. */
+export function withAlwaysApply(markdown: string): string {
+  const end = markdown.startsWith("---\n") ? markdown.indexOf("\n---", 3) : -1;
+  if (end < 0) return markdown;
+  const frontmatter = markdown.slice(4, end);
+  const updated = /^alwaysApply:.*$/mu.test(frontmatter)
+    ? frontmatter.replace(/^alwaysApply:.*$/mu, "alwaysApply: true")
+    : `alwaysApply: true\n${frontmatter}`;
+  return `---\n${updated}${markdown.slice(end)}`;
 }
 
 function matchesAny(path: string, patterns: readonly string[] | undefined): boolean {
-  return patterns?.some((pattern) => pattern === path || globToRegExp(pattern).test(path)) === true;
+  return matchesKnowledgePattern(path, patterns);
 }
 
 function matchingPatterns(path: string, patterns: readonly string[] | undefined): string[] {
-  return patterns?.filter((pattern) => pattern === path || globToRegExp(pattern).test(path)) ?? [];
+  return matchingKnowledgePatterns(path, patterns);
 }
 
 function selectionReasonsForFile(file: ApprovedKnowledgeFile, pkg: PackageDefinition): PackageSelectionReason[] | null {
@@ -85,7 +72,8 @@ function selectionReasonsForFile(file: ApprovedKnowledgeFile, pkg: PackageDefini
   const reasons: PackageSelectionReason[] = [];
   if (pkg.select?.collections?.length && !pkg.select.collections.includes(internalCollection)) return null;
   if (pkg.select?.collections?.length) reasons.push({ kind: "collection", value: internalCollection });
-  const okfRoot = okfRootForCollection(internalCollection);
+  const okfRoot = okfPackagePathForKnowledgePath(file.relPath, pkg.kind === "package.kb" ? pkg.rules : undefined)
+    .startsWith("guides/") ? "guides" : okfRootForCollection(internalCollection);
   if (pkg.select?.okfRoots?.length && !pkg.select.okfRoots.includes(okfRoot)) return null;
   if (pkg.select?.okfRoots?.length) reasons.push({ kind: "okf_root", value: okfRoot });
   const includeMatches = matchingPatterns(file.relPath, pkg.select?.include);
@@ -303,7 +291,11 @@ export async function writeSelectedPackageKnowledge(input: {
       const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
         key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
       const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);
-      await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry, repositoryRemote), "utf8");
+      // A package rule the author marked always-on carries the flag tools read; nothing else is inferred.
+      const alwaysOn = input.pkg.kind === "package.kb" && projected.pageOutputPath.startsWith("rules/") &&
+        matchesKnowledgePattern(approvedByOutput.get(projected.pageOutputPath)!.replace(/^knowledge\//u, ""), input.pkg.rules?.alwaysApply);
+      const ruleMarkdown = alwaysOn ? withAlwaysApply(markdown) : markdown;
+      await writeFile(outputPath, ruleMarkdown + articleProvenanceMarkdown(file?.article, registry, repositoryRemote), "utf8");
       return links.warnings;
     }));
     // Finish all temporary writes before propagating a failure. The caller may
