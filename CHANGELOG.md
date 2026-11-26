@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.104 - 2026-11-26
+
+- `kbPackage` accepts `rules` to decide what reaches Agent rule directories: `exclude` moves matching `standards`/`test` articles to `guides/` (reference tables and lookups), `alwaysApply` writes `alwaysApply: true` into the frontmatter of rules that must load in every session, and `limits` (`fileKb`, default 16; `totalKb`, default 64) sets the size check. `context package build` reports a `rules` warning with the oversized files and an instruction for `src/index.ts` when a rule file or the rules directory exceeds a limit; the build output is unchanged. When the workspace SDK is older than the CLI and would ignore `rules`, the report carries `version_alignment` and asks to upgrade the SDK first. Packages without `rules` keep their build fingerprint, so upgrading the CLI does not rebuild them.
+- The production guide reserves `standards` and `test` for short binding rules and sends reference material to product or architecture collections. The `context` Skill tells the Agent to propose `rules` settings from the warning, apply them only after the user agrees, and rebuild.
+
 ## 0.7.103 - 2026-11-25
 
 - A production stage waits only for its own documents. Other registered documents still waiting for capture are listed as `deferredCaptureSources` in `context status` and no longer block planning, writing, Review or delivery. Before a stage exists, the capture Gate also returns the exact `context action prepare-current --revision … --source …` command for requirements whose documents are all captured, so that request can start while the other documents wait for read permission.
@@ -30,7 +35,7 @@ All notable changes to Context are documented here.
 
 - Before production requirements exist (`src/indexers.yaml` missing), the Route's resource commands such as `context resource materialize context.source-boundary` now carry a valid workflow revision. Previously they carried `requirements-configuration` and always failed with "workflow revision is invalid".
 
-## Unreleased
+## 0.7.104 - 2026-11-26
 
 - The routine update example now starts the scheduled task content with a plain line naming the Context Skill instead of a slash command. Some schedulers expand a leading slash command into the Skill text and drop the rest, so the run never saw its paragraph and `ROUTINE_POLICY` and stopped to ask what to do.
 
