@@ -6,6 +6,10 @@ export interface LarkResourceCommandResult {
 
 export interface LarkResourceCommandOptions {
   cwd?: string;
+  /** `cwd` belongs to this request alone; it is emptied before a retry so partial output cannot remain. */
+  scratchDirectory?: boolean;
+  /** Upper bound for one CLI process; the runner ends the process and reports a timeout. */
+  timeoutMs?: number;
 }
 
 export type LarkResourceCommandRunner = (

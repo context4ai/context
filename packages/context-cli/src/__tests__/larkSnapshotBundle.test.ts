@@ -176,3 +176,20 @@ test("import diagnoses an explicit resource policy mismatch without fetching or 
   })).rejects.toThrow("different resource policy");
   expect(existsSync(join(root, "sources", "lark", "handbook", "manifest.json"))).toBe(false);
 });
+
+test("snapshots written without file or whiteboard settings import under explicit bundle settings", async () => {
+  const base = await temporary();
+  const exported = await fetchLarkSource({ url, output: join(base, "scratch", "source"), now: new Date(capturedAt), runner: fixtureRunner([]) });
+  const written = JSON.parse(await readFile(join(exported.snapshot_dir, "snapshot.json"), "utf8")) as { resource_policy: Record<string, unknown> };
+  // Default policies write the same snapshot.json as earlier versions.
+  expect(Object.keys(written.resource_policy).sort()).toEqual(["gifs", "images", "maxBytesPerResource", "maxTotalBytes", "videos"]);
+  const root = await createLarkCaptureProject(base);
+  const copied = join(root, ".tmp", "imported");
+  await cp(exported.snapshot_dir, copied, { recursive: true });
+  const remote = async () => { throw new Error("Import must not execute a remote command"); };
+  await expect(runCaptureLarkPhase({ projectRoot: root, snapshotDirectory: copied, larkRunner: remote,
+    phase: captureLark({ source: source("handbook"), resources: { files: "reference-only" } }) })).rejects.toThrow("different resource policy");
+  const imported = await runCaptureLarkPhase({ projectRoot: root, snapshotDirectory: copied, larkRunner: remote,
+    phase: captureLark({ source: source("handbook"), resources: { files: "bundle", whiteboards: "bundle" } }) });
+  expect(imported.snapshot.changed).toBe(true);
+});

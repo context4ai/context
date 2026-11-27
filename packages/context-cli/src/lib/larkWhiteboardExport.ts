@@ -43,7 +43,7 @@ export async function exportLarkWhiteboardRaw(
     await runLarkResourceCommand(runner, [
       "whiteboard", "+export", "--as", identity, "--whiteboard-token", token,
       "--output-type", "raw", "--output", "./raw.json", "--overwrite", "--format", "json",
-    ], { cwd: tempRoot });
+    ], { cwd: tempRoot, scratchDirectory: true });
     const rawPayload = JSON.parse(await readFile(join(tempRoot, "raw.json"), "utf8")) as unknown;
     return Buffer.from(`${stableJson(canonicalWhiteboardPayload(rawPayload))}\n`, "utf8");
   } finally {

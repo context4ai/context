@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.105 - 2026-11-27
+
+- Lark capture retries a resource by itself after a timeout, a gateway error (502, 503, 504) or a dropped connection, up to three times with backoff, without stopping the other resources of the document. A waiting retry no longer holds a download slot, and a wave of failures halves concurrency once. Throttling (429, or Lark's `99991400`) still pauses and, once its budget is spent, stops the whole capture. Every lark-cli resource process now has a time limit (120 s; 300 s for files and video), and synced blocks share the same retries and limits.
+- When required resources still fail, the retry returned by the Route keeps the images and files already saved for the same revision and identity, downloads only the missing ones and completes the snapshot. Whiteboards, Sheets, Base tables and synced blocks are read again. Saved resources take the byte budget before new downloads, and images skipped for budget stay skipped unless `maxBytesPerResource` or `maxTotalBytes` is raised; the capture report records the limits (`resource_budget`) only when an image was skipped for them.
+- `captureLark` accepts `resources.files` and `resources.whiteboards` (`reference-only` or `bundle`; whiteboards also cover non-inline diagrams) to keep attachments or whiteboards as source references when a user asks not to download them. Snapshots written by earlier versions import unchanged, and default snapshots are written as before.
+- Excluding a resource type by policy and capturing the same revision again saves the snapshot with placeholders and lists the change as degraded, instead of refusing it. Explicit `bundle` settings no longer disable reuse of an unchanged revision. The document capture procedure tells the Agent to run the Route's retry first, and to ask the user before excluding a resource type.
+
 ## 0.7.104 - 2026-11-26
 
 - `kbPackage` accepts `rules` to decide what reaches Agent rule directories: `exclude` moves matching `standards`/`test` articles to `guides/` (reference tables and lookups), `alwaysApply` writes `alwaysApply: true` into the frontmatter of rules that must load in every session, and `limits` (`fileKb`, default 16; `totalKb`, default 64) sets the size check. `context package build` reports a `rules` warning with the oversized files and an instruction for `src/index.ts` when a rule file or the rules directory exceeds a limit; the build output is unchanged. When the workspace SDK is older than the CLI and would ignore `rules`, the report carries `version_alignment` and asks to upgrade the SDK first. Packages without `rules` keep their build fingerprint, so upgrading the CLI does not rebuild them.

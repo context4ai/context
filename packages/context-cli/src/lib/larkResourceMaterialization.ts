@@ -1,7 +1,7 @@
 import { createLarkResourceScheduler, forEachLarkResource } from "./larkResourceScheduler.js";
 import { downloadLarkMedia } from "./larkMediaDownload.js";
 import { exportLarkWhiteboardRaw } from "./larkWhiteboardExport.js";
-import { LarkResourceBudgetError, omitLarkImage } from "./larkImagePolicy.js";
+import { LarkResourceBudgetError, omitLarkImage, omitLarkResourceByPolicy } from "./larkImagePolicy.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -58,6 +58,9 @@ export interface LarkResourceMaterializationReport {
 export interface LarkResourceMaterializationPolicy {
   images?: "reference-only" | "bundle";
   gifs?: "reference-only" | "bundle";
+  files?: "reference-only" | "bundle";
+  /** Also covers diagrams that are not inline Markdown. */
+  whiteboards?: "reference-only" | "bundle";
   videos: "reference-only" | "bundle";
   maxBytesPerResource: number;
   maxTotalBytes: number;
@@ -68,14 +71,34 @@ export interface SyncedReferenceProjection {
   resources: LarkExternalResource[];
 }
 
+/** A downloaded image or file from an earlier capture of the same document revision and identity. */
+export interface LarkReusableResource {
+  /** Earlier asset path; its extension is kept so the asset path does not change. */
+  path: string;
+  bytes: Uint8Array;
+  mediaType: string;
+  representation: "original" | "preview";
+}
+
+export type LarkResourceReuse = (resource: LarkExternalResource, identity: LarkAccessIdentity) => Promise<LarkReusableResource | undefined>;
+
 export interface MaterializeLarkResourcesInput {
   mediaFiles?: Readonly<Record<string, string>>;
   resources: readonly LarkExternalResource[];
   runner: LarkResourceCommandRunner;
   policy: LarkResourceMaterializationPolicy;
   identity?: LarkAccessIdentity;
-  resolveSyncedReference?: (resource: LarkExternalResource) => Promise<SyncedReferenceProjection>;
+  /** Only images and file attachments are reused: their tokens address immutable bytes. */
+  reuse?: LarkResourceReuse;
+  /** Image locators skipped for budget by the earlier capture of this revision; kept as placeholders without download. */
+  budgetExcluded?: ReadonlySet<string>;
+  /** Receives the scheduled runner so synced blocks share retries, timeouts and concurrency. */
+  resolveSyncedReference?: (resource: LarkExternalResource, runner: LarkResourceCommandRunner) => Promise<SyncedReferenceProjection>;
 }
+
+/** Per-process limits: the size of a file is unknown before it is downloaded. */
+const RESOURCE_TIMEOUT_MS = 120_000;
+const LARGE_RESOURCE_TIMEOUT_MS = 300_000;
 
 export interface MaterializeLarkResourcesResult {
   assets: LarkMaterializedAsset[];
@@ -221,6 +244,7 @@ async function downloadedFile(input: {
   type: "media" | "whiteboard";
   localPath?: string;
   allowPreview?: boolean;
+  timeoutMs?: number;
 }): Promise<{ path: string; bytes: Uint8Array; mediaType: string; representation: "original" | "preview" }> {
   if (input.localPath !== undefined) {
     const bytes = await readFile(input.localPath);
@@ -330,7 +354,7 @@ async function sheetMaterialization(
       "./sheet.json",
       "--format",
       "json",
-    ], { cwd: tempRoot });
+    ], { cwd: tempRoot, scratchDirectory: true });
     const receipt = jsonPayload(stdout);
     if (findBooleanField(receipt, "truncated") === true || findBooleanField(receipt, "complete") === false) {
       throw new Error("embedded Sheet read was truncated");
@@ -586,7 +610,10 @@ function assertBudget(asset: LarkMaterializedAsset, policy: LarkResourceMaterial
 }
 
 export async function materializeLarkResources(input: MaterializeLarkResourcesInput): Promise<MaterializeLarkResourcesResult> {
-  input = { ...input, runner: createLarkResourceScheduler(input.runner) };
+  const raw = input.runner;
+  const timed: LarkResourceCommandRunner = (args, options) =>
+    raw(args, { ...options, timeoutMs: options?.timeoutMs ?? RESOURCE_TIMEOUT_MS });
+  input = { ...input, runner: createLarkResourceScheduler(timed) };
   const assets: LarkMaterializedAsset[] = [];
   const replacements = new Map<string, string>();
   const items: LarkResourceMaterializationItem[] = [];
@@ -600,6 +627,9 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
     seen.add(key);
     const required = REQUIRED_KINDS.has(resource.kind);
     if (omitLarkImage(resource, input.policy, items, replacements)) return;
+    if (omitLarkResourceByPolicy(resource, input.policy, items, replacements)) return;
+    if (resource.kind === "image" && input.budgetExcluded?.has(resource.locator) && omitLarkImage(resource, input.policy, items, replacements,
+      undefined, "The earlier capture of this revision skipped it for exceeding the resource budget; it was not downloaded again")) return;
     try {
       if (resource.kind === "diagram" && resource.inline_content === true) {
         replacements.set(resource.locator, "");
@@ -660,7 +690,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
       if (resource.kind === "synced-reference") {
         if (depth >= 4) throw new Error("synced reference nesting exceeds 4 levels");
         if (input.resolveSyncedReference === undefined) throw new Error("synced reference resolver is unavailable");
-        const projected = await input.resolveSyncedReference(resource);
+        const projected = await input.resolveSyncedReference(resource, input.runner);
         const digest = resourceDigest(resource);
         const asset: LarkMaterializedAsset = {
           path: `materialized/synced-reference/${digest}.md`,
@@ -684,12 +714,18 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
 
       const token = resourceToken(resource);
       if (token === undefined) throw new Error(`${resource.kind} has no downloadable token`);
-      const downloaded = await downloadedFile({
+      // Leaf resources were looked up before downloads began; synced-block media are looked up here.
+      const preloaded = reusable.get(key);
+      reusable.delete(key);
+      const reused = preloaded ?? (depth > 0 && (resource.kind === "image" || resource.kind === "file")
+        ? await input.reuse?.(resource, identity) : undefined);
+      const downloaded = reused ?? await downloadedFile({
         runner: input.runner,
         identity,
         token,
         type: "media",
         allowPreview: resource.kind === "image",
+        timeoutMs: resource.kind === "image" ? RESOURCE_TIMEOUT_MS : LARGE_RESOURCE_TIMEOUT_MS,
         ...(input.mediaFiles?.[token] === undefined ? {} : { localPath: input.mediaFiles[token] }),
       });
       if (omitLarkImage(resource, input.policy, items, replacements, downloaded.mediaType)) return;
@@ -734,7 +770,20 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
     }
   };
 
-  await forEachLarkResource(input.resources.filter(resource => resource.kind !== "synced-reference"), (resource) => materialize(resource, 0));
+  // Resources saved by the earlier capture take their budget first, so new downloads cannot push them out.
+  const reusable = new Map<string, LarkReusableResource>();
+  if (input.reuse !== undefined) {
+    for (const resource of input.resources) {
+      // Resources kept as references never read their earlier bytes.
+      if (resource.kind === "image" ? input.policy.images === "reference-only" || input.budgetExcluded?.has(resource.locator)
+        : resource.kind !== "file" || input.policy.files === "reference-only") continue;
+      const found = await input.reuse(resource, identity);
+      if (found !== undefined) reusable.set(`${resource.kind}\0${resource.locator}`, found);
+    }
+  }
+  const leaves = input.resources.filter(resource => resource.kind !== "synced-reference");
+  for (const resource of leaves.filter(resource => reusable.has(`${resource.kind}\0${resource.locator}`))) await materialize(resource, 0);
+  await forEachLarkResource(leaves.filter(resource => !reusable.has(`${resource.kind}\0${resource.locator}`)), (resource) => materialize(resource, 0));
   // Resolve nested projections after shared leaf resources have their replacements.
   for (const resource of input.resources.filter(resource => resource.kind === "synced-reference")) await materialize(resource, 0);
   // Completion timing must not reorder persisted audit records or assets.

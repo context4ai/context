@@ -31,6 +31,17 @@ describe("@c4a/context SDK bootstrap", () => {
     } })).toThrow();
   });
 
+  test("captureLark preserves and validates file and whiteboard policies", () => {
+    const phase = captureLark({ source: source("handbook"), resources: {
+      files: "reference-only", whiteboards: "bundle",
+    } });
+    expect(phase.resources).toMatchObject({ files: "reference-only", whiteboards: "bundle" });
+    expect("files" in captureLark({ source: source("handbook") }).resources).toBe(false);
+    expect(() => captureLark({ source: source("handbook"), resources: {
+      whiteboards: "skip" as "bundle",
+    } })).toThrow("resources.whiteboards");
+  });
+
   test("defineProject keeps current declarations", () => {
     const project = defineProject({
       sources: allSources("repo"),
