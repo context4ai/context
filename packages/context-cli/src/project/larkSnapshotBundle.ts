@@ -21,6 +21,7 @@ const assetSchema = z.object({
   role: z.enum(["evidence", "presentation", "audit"]).optional(), source: z.record(z.string()).optional(),
 }).strict();
 const policySchema = z.object({ images: z.enum(["bundle", "reference-only"]), gifs: z.enum(["bundle", "reference-only"]),
+  files: z.enum(["bundle", "reference-only"]).optional(), whiteboards: z.enum(["bundle", "reference-only"]).optional(),
   videos: z.enum(["bundle", "reference-only"]), maxBytesPerResource: z.number().int().positive(), maxTotalBytes: z.number().int().positive(),
 }).strict();
 const schema = z.object({
@@ -40,11 +41,14 @@ export interface ImportedLarkSnapshot {
   fetched: FetchFeishuDocSnapshotResult;
 }
 
+/** `files` and `whiteboards` are written only when excluded, so default snapshots match those of earlier versions. */
 export function normalizedSnapshotResourcePolicy(policy: LarkResourceMaterializationPolicy) {
-  return { ...policy, images: policy.images ?? "bundle", gifs: policy.gifs ?? "bundle" };
+  const { files, whiteboards, ...rest } = policy;
+  return { ...rest, images: policy.images ?? "bundle", gifs: policy.gifs ?? "bundle",
+    ...(files === "reference-only" ? { files } : {}), ...(whiteboards === "reference-only" ? { whiteboards } : {}) };
 }
 export function assertSnapshotResourcePolicy(snapshot: ImportedLarkSnapshot, expected: LarkResourceMaterializationPolicy): void {
-  if (!isDeepStrictEqual(snapshot.resourcePolicy, normalizedSnapshotResourcePolicy(expected))) {
+  if (!isDeepStrictEqual(normalizedSnapshotResourcePolicy(snapshot.resourcePolicy), normalizedSnapshotResourcePolicy(expected))) {
     throw new ContextError(ExitCode.UserError, "Saved Lark snapshot was captured with a different resource policy; import did not reinterpret or refetch its resources", {
       reason_code: "lark.snapshot-policy-mismatch", captured_policy: snapshot.resourcePolicy,
       configured_policy: normalizedSnapshotResourcePolicy(expected),
@@ -205,7 +209,8 @@ async function validateBundle(root: string, manifest: SnapshotManifest): Promise
       if (!available.has(path)) throw larkSnapshotError(`Resource report references a missing asset: ${path}`);
     }
   }
-  return { url: manifest.url, capturedAt: manifest.captured_at, resourcePolicy: manifest.resource_policy, fetched: {
+  return { url: manifest.url, capturedAt: manifest.captured_at,
+    resourcePolicy: normalizedSnapshotResourcePolicy(manifest.resource_policy as LarkResourceMaterializationPolicy), fetched: {
     markdown, assets, accessIdentity: manifest.access_identity, identityFallback: false,
     access: report.access ?? { identity: manifest.access_identity },
     ...(manifest.title === undefined ? {} : { title: manifest.title }),

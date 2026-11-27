@@ -241,12 +241,32 @@ To retain static images but exclude GIF files:
 captureLark({ source: handbook, resources: { gifs: "reference-only" } });
 ```
 
-Both fields also accept `bundle`; omitted fields retain normal capture behavior.
+To keep file attachments or whiteboards (including diagrams that are not inline
+Markdown) as references when the user explicitly asks not to download them:
+
+```ts
+captureLark({ source: handbook, resources: { files: "reference-only", whiteboards: "reference-only" } });
+```
+
+These fields also accept `bundle`; omitted fields retain normal capture behavior.
+Sheets and Base tables are document content and have no such setting.
 Known GIF metadata avoids downloading; when a source only supplies an opaque
 media token, identification may require downloading the file. Such a GIF is then
 excluded from the snapshot assets and knowledge, rather than decoded or retained.
 Existing evidence is not deleted by changing a policy. Already approved image
 references must be revised through the normal Review flow to change their content.
+
+Capture retries a resource by itself after a timeout, a gateway error (502, 503,
+504) or a dropped connection, up to three times, without stopping the other
+resources. Throttling still pauses every request of the capture. When required
+resources still fail, the snapshot is saved with the failure report; the retry
+returned by the Route keeps the images and files already saved for the same
+revision and identity, downloads only the missing ones and then completes the
+snapshot. Whiteboards, Sheets, Base tables and synced blocks are read again.
+Images the earlier capture skipped for exceeding the byte budget stay skipped
+unless `maxBytesPerResource` or `maxTotalBytes` has been raised since.
+Changing a policy to `reference-only` for a type that was captured before is
+saved with placeholders and listed as a degraded resource; it is not refused.
 
 Inclusion does not mean lossless original-byte delivery. The package optimizer
 preserves animations without decoding every frame or silently flattening them.

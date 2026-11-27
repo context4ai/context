@@ -79,6 +79,9 @@ export type CaptureLarkPhaseDefinition = {
   resources: {
     images?: "reference-only" | "bundle";
     gifs?: "reference-only" | "bundle";
+    files?: "reference-only" | "bundle";
+    /** Also covers diagrams that are not inline Markdown. */
+    whiteboards?: "reference-only" | "bundle";
     videos: "reference-only" | "bundle";
     maxBytesPerResource: number;
     maxTotalBytes: number;
@@ -204,6 +207,8 @@ export const captureLark = (definition: {
   resources?: {
     images?: "reference-only" | "bundle";
     gifs?: "reference-only" | "bundle";
+    files?: "reference-only" | "bundle";
+    whiteboards?: "reference-only" | "bundle";
     videos?: "reference-only" | "bundle";
     maxBytesPerResource?: number;
     maxTotalBytes?: number;
@@ -211,7 +216,7 @@ export const captureLark = (definition: {
 }): CaptureLarkPhaseDefinition => {
   const sourceDefinition = bindSourceType(definition.source, "lark", "captureLark source") as LarkSourceDefinition | TypedSourceReference<"lark">;
   const sourceId = getSourceName(sourceDefinition);
-  for (const key of ["images", "gifs"] as const) {
+  for (const key of ["images", "gifs", "files", "whiteboards"] as const) {
     const value = definition.resources?.[key];
     if (value !== undefined && value !== "bundle" && value !== "reference-only") {
       throw new TypeError(`captureLark resources.${key} must be bundle or reference-only`);
@@ -237,6 +242,8 @@ export const captureLark = (definition: {
     resources: {
       ...(definition.resources?.images === undefined ? {} : { images: definition.resources.images }),
       ...(definition.resources?.gifs === undefined ? {} : { gifs: definition.resources.gifs }),
+      ...(definition.resources?.files === undefined ? {} : { files: definition.resources.files }),
+      ...(definition.resources?.whiteboards === undefined ? {} : { whiteboards: definition.resources.whiteboards }),
       videos: definition.resources?.videos ?? "reference-only",
       maxBytesPerResource,
       maxTotalBytes,

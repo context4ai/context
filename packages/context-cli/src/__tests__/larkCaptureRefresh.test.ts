@@ -220,12 +220,13 @@ test.each(["preview", "reference-only", "existing-preview"])("same-revision capt
     expect(saved.resource_materialization.items[0]).toMatchObject({ status: "materialized", reason_code: "document.resource.preview" });
     expect(saved.diagnostics.join("\n")).toContain("lark.capture.resource-degraded: image");
   } else {
-    await expect(runCaptureLarkPhase(input)).rejects.toThrow("existing snapshot was preserved");
-    expect(await Promise.all(paths.map(path => readFile(join(root, path))))).toEqual(before);
-    revision = "2";
-    const next = await runCaptureLarkPhase(input);
-    expect(next.snapshot.changed).toBe(true);
-    expect(next.resource_materialization.items[0]).toMatchObject({ status: "reference-only" });
+    // An explicit policy exclusion is the user's choice, not a lost resource: it is saved with a placeholder.
+    const saved = await runCaptureLarkPhase(input);
+    expect(saved.snapshot.changed).toBe(true);
+    expect(saved.resource_materialization.items[0]).toMatchObject({ status: "reference-only", reason_code: "image-excluded-by-policy" });
+    expect(saved.diagnostics.join("\n")).toContain("lark.capture.resource-degraded: image");
+    expect(await readFile(join(root, documentPath), "utf8")).toContain("Image omitted: Diagram");
+    expect(before.length).toBeGreaterThan(0);
   }
 });
 
@@ -251,4 +252,156 @@ test("a same-revision refresh keeps the main text when a resource becomes a perm
   const body = await readFile(join(root, documentPath), "utf8");
   expect(body).toContain("Main rule");
   expect(body).toContain("> Resource unavailable: Diagram");
+});
+
+interface ResourceDocument { fail: Set<string>; downloads: string[]; revision?: string | null; text?: string; whiteboard?: boolean; file?: boolean }
+function resourceDocument(tokens: readonly string[], options: ResourceDocument): LarkRunner {
+  return async (args, commandOptions) => {
+    if (args.includes("--help")) return { stdout: "--api-version string\n--doc-format string", stderr: "", exitCode: 0 };
+    if (args.includes("+media-download") || args[0] === "whiteboard") {
+      const token = args[0] === "whiteboard" ? `raw:${args[args.indexOf("--whiteboard-token") + 1]!}` : args[args.indexOf("--token") + 1]!;
+      options.downloads.push(token);
+      if (options.fail.has(token)) return { stdout: "", stderr: "unexpected media failure", exitCode: 1 };
+      const output = args[args.indexOf("--output") + 1]!;
+      await writeFile(resolve(commandOptions!.cwd!, args[0] === "whiteboard" ? output : `${output}.png`),
+        args[0] === "whiteboard" ? JSON.stringify({ nodes: [] }) : `bytes of ${token}`);
+      return { stdout: JSON.stringify({ ok: true, data: { saved: true } }), stderr: "", exitCode: 0 };
+    }
+    const revision = options.revision === undefined ? "1" : options.revision;
+    return { stdout: JSON.stringify({ ok: true, data: { ...(revision === null ? {} : { revision_id: revision }), document: {
+      content: `<title>Guide</title><p>${options.text ?? "Main rule"}</p>${tokens.map(token => `<img token="${token}" alt="Figure ${token}"/>`).join("")}`
+        + (options.whiteboard ? '<whiteboard token="board"/>' : "") + (options.file ? '<file token="attachment" name="Plan.pdf"/>' : ""),
+    } } }), stderr: "", exitCode: 0 };
+  };
+}
+
+async function failOnce(root: string, read: LarkRunner, options: ResourceDocument, input: Partial<Parameters<typeof runCaptureLarkPhase>[0]> = {}) {
+  await expect(runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, ...input })).rejects.toThrow("required resources could not be materialized");
+  options.fail.clear(); options.downloads.length = 0;
+}
+
+test("a retry after failed resources downloads only the missing ones and completes the snapshot", async () => {
+  const root = await workspace();
+  const options = { fail: new Set(["c"]), downloads: [] as string[] };
+  const read = resourceDocument(["a", "b", "c"], options);
+  await expect(runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read })).rejects.toThrow("required resources could not be materialized");
+  expect(options.downloads.sort()).toEqual(["a", "b", "c"]);
+  options.fail.clear(); options.downloads.length = 0;
+  const retried = await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads).toEqual(["c"]);
+  expect(retried.resource_materialization.status).toBe("complete");
+  expect(retried.resource_materialization.items.map(item => item.status)).toEqual(["materialized", "materialized", "materialized"]);
+  const body = await readFile(join(root, documentPath), "utf8");
+  for (const token of ["a", "b", "c"]) expect(body).toContain(`Figure ${token}`);
+  // No image went over budget, so the report is written exactly as before.
+  expect(JSON.parse(await readFile(join(root, "sources/lark/handbook/assets/capture-report.json"), "utf8"))).not.toHaveProperty("resource_budget");
+  // A complete snapshot is not reused by later refreshes: they download again.
+  options.downloads.length = 0;
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads.sort()).toEqual(["a", "b", "c"]);
+});
+
+test("a retry downloads a saved resource again when its bytes no longer match the snapshot", async () => {
+  const root = await workspace();
+  const options = { fail: new Set(["b"]), downloads: [] as string[] };
+  const read = resourceDocument(["a", "b"], options);
+  const first = await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read }).catch(error => error);
+  expect(String(first)).toContain("required resources could not be materialized");
+  const manifest = JSON.parse(await readFile(join(root, manifestPath), "utf8"));
+  const saved = manifest.assets.find((asset: { source?: { kind?: string } }) => asset.source?.kind === "image");
+  await writeFile(join(root, "sources/lark/handbook", saved.path), "edited locally");
+  options.fail.clear(); options.downloads.length = 0;
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads.sort()).toEqual(["a", "b"]);
+});
+
+test.each([
+  ["a new revision", (options: ResourceDocument) => { options.revision = "2"; }],
+  ["a changed body without a revision", (options: ResourceDocument) => { options.text = "Edited rule"; }],
+] as const)("a retry after %s downloads every resource again", async (_name, change) => {
+  const root = await workspace();
+  const options: ResourceDocument = { fail: new Set(["b"]), downloads: [], ...(_name.includes("without") ? { revision: null } : {}) };
+  const read = resourceDocument(["a", "b"], options);
+  await failOnce(root, read, options);
+  change(options);
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads.sort()).toEqual(["a", "b"]);
+});
+
+test("without a revision, the same raw body reuses saved resources", async () => {
+  const root = await workspace();
+  const options: ResourceDocument = { fail: new Set(["b"]), downloads: [], revision: null };
+  const read = resourceDocument(["a", "b"], options);
+  await failOnce(root, read, options);
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads).toEqual(["b"]);
+});
+
+test("a retry with another identity or a host prefetch downloads every resource again", async () => {
+  const previous = process.env.CONTEXT_LARK_IDENTITY;
+  try {
+    for (const mode of ["identity", "prefetched"] as const) {
+      const root = await workspace();
+      const options: ResourceDocument = { fail: new Set(["b"]), downloads: [] };
+      const read = resourceDocument(["a", "b"], options);
+      process.env.CONTEXT_LARK_IDENTITY = "user";
+      await failOnce(root, read, options);
+      if (mode === "identity") process.env.CONTEXT_LARK_IDENTITY = "bot";
+      await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"],
+        ...(mode === "prefetched" ? { prefetched: { identity: "user" as const, responsePages: [(await read(["docs", "+fetch"])).stdout] } } : {}) });
+      expect(options.downloads.sort()).toEqual(["a", "b"]);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.CONTEXT_LARK_IDENTITY; else process.env.CONTEXT_LARK_IDENTITY = previous;
+  }
+});
+
+test("a retry reads whiteboards again and reuses only images", async () => {
+  const root = await workspace();
+  const options: ResourceDocument = { fail: new Set(["b"]), downloads: [], whiteboard: true };
+  const read = resourceDocument(["a", "b"], options);
+  await failOnce(root, read, options);
+  await runCaptureLarkPhase({ projectRoot: root, phase, larkRunner: read, refreshSources: ["lark:handbook"] });
+  expect(options.downloads.sort()).toEqual(["b", "board", "raw:board"]);
+});
+
+test("after a failed capture, excluding the failing type by policy saves the snapshot", async () => {
+  const root = await workspace();
+  const options: ResourceDocument = { fail: new Set(["attachment"]), downloads: [], file: true };
+  const read = resourceDocument(["a"], options);
+  await failOnce(root, read, options);
+  const saved = await runCaptureLarkPhase({ projectRoot: root, larkRunner: read, refreshSources: ["lark:handbook"],
+    phase: captureLark({ source: source("handbook"), resources: { files: "reference-only" } }) });
+  expect(options.downloads).toEqual([]);
+  expect(saved.resource_materialization.status).toBe("complete");
+  expect(saved.resource_materialization.items.find(item => item.kind === "file")).toMatchObject({ status: "reference-only", reason_code: "file-excluded-by-policy" });
+  expect(await readFile(join(root, documentPath), "utf8")).toContain("File omitted: Plan.pdf");
+});
+
+test("explicit bundle settings still skip an unchanged revision", async () => {
+  const root = await workspace();
+  const options: ResourceDocument = { fail: new Set(), downloads: [], file: true };
+  const read = resourceDocument(["a"], options);
+  const explicit = captureLark({ source: source("handbook"), resources: { images: "bundle", gifs: "bundle", files: "bundle", whiteboards: "bundle" } });
+  await runCaptureLarkPhase({ projectRoot: root, phase: explicit, larkRunner: read });
+  options.downloads.length = 0;
+  expect((await runCaptureLarkPhase({ projectRoot: root, phase: explicit, larkRunner: read })).snapshot.changed).toBe(false);
+  expect(options.downloads).toEqual([]);
+});
+
+test("a retry skips images that went over the unchanged budget, and downloads them after the budget is raised", async () => {
+  const big = "b".repeat(30);
+  for (const raised of [false, true]) {
+    const root = await workspace();
+    const options: ResourceDocument = { fail: new Set(["c"]), downloads: [] };
+    const read = resourceDocument(["a", big, "c"], options);
+    const limited = captureLark({ source: source("handbook"), resources: { maxBytesPerResource: 20, maxTotalBytes: 100 } });
+    await failOnce(root, read, options, { phase: limited });
+    const report = JSON.parse(await readFile(join(root, "sources/lark/handbook/assets/capture-report.json"), "utf8"));
+    expect(report.resource_budget).toEqual({ maxBytesPerResource: 20, maxTotalBytes: 100 });
+    const retried = await runCaptureLarkPhase({ projectRoot: root, larkRunner: read, refreshSources: ["lark:handbook"],
+      phase: raised ? captureLark({ source: source("handbook"), resources: { maxBytesPerResource: 100, maxTotalBytes: 100 } }) : limited });
+    expect(options.downloads.sort()).toEqual(raised ? [big, "c"].sort() : ["c"]);
+    expect(retried.resource_materialization.status).toBe(raised ? "complete" : "warning");
+  }
 });

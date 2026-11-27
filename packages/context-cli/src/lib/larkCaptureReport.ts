@@ -39,6 +39,16 @@ export interface LarkCaptureReport {
   resources: LarkCaptureReportResource[];
   /** Absent in reports written before 0.7.98. */
   access?: LarkCaptureAccess;
+  /**
+   * Byte limits in force, written only when an image was skipped for exceeding them, so a retry
+   * of the same revision need not download it again. Absent in reports written before 0.7.105.
+   */
+  resource_budget?: LarkCaptureResourceBudget;
+}
+
+export interface LarkCaptureResourceBudget {
+  maxBytesPerResource: number;
+  maxTotalBytes: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,7 +98,9 @@ export function createLarkCaptureReport(input: {
   resourceMaterialization: LarkResourceMaterializationReport;
   resources: readonly LarkExternalResource[];
   access?: LarkCaptureAccess;
+  resourceBudget?: LarkCaptureResourceBudget;
 }): LarkCaptureReport {
+  const budgetExceeded = input.resourceMaterialization.items.some((item) => item.reason_code === "image-budget-exceeded");
   const descriptors = new Map(input.resources.map((resource) => [resourceKey(resource), resource]));
   return {
     schema_version: LARK_CAPTURE_REPORT_SCHEMA_VERSION,
@@ -103,7 +115,19 @@ export function createLarkCaptureReport(input: {
       };
     }),
     ...(input.access === undefined ? {} : { access: input.access }),
+    ...(budgetExceeded && input.resourceBudget !== undefined ? { resource_budget: {
+      maxBytesPerResource: input.resourceBudget.maxBytesPerResource, maxTotalBytes: input.resourceBudget.maxTotalBytes,
+    } } : {}),
   };
+}
+
+function parseResourceBudget(value: unknown): LarkCaptureResourceBudget | undefined {
+  if (value === undefined) return undefined;
+  const positive = (field: unknown): field is number => typeof field === "number" && Number.isSafeInteger(field) && field > 0;
+  if (!isRecord(value) || !positive(value.maxBytesPerResource) || !positive(value.maxTotalBytes)) {
+    throw new TypeError("Lark capture report resource_budget must hold positive maxBytesPerResource and maxTotalBytes");
+  }
+  return { maxBytesPerResource: value.maxBytesPerResource, maxTotalBytes: value.maxTotalBytes };
 }
 
 function parseAccess(value: unknown): LarkCaptureAccess | undefined {
@@ -167,6 +191,7 @@ export function parseLarkCaptureReport(value: unknown): LarkCaptureReport {
     throw new TypeError("Lark capture report resource_materialization is required");
   }
   const access = parseAccess(value.access);
+  const resourceBudget = parseResourceBudget(value.resource_budget);
   return {
     schema_version: LARK_CAPTURE_REPORT_SCHEMA_VERSION,
     fidelity,
@@ -177,6 +202,7 @@ export function parseLarkCaptureReport(value: unknown): LarkCaptureReport {
       attributes: enriched[index]?.attributes ?? {},
     })),
     ...(access === undefined ? {} : { access }),
+    ...(resourceBudget === undefined ? {} : { resource_budget: resourceBudget }),
   };
 }
 

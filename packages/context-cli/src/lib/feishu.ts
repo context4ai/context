@@ -13,6 +13,7 @@ import {
   type LarkAccessIdentity,
   type LarkResourceAssetRole,
   type LarkResourceMaterializationPolicy,
+  type LarkResourceReuse,
   type LarkResourceMaterializationReport,
 } from "./larkResourceMaterialization.js";
 import { createLarkCaptureReport, sameLarkAccess, type LarkAccessEvent, type LarkCaptureAccess } from "./larkCaptureReport.js";
@@ -61,6 +62,8 @@ export interface RunLarkResult {
 
 export interface RunLarkOptions {
   cwd?: string;
+  /** Ends the process (and any child it started) after this many milliseconds; reported as a timeout. */
+  timeoutMs?: number;
 }
 
 export type LarkRunner = (args: string[], options?: RunLarkOptions) => Promise<RunLarkResult>;
@@ -68,12 +71,27 @@ type DocsFetchApiVersion = "v1" | "v2";
 
 const defaultRunner: LarkRunner = (args, options) =>
   new Promise((resolve, reject) => {
+    const timeoutMs = options?.timeoutMs;
+    // A separate process group lets a timeout also end children of a lark-cli host shim.
+    const group = timeoutMs !== undefined && process.platform !== "win32";
     const child = spawn(process.env.CONTEXT_LARK_CLI_BIN?.trim() || LARK_BIN, args, {
       ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(group ? { detached: true } : {}),
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
+      // A process that already exited is reported by its own exit code.
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      timedOut = true;
+      try {
+        if (group && child.pid) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch { /* Already exited; close still reports the result. */ }
+    }, timeoutMs);
+    timer?.unref();
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
@@ -81,16 +99,30 @@ const defaultRunner: LarkRunner = (args, options) =>
       stderr += chunk.toString("utf8");
     });
     child.on("error", (err: NodeJS.ErrnoException) => {
+      if (timer !== undefined) clearTimeout(timer);
       if (err.code === "ENOENT") {
         reject(new LarkCliNotInstalledError());
         return;
       }
       reject(err);
     });
+    child.on("exit", () => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
     child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code });
+      if (timer !== undefined) clearTimeout(timer);
+      resolve(timedOut
+        ? { stdout, stderr: `${stderr}${stderr.length ? "\n" : ""}${LARK_BIN} ${args.slice(0, 2).join(" ")} timed out after ${Math.round(timeoutMs! / 1000)} s`, exitCode: null }
+        : { stdout, stderr, exitCode: code });
     });
   });
+
+/** The earlier capture describes the same document version: the same revision, or without one the same raw body. */
+function sameLarkRevision(earlier: { revisionId?: string; rawContentHash?: string } | undefined, revisionId: string | undefined, rawContentHash: string | undefined): boolean {
+  if (earlier === undefined) return false;
+  if (revisionId !== undefined || earlier.revisionId !== undefined) return revisionId === earlier.revisionId;
+  return rawContentHash !== undefined && rawContentHash === earlier.rawContentHash;
+}
 
 export async function checkLarkCli(runner: LarkRunner = defaultRunner): Promise<string> {
   const result = await runner(["--version", "--as", resolveLarkReadIdentity()]);
@@ -135,6 +167,15 @@ export interface FetchFeishuDocInput {
    */
   identity?: LarkAccessIdentity | "auto";
   resourcePolicy?: Partial<LarkResourceMaterializationPolicy>;
+  /**
+   * Images and files of an earlier capture. They are used only when this read has the same
+   * revision (or, without one, the same raw body hash); the loader checks identity and bytes.
+   */
+  reuseResources?: {
+    revisionId?: string; rawContentHash?: string; load: LarkResourceReuse;
+    /** Images the earlier capture skipped for budget under limits no lower than now, read as `identity`. */
+    budgetExcluded?: { identity: LarkAccessIdentity; locators: ReadonlySet<string> };
+  };
 }
 
 export interface FetchFeishuDocAsset {
@@ -461,6 +502,7 @@ function captureReportAsset(input: {
   resourceMaterialization: LarkResourceMaterializationReport;
   resources: readonly LarkExternalResource[];
   access: LarkCaptureAccess;
+  resourceBudget?: { maxBytesPerResource: number; maxTotalBytes: number };
 }): FetchFeishuDocAsset {
   const report = createLarkCaptureReport(input);
   return {
@@ -728,24 +770,27 @@ export async function fetchFeishuDocSnapshot(
   }
   const resources = [...new Map([...(projection?.resources ?? []), ...larkMarkdownImageResources(body)]
     .map(resource => [resource.locator, resource])).values()];
+  const policy: LarkResourceMaterializationPolicy = {
+    ...DEFAULT_RESOURCE_POLICY,
+    ...input.resourcePolicy,
+  };
   if (resources.length) {
-    const policy: LarkResourceMaterializationPolicy = {
-      ...DEFAULT_RESOURCE_POLICY,
-      ...input.resourcePolicy,
-    };
+    const earlier = sameLarkRevision(input.reuseResources, revisionId, projection?.rawContentHash) ? input.reuseResources : undefined;
     const materialized = await materializeLarkResources({
       resources,
       runner,
       ...(input.prefetched?.mediaFiles === undefined ? {} : { mediaFiles: input.prefetched.mediaFiles }),
+      ...(earlier === undefined ? {} : { reuse: earlier.load }),
+      ...(earlier?.budgetExcluded?.identity === accessIdentity ? { budgetExcluded: earlier.budgetExcluded.locators } : {}),
       policy,
       identity: accessIdentity,
-      resolveSyncedReference: async (resource) => {
+      resolveSyncedReference: async (resource, scheduled) => {
         const sourceToken = resource.attributes["src-token"];
         const blockId = resource.attributes["src-block-id"];
         if (sourceToken === undefined || blockId === undefined) {
           throw new LarkCliError("synced reference requires src-token and src-block-id", 0, "");
         }
-        const synced = await fetchDocsResponse({ url: sourceToken }, docsFetchPlan, runner, accessIdentity);
+        const synced = await fetchDocsResponse({ url: sourceToken }, docsFetchPlan, scheduled, accessIdentity);
         if (synced.contentFormat !== "xml") {
           throw new LarkCliError("synced reference source did not return XML", 0, "");
         }
@@ -772,6 +817,7 @@ export async function fetchFeishuDocSnapshot(
     resourceMaterialization,
     resources,
     access,
+    resourceBudget: { maxBytesPerResource: policy.maxBytesPerResource, maxTotalBytes: policy.maxTotalBytes },
   }));
 
   // Prepend title as H1 if the readable projection doesn't already lead with one —

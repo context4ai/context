@@ -168,6 +168,14 @@ Other resource types retain their existing policies. Do not edit snapshots or
 invent unsupported flags; when a capture adapter cannot exclude images, explain
 that limitation and resolve the acquisition method before downloading.
 
+Capture retries timed-out or gateway-failed resources by itself. When a capture
+still reports required resources that could not be materialized, run the retry
+the Route returns: it keeps the images and files already saved for the same
+revision and downloads only the missing ones. If resources still fail, tell the
+user which kinds failed and ask whether to keep them as references; only after
+an explicit choice set `resources.images`, `resources.files` or
+`resources.whiteboards` to `reference-only` for that source and capture again.
+
 Preserve source links/placeholders and report skipped images as not acquired or
 interpreted. This is a workflow instruction using existing resource policies, not
 a new CLI hard gate or automatic document counter. For tasks that still include

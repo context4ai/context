@@ -1,4 +1,4 @@
-import { larkAccessDiagnostics, type LarkAccessEvent, type LarkCaptureAccess } from "../lib/larkCaptureReport.js";
+import { larkAccessDiagnostics, type LarkAccessEvent, type LarkCaptureAccess, type LarkCaptureReport } from "../lib/larkCaptureReport.js";
 import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
@@ -26,6 +26,7 @@ import {
   LarkCliError,
   LarkCliNotInstalledError,
   type FetchFeishuDocAsset,
+  type FetchFeishuDocInput,
   type LarkRunner,
 } from "../lib/feishu.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -43,7 +44,9 @@ import {
 import { withProjectWriteLock } from "./writeLock.js";
 import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
 import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
-import { assertSnapshotResourcePolicy, readLarkSnapshotBundle } from "./larkSnapshotBundle.js";
+import { assertSnapshotResourcePolicy, normalizedSnapshotResourcePolicy, readLarkSnapshotBundle } from "./larkSnapshotBundle.js";
+import { isDeepStrictEqual } from "node:util";
+import { LARK_POLICY_EXCLUSION_REASON_CODES } from "../lib/larkImagePolicy.js";
 import { checkedLarkRevision, larkSnapshotComparable, larkSnapshotFingerprint, rememberCheckedLarkRevision } from "./larkCaptureFreshness.js";
 import { documentSnapshotFidelityState, readDocumentSnapshotCaptureReport } from "./documentSnapshotFidelity.js";
 import { beginFormatOnlyUpdate, invalidateFormatOnlyUpdate, recordFormatOnlyCapture } from "./formatOnlyUpdate.js";
@@ -271,6 +274,54 @@ function assetManifestEntry(asset: FetchFeishuDocAsset, assetRoot: string): {
   };
 }
 
+/**
+ * Images and files saved by an earlier capture of this source, offered for reuse when the next read
+ * has the same revision. Each is reused only for the same identity and when its bytes still match.
+ */
+function earlierLarkResources(projectRoot: string, materializedAt: string, manifest: {
+  assets?: readonly DocumentSnapshotAssetEntry[]; metadata?: { source?: { revisionId?: string } };
+}, budgetExcluded?: NonNullable<FetchFeishuDocInput["reuseResources"]>["budgetExcluded"]): FetchFeishuDocInput["reuseResources"] {
+  const byResource = new Map<string, DocumentSnapshotAssetEntry>();
+  for (const asset of manifest.assets ?? []) {
+    const source = asset.source;
+    if (asset.role !== "evidence" || (source?.kind !== "image" && source?.kind !== "file") ||
+        !source.locator || !source.identity || !asset.content_hash || !asset.media_type) continue;
+    byResource.set(`${source.kind}\0${source.locator}`, asset);
+  }
+  if (byResource.size === 0 && budgetExcluded === undefined) return undefined;
+  const revisionId = manifest.metadata?.source?.revisionId;
+  const rawContentHash = manifest.assets?.find(asset => asset.source?.kind === "lark-docx-xml")?.source?.raw_content_hash;
+  return {
+    ...(revisionId === undefined ? {} : { revisionId }),
+    ...(rawContentHash === undefined ? {} : { rawContentHash }),
+    ...(budgetExcluded === undefined ? {} : { budgetExcluded }),
+    load: async (resource, identity) => {
+      const asset = byResource.get(`${resource.kind}\0${resource.locator}`);
+      if (asset === undefined || asset.source?.identity !== identity) return undefined;
+      let bytes: Uint8Array;
+      try { bytes = await readFile(join(projectRoot, materializedAt, asset.path)); }
+      catch { return undefined; }
+      if (computeDocumentContentHash(bytes) !== asset.content_hash) return undefined;
+      return { path: asset.path, bytes, mediaType: asset.media_type!,
+        representation: asset.source.representation === "preview" ? "preview" : "original" };
+    },
+  };
+}
+
+/**
+ * Images the earlier capture skipped for budget. They stay skipped only while neither limit has been
+ * raised; reports written before the budget was recorded skip nothing.
+ */
+function budgetExcludedImages(report: LarkCaptureReport | undefined, policy: { maxBytesPerResource: number; maxTotalBytes: number }):
+  NonNullable<FetchFeishuDocInput["reuseResources"]>["budgetExcluded"] {
+  const budget = report?.resource_budget;
+  if (budget === undefined || report?.access === undefined ||
+      policy.maxBytesPerResource > budget.maxBytesPerResource || policy.maxTotalBytes > budget.maxTotalBytes) return undefined;
+  const locators = new Set(report.resources
+    .filter(item => item.kind === "image" && item.reason_code === "image-budget-exceeded").map(item => item.locator));
+  return locators.size === 0 ? undefined : { identity: report.access.identity, locators };
+}
+
 async function listSnapshotAssetFiles(root: string, assetRoot: string): Promise<string[]> {
   const assetsRoot = join(root, assetRoot);
   const files: string[] = [];
@@ -403,9 +454,23 @@ async function runCaptureLarkPhaseUnlocked(input: {
   const previousRevision = (fingerprint === undefined ? undefined : await checkedLarkRevision(input.projectRoot, resolved.sourceName, fingerprint))
     ?? previousManifest?.metadata?.source?.revisionId;
   const unchangedRevisionId = !refresh && !input.prefetched && !recovery &&
-    Object.entries(input.phase.resources ?? {}).every(([key, value]) => value === DEFAULT_RESOURCE_POLICY[key as keyof typeof DEFAULT_RESOURCE_POLICY]) &&
+    isDeepStrictEqual(normalizedSnapshotResourcePolicy({ ...DEFAULT_RESOURCE_POLICY, ...input.phase.resources }),
+      normalizedSnapshotResourcePolicy(DEFAULT_RESOURCE_POLICY)) &&
     previousManifest?.normalizer_version === LARK_DOCUMENT_NORMALIZER_VERSION && fingerprint !== undefined
     ? previousRevision : undefined;
+  // After a capture whose required resources failed, the retry downloads only what is still missing.
+  let reuseResources: FetchFeishuDocInput["reuseResources"];
+  // Only the same registered document, read by Context itself (not a host prefetch), is reused.
+  if (previousManifest !== null && !recovery && !input.prefetched &&
+      larkSnapshotIdentityDiagnostic(entry, previousManifest) === null) {
+    try {
+      const report = readDocumentSnapshotCaptureReport({ projectRoot: input.projectRoot, materializedAt, manifest: previousManifest });
+      if (documentSnapshotFidelityState(previousManifest, report).resourceMaterialization?.status === "error") {
+        reuseResources = earlierLarkResources(input.projectRoot, materializedAt, previousManifest,
+          budgetExcludedImages(report, { ...DEFAULT_RESOURCE_POLICY, ...input.phase.resources }));
+      }
+    } catch { /* An unreadable report is diagnosed by the fidelity checks below; nothing is reused. */ }
+  }
   await beginFormatOnlyUpdate(input.projectRoot);
   // The access recorded with the unchanged snapshot; old reports without it keep reusing the snapshot.
   let unchangedAccess: LarkCaptureAccess | undefined;
@@ -427,6 +492,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
       url: target.value,
       resourcePolicy: input.phase.resources,
       requireCompleteBody: true,
+      ...(reuseResources === undefined ? {} : { reuseResources }),
       ...(typeof unchangedRevisionId === "string" ? { unchangedRevisionId } : {}),
       ...(unchangedAccess === undefined ? {} : { unchangedAccess }),
       accessEvents,
@@ -485,7 +551,9 @@ async function runCaptureLarkPhaseUnlocked(input: {
     let lost = fetched.resourceMaterialization.items.filter(item =>
       previous.resourceMaterialization?.items.some(old => old.kind === item.kind && old.locator === item.locator && old.status === "materialized" &&
         (item.status !== "materialized" || item.reason_code === "document.resource.preview" && old.reason_code !== "document.resource.preview")));
-    degraded = lost.filter(item => item.status === "materialized" || isNonBlockingDocumentResourceFailureReasonCode(item.reason_code));
+    // A preview, a located gap or an explicit policy exclusion is saved and listed; a transient loss is not.
+    degraded = lost.filter(item => item.status === "materialized" || isNonBlockingDocumentResourceFailureReasonCode(item.reason_code) ||
+      LARK_POLICY_EXCLUSION_REASON_CODES.has(item.reason_code ?? ""));
     lost = lost.filter(item => !degraded.includes(item));
     if (lost.length) throw new ContextError(ExitCode.WorkspaceStateError,
       "Previously captured resources were degraded; the existing snapshot was preserved. Check resource policy and access before retrying the explicit refresh.",
