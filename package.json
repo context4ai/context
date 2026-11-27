@@ -1,6 +1,6 @@
 {
   "name": "context",
-  "version": "0.7.104",
+  "version": "0.7.105",
   "packageManager": "bun@1.3.9",
   "repository": {
     "type": "git",
