@@ -9,6 +9,7 @@ import { registeredRepoHistoryReader } from "./articleSourceReader.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import { commandGitObjectReader, SourceReadError, SourceUnavailableError } from "./gitObjectReader.js";
 import { hunks, mapReferenceRange } from "./referenceRangeMap.js";
+import { exactQuoteLocator } from "./submittedSourceLocator.js";
 
 /** Unavailable reasons that describe this machine (a download or commit not yet local), not the source. */
 export const LOCAL_SOURCE_REASONS: Readonly<Record<string, string>> = {
@@ -92,9 +93,9 @@ export async function suggestedRange(root: string, reference: ArticleSourceRefer
   if (!collides) return { start_line: mapped.start_line, end_line: mapped.end_line, ...clip(region),
     locator: { path: mapped.path, start_line: mapped.start_line, end_line: mapped.end_line },
     message: "The source diff maps the old lines here. If this text still supports the section, cite this locator; it is checked again on submit." };
-  const unique = region.trim() !== "" && normalized.indexOf(region) === normalized.lastIndexOf(region);
-  if (!unique || region.length > 4_000) return undefined;
-  return { start_line: mapped.start_line, end_line: mapped.end_line, ...clip(region), locator: { path: mapped.path, quote: region },
+  const quote = exactQuoteLocator(mapped, normalized, 4_000);
+  if (!quote) return undefined;
+  return { start_line: mapped.start_line, end_line: mapped.end_line, ...clip(region), locator: quote,
     message: "An earlier citation used these line numbers, and repeating them keeps that earlier evidence; to cite the new text here, use this quote locator." };
 }
 

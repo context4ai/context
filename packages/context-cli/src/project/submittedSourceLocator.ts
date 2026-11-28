@@ -1,4 +1,5 @@
-import { articleSourceLocatorSchema, articleSourceLocatorInputSchema, type ArticleSourceLocator, type ArticleSourceLocatorInput } from "@c4a/context";
+import { articleSourceLocatorSchema, articleSourceLocatorInputSchema, articleSourceRegion, type ArticleSourceLocator,
+  type ArticleSourceLocatorInput } from "@c4a/context";
 import { SubmissionInputError } from "./productionFeedback.js";
 
 export const submittedSourceLocatorSchema = articleSourceLocatorInputSchema;
@@ -18,6 +19,21 @@ export function assertNoCaptureGap(locator: ArticleSourceLocator, capturedText: 
   const gap = lines.findIndex(gapOnly);
   if (gap >= 0) throw new SubmissionInputError(`${locator.path}:${locator.start_line + gap} is a capture gap (the resource was not captured), `
     + "not evidence. Cite only captured lines; the missing content cannot support a claim until it is captured.");
+}
+
+/** The text at these lines as a quote locator, only when that quote occurs once, resolves
+ * back to exactly these lines (a trailing empty line, for example, would not) and holds no
+ * capture gap; otherwise undefined. */
+export function exactQuoteLocator(locator: ArticleSourceLocator, capturedText: string, maxLength: number): { path: string; quote: string } | undefined {
+  const text = capturedText.replace(/\r\n/gu, "\n");
+  try {
+    const quote = articleSourceRegion(text, locator);
+    if (quote.trim() === "" || quote.length > maxLength) return undefined;
+    const resolved = resolveSubmittedSourceLocator({ path: locator.path, quote }, text);
+    if (resolved.start_line !== locator.start_line || resolved.end_line !== locator.end_line) return undefined;
+    assertNoCaptureGap(resolved, text);
+    return { path: locator.path, quote };
+  } catch { return undefined; }
 }
 
 /** Call only after authorization, with the same captured text used for hashing. */

@@ -52,6 +52,14 @@ link targets or a restored table may change meaning even if the text looks simil
 If any mapping is missing or uncertain, use normal revision. A format-only
 decision does not authorize publication or suppress unrelated version changes.
 
+Without a proposal, document evidence stays positional, so find the cited text
+in the current snapshot (a distinctive line or its heading) before deciding. A
+change that is only export formatting (merged bold markers, regenerated
+descriptions in omitted-image placeholders) needs no change to the page body:
+kept without an instruction, its citations stay at their previous locations and
+are listed in `reference_warnings`; to clear them now, give the page an
+instruction to re-cite the current text only.
+
 Also inspect additions and shared dependencies in the source change. Existing
 page references cannot discover every new topic. For repositories,
 `uncited_changes` lists the changed files no approved page cites, grouped by

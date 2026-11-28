@@ -130,6 +130,38 @@ test("a resubmitted earlier citation keeps its evidence; quote selects the text 
     await writeFile(path, "# Note\nNew implementation\nNew implementation\n");
     await expect(prepareRevisionReferences({ ...input, edits: [resubmit] })).rejects.toMatchObject({
       reason: "kept-reference-unresolved", message: expect.stringContaining("use a quote or heading locator") });
+    // A capture gap at those lines is not offered as a quote: it could never be cited.
+    await writeFile(path, "# Note\n> Resource unavailable: Board (whiteboard; denied). <!-- wb:1 -->\n");
+    const gap = prepareRevisionReferences({ ...input, edits: [resubmit] });
+    await expect(gap).rejects.toMatchObject({ reason: "kept-reference-unresolved", message: expect.stringContaining("use a quote or heading locator") });
+    await expect(gap).rejects.not.toMatchObject({ message: expect.stringContaining("submit this locator instead") });
+    // Lines past the end of the file are named as such, not as changed text.
+    await writeFile(path, "# Note");
+    await expect(prepareRevisionReferences({ ...input, edits: [resubmit] })).rejects.toMatchObject({
+      reason: "kept-reference-unresolved", message: expect.stringContaining("the file now has 1 lines, so these lines no longer exist") });
+    // An unreadable source is named with its reason; no locator advice.
+    await rm(path);
+    const missing = prepareRevisionReferences({ ...input, edits: [resubmit] });
+    await expect(missing).rejects.toMatchObject({ reason: "kept-reference-unresolved",
+      message: expect.stringMatching(/cannot be read \(source-[a-z-]+\)\. Restore or refresh the source/u) });
+    await expect(missing).rejects.not.toMatchObject({ message: expect.stringContaining("text now at these lines") });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a citation outside the page names supporting_sources when the source belongs to the update", async () => {
+  const root = await mkdtemp(join(tmpdir(), "revision-outside-scope-"));
+  const sourceRef = "note:20260912/source.md";
+  const other = "note:20260912/other.md";
+  const reference = createArticleSourceReference(sourceRef, { path: "source.md", start_line: 2, end_line: 2 }, "# Note\nText\n");
+  const edits = [{ section_id: "answer", references: [{ source_ref: other, locator: { path: "other.md", start_line: 1, end_line: 1 } }] }];
+  const input = { projectRoot: root, sourceRefs: [sourceRef], sectionIds: ["answer"], previous: [{ id: "answer", references: [reference] }], edits };
+  try {
+    await expect(prepareRevisionReferences({ ...input, processedScopes: [sourceRef, other] })).rejects.toMatchObject({
+      reason: "source-outside-revision", message: expect.stringContaining("run context task adjust for this revision with that scope (in a later source update, list it in the page decision's supporting_sources") });
+    await expect(prepareRevisionReferences(input)).rejects.toMatchObject({
+      reason: "source-outside-revision", message: expect.stringContaining("register it as a source") });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

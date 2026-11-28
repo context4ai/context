@@ -11,8 +11,10 @@ import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeU
 import { inspectPendingSourceUpdates, pendingSourceUpdateScopes } from "../project/pendingSourceUpdates.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
 import { suggestedCitation } from "../project/approvedRevisionReferences.js";
+import { registeredArticleSourceReader } from "../project/articleSourceReader.js";
 import { collectProjectStatus } from "../project/status.js";
 import { completeApprovedRevision, readApprovedRevision } from "../project/approvedRevision.js";
+import { prepareApprovedRevisionSubmission } from "../project/approvedRevisionSubmission.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -204,6 +206,18 @@ test("a checkout outside the workspace behind a symlinked local path is read lik
   expect(update.changed_references).toBeUndefined();
   expect(update.reference_groups).toMatchObject({ needs_decision: [], unavailable: [] });
   expect(update.uncited_changes?.length).toBeGreaterThan(0);
+});
+
+test("a checkout outside the workspace still keeps cited paths inside the repository", async () => {
+  const root = await settledKnowledge();
+  await checkoutOutsideWorkspace(root);
+  const read = await registeredArticleSourceReader(root);
+  const source = "repo:" + YAML.parse(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).sources[0].name
+    + "/" + YAML.parse(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).sources[0].modules[0].name;
+  expect(await read(source, "src/index.ts")).toContain("answer");
+  for (const path of ["../outside.ts", "src/../../outside.ts"]) {
+    await expect(read(source, path)).rejects.toMatchObject({ detail: { reason_code: "source-path-outside-scope" } });
+  }
 });
 
 test("a changed citation in a checkout outside the workspace reports its current text", async () => {
@@ -436,6 +450,30 @@ test("a source-update revision cannot keep a citation the processed version no l
   const preview = await completeApprovedRevision({ projectRoot: root, revision: request.revision, preview: true,
     markdown, sections: [{ section_id: section, references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF, locator: { path: "src/index.ts", quote: "export const answer = 43;" } }] }] });
   expect(preview.changed).toBe(true);
+});
+
+test("a source-update batch preview blocks stale citations of the processed source on every page, as submission does", async () => {
+  const root = await settledKnowledge();
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  await beginKnowledgeUpdate(root, undefined, { pending: true });
+  const status = await collectProjectStatus(root, { managed: true });
+  await completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision, managed: true,
+    value: { stage: "source-update", decisions: [{ path: "architecture/overview.md", instruction: "Describe the new value." },
+      { path: "architecture/usage.md", instruction: "Describe the new value." }],
+      scope_summary: "The value changed.", new_topics: [] } });
+  const request = (await readApprovedRevision(root))!;
+  const batch = await prepareApprovedRevisionSubmission({ projectRoot: root, revision: request.revision, managed: true });
+  expect(batch.tasks).toHaveLength(2);
+  // Both writers change the prose but do not re-cite the changed source.
+  for (const [index, task] of batch.tasks.entries()) {
+    const input = JSON.parse(await readFile(join(root, task.task_input), "utf8"));
+    await writeFile(join(root, batch.agent_directory, batch.submission.tasks[index]!.edits), JSON.stringify({ stage: "approved-revision",
+      markdown: input.target.markdown.replace("value 42.", "value 43.") }));
+  }
+  const preview = await completeCurrentIndexerAction({ cwd: root, revision: request.revision, value: batch.submission,
+    managed: true, preview: true }) as unknown as { ok_count: number; pages: Array<{ ok: boolean; issues: Array<{ reason_code?: string }> }> };
+  expect(preview.ok_count).toBe(0);
+  for (const page of preview.pages) expect(page.issues.map(issue => issue.reason_code)).toContain("processed-reference-stale");
 });
 
 test("verify reports missing local downloads and commits as unchecked, and a deleted file as a change", async () => {

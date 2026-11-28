@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { articleSourceLocatorSchema, approvedRevisionSemanticInputSchema } from "@c4a/context";
-import { resolveSubmittedSourceLocator, submittedSourceLocatorSchema } from "../project/submittedSourceLocator.js";
+import { exactQuoteLocator, resolveSubmittedSourceLocator, submittedSourceLocatorSchema } from "../project/submittedSourceLocator.js";
 
 test("headings resolve sections, ignore fences and stop at same or higher level", () => {
   const text = "# Start\nIntro\n## Usage\nUse it\n### Detail\nMore\n\n## End\nDone\n";
@@ -30,4 +30,22 @@ test("author schema accepts symbolic inputs without changing durable locator sch
   const locator = { path: "guide.md", quote: "Unique" };
   expect(approvedRevisionSemanticInputSchema.safeParse({ stage: "approved-revision", sections: [{ section_id: "a", references: [{ source_ref: "note:a", locator }] }] }).success).toBe(true);
   expect(articleSourceLocatorSchema.safeParse(locator).success).toBe(false);
+});
+
+test("an exact quote locator resolves back to the same lines or is not offered", () => {
+  const at = (start_line: number, end_line: number) => ({ path: "a.md", start_line, end_line });
+  expect(exactQuoteLocator(at(2, 3), "# A\nNew one\nNew two\n", 2_000)).toEqual({ path: "a.md", quote: "New one\nNew two" });
+  expect(exactQuoteLocator(at(2, 2), "# A\r\nNew one\r\n", 2_000)).toEqual({ path: "a.md", quote: "New one" });
+  // Only quotes that resolve back to the same lines are offered: a leading empty line
+  // does; a trailing one would end a line early.
+  expect(exactQuoteLocator(at(2, 3), "# A\n\nNew one\n", 2_000)).toEqual({ path: "a.md", quote: "\nNew one" });
+  expect(resolveSubmittedSourceLocator({ path: "a.md", quote: "\nNew one" }, "# A\n\nNew one\n")).toEqual(at(2, 3));
+  expect(resolveSubmittedSourceLocator({ path: "a.md", quote: "New one\n" }, "# A\nNew one\n\nMore\n")).toEqual(at(2, 2));
+  expect(exactQuoteLocator(at(2, 3), "# A\nNew one\n\nMore\n", 2_000)).toBeUndefined();
+  // Repeated text, a capture gap, an empty or too long region, or lines beyond the file.
+  expect(exactQuoteLocator(at(2, 2), "Same\nSame\n", 2_000)).toBeUndefined();
+  expect(exactQuoteLocator(at(2, 2), "# A\n> Resource unavailable: Board (whiteboard; denied). <!-- wb:1 -->\n", 2_000)).toBeUndefined();
+  expect(exactQuoteLocator(at(2, 2), "# A\n   \n", 2_000)).toBeUndefined();
+  expect(exactQuoteLocator(at(2, 2), `# A\n${"x".repeat(30)}\n`, 20)).toBeUndefined();
+  expect(exactQuoteLocator(at(4, 5), "# A\nB\n", 2_000)).toBeUndefined();
 });

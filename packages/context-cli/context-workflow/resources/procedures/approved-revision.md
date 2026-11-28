@@ -180,7 +180,10 @@ fixed source, signing) against the current Route and returns one result per page
 with its issues, without saving drafts, task state or source caches. It reports problems and never repairs them: for example, a line range
 past the end of a file is reported, not clamped. Write the whole batch, preview
 it once, correct the flagged pages, then submit; do not write ad-hoc validation
-or re-signing scripts.
+or re-signing scripts. For pages from a source update, the task input does not
+list which citations changed: the preview reports each citation the processed
+source no longer confirms (`processed-reference-stale`, with the old text's new
+lines when known), so re-cite those, or quote or rewrite the paragraph.
 
 Preview is useful only when its assembled text will be read before deciding to
 submit. An unattended loop submits directly. Continue from the receipt's

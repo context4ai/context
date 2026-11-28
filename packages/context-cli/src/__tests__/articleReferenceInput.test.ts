@@ -48,6 +48,42 @@ test("a permitted path cannot escape the captured root through a symlink", async
   }])).toThrow("authorized root");
 });
 
+test("a registered repository linked to a checkout outside the workspace is read inside that checkout", async () => {
+  const { root, content } = await fixture();
+  const outside = await mkdtemp(join(tmpdir(), "context-article-checkout-"));
+  roots.push(outside);
+  await writeFile(join(outside, "entry.ts"), content);
+  await writeFile(join(outside, "..", `${outside.split("/").pop()}-secret.ts`), "secret");
+  const linked = join(root, "sources/repo/linked");
+  await symlink(outside, linked);
+  const view = { items: [{ category: "source-access", value: { source_ref: "repo:linked", captured_root: linked, paths: ["entry.ts"] } }] } as unknown as IndexerAuthorizedWorksetView;
+  const reference = { source_ref: "repo:linked", locator: { path: "entry.ts", start_line: 2, end_line: 2 } };
+  expect(articleReferenceResolver({ projectRoot: root, view })([reference])).toEqual([createArticleSourceReference(reference.source_ref, reference.locator, content)]);
+  expect(() => articleReferenceResolver({ projectRoot: root, view })([{ ...reference,
+    locator: { path: `../${outside.split("/").pop()}-secret.ts`, start_line: 1, end_line: 1 } }])).toThrow();
+  // A captured root that is not a workspace location stays rejected.
+  const direct = { items: [{ category: "source-access", value: { source_ref: "repo:linked", captured_root: outside, paths: ["entry.ts"] } }] } as unknown as IndexerAuthorizedWorksetView;
+  expect(() => articleReferenceResolver({ projectRoot: root, view: direct })([reference])).toThrow("authorized root");
+});
+
+test("a repository registered directly under the workspace root is read, plain or linked", async () => {
+  const { root, content } = await fixture();
+  const reference = (source: string) => ({ source_ref: source, locator: { path: "entry.ts", start_line: 2, end_line: 2 } });
+  const view = (source: string, captured: string) => ({ items: [{ category: "source-access",
+    value: { source_ref: source, captured_root: captured, paths: ["entry.ts"] } }] }) as unknown as IndexerAuthorizedWorksetView;
+  await mkdir(join(root, "fixture-source"));
+  await writeFile(join(root, "fixture-source/entry.ts"), content);
+  expect(articleReferenceResolver({ projectRoot: root, view: view("repo:plain", join(root, "fixture-source")) })([reference("repo:plain")]))
+    .toEqual([createArticleSourceReference("repo:plain", reference("repo:plain").locator, content)]);
+  // A relative captured root resolves against the workspace, not the process directory.
+  expect(articleReferenceResolver({ projectRoot: root, view: view("repo:plain", "fixture-source") })([reference("repo:plain")])).toHaveLength(1);
+  const outside = await mkdtemp(join(tmpdir(), "context-article-top-"));
+  roots.push(outside);
+  await writeFile(join(outside, "entry.ts"), content);
+  await symlink(outside, join(root, "my-repo"));
+  expect(articleReferenceResolver({ projectRoot: root, view: view("repo:linked", join(root, "my-repo")) })([reference("repo:linked")])).toHaveLength(1);
+});
+
 test("documents use the current captured bytes, not a similarly named source or stale snapshot", async () => {
   const { root, captured, content } = await fixture();
   const view = { items: [{ category: "document", value: {

@@ -103,28 +103,34 @@ workspace targets or the delivery configuration.
    several stages. One source update always covers all affected articles of its
    sources; to keep a large one in groups of about 30, approve and deliver
    checked pages early with the Route's `context run --deliver` while the rest
-   stay pending. Above 500 source documents, the `context-plan` human scope gate applies: save progress
-   and stop.
+   stay pending. Above 500 source documents, the `context-plan` human scope
+   gate applies: save progress and stop.
 6. **Run one batch at a time.** Context keeps one active update; finish its
-   review and delivery before the next. For each repository of the batch, move
-   only its existing registration: rerun `context source add repo` with the
-   registered namespace, `--module`, remote or local path and subpath, changing
-   only `--ref <sha>`. Then start the update with one `context update --input`
-   naming the batch's repository and document scopes. Use `context update
-   --pending --format json` only when the batch is every pending repository and
-   has no documents. Only `--pending` downloads:
-   `--input` reads what the checkout already has, so for it first fetch and check
-   out the new commit in a shallow or partial clone. Before writing, restore every
-   source the candidate pages cite, not only this repository: a page that cites
-   a missing source cannot be submitted. `context source recovery-plan --format
-   json` lists them with a fill-in restore input. Re-capture changed documents
-   through their normal capture Route; for a newer origin version, install it
-   into a new version directory and move the registration first, as in the
-   knowledge-updates guide's versioned external content section. For pages kept
-   as written, keep revisions of code contradictions locally, list them in the
-   run report, and do not raise again a contradiction the history shows was
-   kept unless its cited code changed. Do not
-   start a new batch after the time budget; finish or checkpoint the current one.
+   review and delivery before the next. Start each batch in this order (the
+   knowledge-updates guide, "Refresh several registered sources", step 4):
+   1. Fetch and check out each of the batch's repositories at its new commit in
+      a shallow or partial clone, keeping the processed commit available:
+      `--input` reads only what the checkout already has.
+   2. Move only the batch's registrations: rerun `context source add repo` with
+      the registered namespace, `--module`, remote or local path and subpath,
+      changing only `--ref <sha>`.
+   3. Re-capture the batch's changed documents through their normal capture
+      Route; for a newer origin version, install it into a new version
+      directory and move the registration first, as in the knowledge-updates
+      guide's "Versioned external content and archived collections".
+   4. Start one `context update --input` naming the batch's repository and
+      document scopes, each with its `requirement_ref`; list a source shared by
+      several requirements once per requirement. Use `context update --pending
+      --format json` instead only when the batch is every pending repository
+      and has no documents; it also downloads what it needs.
+
+   Before writing, restore every source the candidate pages cite, not only this
+   batch's: a page that cites a missing source cannot be submitted. `context
+   source recovery-plan --format json` lists them with a fill-in restore input.
+   For pages kept as written, keep revisions of code contradictions locally,
+   list them in the run report, and do not raise again a contradiction the
+   history shows was kept unless its cited code changed. Do not start a new
+   batch after the time budget; finish or checkpoint the current one.
 7. **Cover uncited changes.** In the source-update decision, go through
    `uncited_changes` by directory, new directories first. Skip tests, lock
    files, generated code and third-party directories, and read the diff only for
