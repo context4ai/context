@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import { assertNoCaptureGap, resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import { SubmissionInputError, SubmissionInputErrors } from "./productionFeedback.js";
-import { articleFragmentReferences, createArticleSourceReference,
+import { articleFragmentReferences, articleSourceRegion, createArticleSourceReference,
   repoContentScopeMatches, type ArticleSourceReference, type ArticleStructureEntry } from "@c4a/context";
 import { rememberArticleRegion } from "./articleRegionBaselines.js";
 import { relocateUnchangedReference } from "./settledReferenceRelocation.js";
@@ -24,6 +24,15 @@ interface ReferenceContext {
   readSource: SourceRead;
 }
 
+/** The current text at a citation's lines as a quote locator, when it occurs once in the file. */
+async function currentQuote(context: ReferenceContext, sourceRef: string, locator: { path: string; start_line: number; end_line: number }) {
+  try {
+    const text = (await context.readSource(sourceRef, locator.path, true)).replace(/\r\n/gu, "\n");
+    const region = articleSourceRegion(text, locator);
+    return region.trim() !== "" && region.length <= 2_000 && text.indexOf(region) === text.lastIndexOf(region) ? region : undefined;
+  } catch { return undefined; }
+}
+
 /** One submitted citation; input problems throw SubmissionInputError. */
 async function resolveSubmittedReference(context: ReferenceContext, id: string, at: Array<string | number>,
   reference: NonNullable<NonNullable<RevisionContentInput["sections"]>[number]["references"]>[number]): Promise<ArticleSourceReference> {
@@ -41,9 +50,12 @@ async function resolveSubmittedReference(context: ReferenceContext, id: string, 
   if (kept) {
     const observed = await relocateUnchangedReference(context.projectRoot, context.readSource, kept);
     if (observed.state === "current" || observed.state === "moved") return observed.reference;
+    const quote = await currentQuote(context, reference.source_ref, kept.locator);
     throw new SubmissionInputError(`Fragment ${id}: ${reference.source_ref} ${kept.locator.path}:${kept.locator.start_line}-${kept.locator.end_line} `
-      + `repeats an earlier citation, so it keeps that evidence, which is ${observed.state} in the current source. `
-      + "To keep the earlier evidence, cite its current position. To cite the text now at these lines (it may be the correct new content), use a quote or heading locator.",
+      + `repeats an earlier citation's line numbers, so it keeps that citation's text, which is ${observed.state} in the current source; `
+      + "the text now at these lines is different. To keep the earlier evidence, cite its current position. To cite the text now at these lines "
+      + (quote ? `(it may be the correct new content), submit this locator instead: ${JSON.stringify({ path: kept.locator.path, quote })}.`
+        : "(it may be the correct new content), use a quote or heading locator."),
     [...at, "locator"], "kept-reference-unresolved");
   }
   const text = await context.readSource(reference.source_ref, reference.locator.path, true);

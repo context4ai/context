@@ -131,8 +131,10 @@ Recommend **30 source documents per stage**. Adjust the group to its subject,
 length, complexity and dependencies, with an absolute maximum of **50**.
 Explain groups above 30 in the PLAN; split even smaller groups when needed.
 Investigate at most **one new repository per stage**; existing studied
-repositories may support a document stage. Limit a revision stage to **30 target
-articles**. These are planning boundaries, not additional CLI gates.
+repositories may support a document stage. Refreshing repositories that are
+already registered is not new investigation: batch it by requirement as the
+knowledge-updates guide describes, with only a large repository on its own.
+Limit a revision stage to **30 target articles**. These are planning boundaries, not additional CLI gates.
 
 After each stage, record actual research, production, review, merge and delivery
 results in the PLAN. When publication is required, mark it delivered only after

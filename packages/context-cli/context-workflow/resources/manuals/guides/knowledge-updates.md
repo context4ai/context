@@ -456,6 +456,50 @@ Before importing a `note`, read [note source preparation](note.md).
 Before importing `sessions`, read [development summary preparation](sessions.md).
 Choose the reference for the actual input; do not read both by default.
 
+## Refresh several registered sources
+
+When several registered sources move to newer versions together, size them
+first and update them in batches, so each review covers related pages:
+
+1. **Size read-only.** Before changing `sources/repo/index.yaml`, fetch only the
+   target commits (`git ls-remote`, or `git fetch` with `--filter=blob:none` in a
+   partial clone). Do not pull, check out or move any HEAD yet: a checkout that
+   no longer matches its registered commit reports a changed source boundary.
+   List each repository's changes with `git diff --name-status <processed>
+   <target> -- <registered subpath>`, which compares trees without downloading
+   file contents and prints full paths; do not use `--stat`, which downloads
+   both versions of every changed file. Count official code and Markdown files,
+   not tests, lock files, generated output or third-party directories. For
+   documents, check their current revision.
+2. **Separate large repositories.** A monorepo, a large repository, or one with
+   many relevant changed files (about 500 as a guide, or new directories to
+   assess) gets its own batch. This is a judgment, not a limit.
+3. **Group the rest by requirement.** Each requirement in `src/indexers.yaml`
+   whose sources changed forms one batch. A small group (only citation changes,
+   or one to three pages) joins the batch with the same requirement, otherwise
+   the smallest batch; mention it separately in the batch report. Across
+   sources, split a batch above 30 pages by source; a single source above 30
+   pages uses `context run --deliver` to deliver checked pages in groups.
+4. **Run one batch at a time.** Context keeps one active update. When a batch
+   starts, fetch and check out its repositories at the target commits with the
+   cited files' contents available (`--input` reads only what the checkout has;
+   keep the processed commit available for history), move only this batch's
+   registrations (`context source add repo` changing only `--ref`), refresh its
+   documents and versioned file sources the usual way, then start one
+   `context update --input` listing all of the batch's `repo:`, `lark:` and
+   `file:` scopes. Do not move later batches' registrations early.
+5. **`--pending` only for one repository-only batch.** `context update
+   --pending` covers repositories only and is a write: once it runs, the batch
+   cannot be split with `--input` without rolling back. Use it only when the
+   batch is every pending repository and has no documents.
+
+The user or the workspace `AGENTS.md` may also ask for a corrections-only
+update: correct what pages already say, add no features or topics the pages did
+not cover, and avoid repeating the same detail across pages. In the
+source-update decision, then leave `new_topics` empty, say in `scope_summary`
+which uncited additions were left out, and put the rule into each revised
+page's `instruction` so the writing step follows it.
+
 ## Versioned external content and archived collections
 
 Published content that another team versions, such as a documentation
@@ -770,6 +814,13 @@ prose and queued pages remain; an affected draft returns to writing/review.
 An unrelated queued page does not revoke an unchanged current page's review.
 If a page has already been applied, finish its close/build before changing its
 inputs. Only the final completed scope advances its processed baseline.
+
+For a source update, the adjustment keeps the citation results the update
+already computed; it does not read the sources again. When those results came
+from the local checkout rather than the source (for example, every citation of
+a repository reported `unavailable` before its checkout was restored or moved),
+discard the unfinished update as described in "Adjust or roll back current work"
+and start `context update` again.
 
 For several documents, `source import` also accepts a JSON/YAML array of the same
 single-document inputs. Its receipt reports each zero-based input index and

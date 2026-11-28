@@ -1,7 +1,7 @@
 import { initialRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, writeFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { readProcessedScopes } from "@c4a/context";
@@ -181,6 +181,43 @@ test("uncited changes are reported unknown, not absent, when the processed commi
   expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
   expect((await readKnowledgeUpdate(root))!.uncited_changes).toEqual([expect.objectContaining({
     groups: [], unavailable: expect.stringContaining("uncited changes are unknown") })]);
+});
+
+/** The registered local path is a symlink to a checkout outside the workspace, as
+ * `context source restore` binds an existing checkout. */
+async function checkoutOutsideWorkspace(root: string) {
+  // A sibling of the workspace: outside it, on the same file system.
+  const outside = await mkdtemp(`${root}-outside-`);
+  roots.push(outside);
+  await rename(join(root, "fixture-source"), join(outside, "checkout"));
+  await symlink(join(outside, "checkout"), join(root, "fixture-source"));
+}
+
+test("a checkout outside the workspace behind a symlinked local path is read like any other", async () => {
+  const root = await settledKnowledge();
+  await checkoutOutsideWorkspace(root);
+  // Only an uncited file changes: the update asks for the scope decision, and every
+  // citation is current, none unavailable.
+  await moveRegistration(root, "src/other.ts", "export const other = 1;\n");
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.changed_references).toBeUndefined();
+  expect(update.reference_groups).toMatchObject({ needs_decision: [], unavailable: [] });
+  expect(update.uncited_changes?.length).toBeGreaterThan(0);
+});
+
+test("a changed citation in a checkout outside the workspace reports its current text", async () => {
+  const root = await settledKnowledge();
+  await checkoutOutsideWorkspace(root);
+  await moveRegistration(root, "src/index.ts", "export const answer = 43;\n");
+  expect(await beginKnowledgeUpdate(root, undefined, { pending: true })).toMatchObject({ outcome: "update-prepared" });
+  const update = (await readKnowledgeUpdate(root))!;
+  expect(update.changed_references!.length).toBeGreaterThan(0);
+  expect(update.changed_references!.every(item => item.state !== "unavailable")).toBe(true);
+  for (const item of update.reference_evidence!) {
+    expect(item.current).toMatchObject({ status: "available", text: "export const answer = 43;" });
+    expect(item.history).toMatchObject({ status: "available" });
+  }
 });
 
 test("source-update evidence suggests the mapped lines of a rewritten repository citation", async () => {

@@ -120,11 +120,16 @@ test("a resubmitted earlier citation keeps its evidence; quote selects the text 
     const reselected = await prepareRevisionReferences({ ...input, edits: [{ section_id: "answer", references: [
       { source_ref: sourceRef, locator: { path: "source.md", quote: "New implementation" } }] }] });
     expect(reselected[0]!.references).toEqual([createArticleSourceReference(sourceRef, { path: "source.md", start_line: 2, end_line: 2 }, changed)]);
-    // Without the earlier evidence the resubmission is rejected with both choices.
+    // Without the earlier evidence the resubmission is rejected with both choices;
+    // the text now at those lines is unique, so the error carries its quote locator.
     await writeFile(path, "# Note\nNew implementation\nOther text\n");
     await expect(prepareRevisionReferences({ ...input, edits: [resubmit] })).rejects.toMatchObject({
       reason: "kept-reference-unresolved", path: ["sections", 0, "references", 0, "locator"],
-      message: expect.stringContaining("use a quote or heading locator") });
+      message: expect.stringContaining('submit this locator instead: {"path":"source.md","quote":"New implementation"}') });
+    // Repeated text has no unique quote; the error names the locator kinds instead.
+    await writeFile(path, "# Note\nNew implementation\nNew implementation\n");
+    await expect(prepareRevisionReferences({ ...input, edits: [resubmit] })).rejects.toMatchObject({
+      reason: "kept-reference-unresolved", message: expect.stringContaining("use a quote or heading locator") });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

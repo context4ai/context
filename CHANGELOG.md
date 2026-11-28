@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.106 - 2026-11-28
+
+- Source updates read repository citations when the registered checkout lives outside the workspace, for example an existing checkout bound by `context source restore` through a symlinked `local` path. Every citation of such a repository was reported `unavailable` with `source-path-outside-scope`, including unchanged ones; unchanged citations are now current and changed ones come with their current text and history. Repository reads still use Git objects of the registered commit, and captured documents and notes must still stay inside the workspace.
+- When a revision repeats an earlier citation's line numbers but the text there changed, the `kept-reference-unresolved` error says so and, when the new text occurs once in the file, gives the quote locator to submit instead.
+- The knowledge-updates guide describes refreshing several registered sources: size them read-only with `git diff --name-status`, give a large repository or a monorepo its own batch, group the rest by requirement, and per batch check out, move `--ref`, refresh documents and run one `context update --input`. The `context`, `context-plan` and routine-update guidance points there; "one new repository per stage" applies to new investigation only.
+- A corrections-only request (in the task or the workspace `AGENTS.md`) leaves `new_topics` empty and carries the rule into each page's instruction; a revision under it adds nothing the instruction does not ask for. The guide also notes that `task adjust` with `refresh: true` keeps a source update's computed citation results; when they came from the local checkout, discard the update and start it again.
+
 ## 0.7.105 - 2026-11-27
 
 - Lark capture retries a resource by itself after a timeout, a gateway error (502, 503, 504) or a dropped connection, up to three times with backoff, without stopping the other resources of the document. A waiting retry no longer holds a download slot, and a wave of failures halves concurrency once. Throttling (429, or Lark's `99991400`) still pauses and, once its budget is spent, stops the whole capture. Every lark-cli resource process now has a time limit (120 s; 300 s for files and video), and synced blocks share the same retries and limits.
