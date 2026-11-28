@@ -9,6 +9,8 @@ mediaType: text/markdown
 The current action contains the approved page and the user's instruction. Read
 the entire page first. Revise only what the instruction and available sources
 support; retain still-correct explanations and confirmed user contributions.
+When the instruction asks for corrections only, do not add material it does not
+ask for.
 
 For an expression-only change, the approved text is enough. Do not capture,
 parse, partition, or reconfigure its source. For changed facts, read the relevant

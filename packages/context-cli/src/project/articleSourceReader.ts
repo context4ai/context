@@ -87,7 +87,8 @@ export async function registeredRepoHistoryReader(projectRoot: string) {
       const name = sourceRef.startsWith("repo:") ? sourceRef.slice("repo:".length) : undefined;
       const entry = registry.repos.find(item => item.id === name || item.name === name);
       if (!entry) throw new TypeError(`Source is not a registered repository: ${sourceRef}`);
-      root = realpath(resolve(workspace, entry.materializedAt)).then(actual => { inside(workspace, actual); return actual; });
+      // Repository reads are Git objects of a fixed commit; the checkout may live anywhere.
+      root = realpath(resolve(workspace, entry.materializedAt));
       roots.set(sourceRef, root);
     }
     const directory = await root;
@@ -138,7 +139,10 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       if (kind === "repo") throw new SourceReadError(`The registered source checkout of ${sourceRef} is not accessible. Restore the source before checking citations.`, "context source recovery-plan --format json");
       throw error;
     });
-    inside(workspace, root);
+    // A repository is read as Git objects of its fixed commit, never as files, so a
+    // checkout outside the workspace (a restored existing checkout) is valid; captured
+    // documents and notes are files and must stay inside it.
+    if (kind !== "repo") inside(workspace, root);
     if (managed) return { root, files: new Map([[basename(entry.materializedAt), ""]]) };
     if (kind === "repo") {
       if (!("ref" in entry) || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(entry.ref)) {

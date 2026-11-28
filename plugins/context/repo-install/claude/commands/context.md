@@ -95,8 +95,10 @@ as knowledge. Explicit audience-oriented rewriting remains ordinary production.
 For an authorized knowledge-production request involving more than 30 original
 documents or at least two repositories needing substantive investigation, use
 the installed `context-plan` Skill before registering the full request. Also use
-it for multi-repository baseline updates and broad document-change scans. Count
-the requested change, not all historical workspace sources; repositories used
+it for broad document-change scans. A refresh of already registered sources
+is not new investigation: batch it as the knowledge-updates guide describes in
+"Refresh several registered sources", and plan only a large repository or a
+monorepo that needs its own stages. Count the requested change, not all historical workspace sources; repositories used
 only as existing reference material do not count as new investigation. A large
 single repository or long document may warrant planning by module or chapter.
 For a new knowledge project with unclear boundaries or several deliveries,
@@ -142,7 +144,7 @@ without the user's authorization.
 
 ### Check the CLI first
 
-This Skill ships with Context 0.7.105.
+This Skill ships with Context 0.7.106.
 
 When entering production in a workspace, align the CLI, this Skill and the
 workspace SDK once per session with [version alignment](../resources/context/version-alignment.md):
@@ -257,7 +259,7 @@ Within an active Context workflow, requests include, but are not limited to:
 | Capture named documents and pause | Register only the selected documents, capture through the current authorized Route, report usable snapshots and resource gaps, then stop before article planning. |
 | Preserve conversation insights | Save or use a summary of supplied discussion, not an entire session history. Code-change links are optional. |
 | Plan a large knowledge project or source refresh | Use `context-plan` for investigation, an approved PLAN and one bounded production stage at a time. |
-| Update knowledge from source changes | Assess a selected commit, MR/PR or document change against a fixed source version; route multi-repository or broad scans through `context-plan`, then update the selected stage's affected pages. |
+| Update knowledge from source changes | Assess a selected commit, MR/PR or document change against a fixed source version; refresh several registered sources in batches by requirement (knowledge-updates guide, "Refresh several registered sources"); route broad scans or a large repository through `context-plan`, then update the selected stage's affected pages. |
 | Bring in another team's knowledge and follow it | A released knowledge package, Skill, documentation repository or wiki that another team maintains, shown here and kept current: register it as a `file` source with its origin and version (knowledge-updates guide, "Versioned external content"), then let the user choose between keeping its pages as written (`preserve_original`) and rewriting them as this knowledge base's articles. Do not copy it into custom website pages or write sync scripts; to only point readers to it, register an import. |
 | Run a routine update | Refresh all registered sources (or the named subset) on a schedule without repeating task instructions: read [routine update](../resources/context/routine-update.md). |
 | Revise existing content | Correct current drafts or approved pages, including several pages or supported API-table regeneration. |

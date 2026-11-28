@@ -66,6 +66,12 @@ Use an empty list only when existing pages cover the change or the additions
 are outside the confirmed purpose. New pages go through the same writing and
 review process as revisions; a new topic is not a no-change decision.
 
+When the task or the workspace `AGENTS.md` asks for corrections only, leave
+`new_topics` empty, say in `scope_summary` which additions were left out, and
+write the rule into each revised page's `instruction`: correct what the page
+already says, add no features or topics it did not cover, and avoid repeating
+detail that other pages carry.
+
 A kept page's citations whose text only moved in the updated source are
 relocated when the update settles. When cited text changed or cannot be
 confirmed, the completion result lists it in `reference_warnings`; those

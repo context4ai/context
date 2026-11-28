@@ -96,20 +96,23 @@ workspace targets or the delivery configuration.
    ones that hold no lasting knowledge (step 7), report "no knowledge changes
    this run" and stop without publication. The only commit allowed then is a
    workspace SDK upgrade from version alignment, delivered on its own.
-5. **Size the work.** One repository with at most 30 affected articles: update it
-   directly. Otherwise use `context-plan` with one repository per stage. One
-   source update always covers all affected articles of that repository; to keep
-   a large one in groups of about 30, approve and deliver checked pages early
-   with the Route's `context run --deliver` while the rest stay pending. Above 500
-   source documents, the `context-plan` human scope gate applies: save progress
+5. **Size the work.** Batch the changed sources as the knowledge-updates guide
+   describes in "Refresh several registered sources": size them read-only, give
+   a large repository or a monorepo its own batch, and group the rest by
+   requirement. Use `context-plan` only for a large repository that needs
+   several stages. One source update always covers all affected articles of its
+   sources; to keep a large one in groups of about 30, approve and deliver
+   checked pages early with the Route's `context run --deliver` while the rest
+   stay pending. Above 500 source documents, the `context-plan` human scope gate applies: save progress
    and stop.
 6. **Run one batch at a time.** Context keeps one active update; finish its
-   review and delivery before the next. For each repository, move only its
-   existing registration: rerun `context source add repo` with the registered
-   namespace, `--module`, remote or local path and subpath, changing only
-   `--ref <sha>`. Then start the update with `context update --input` naming that
-   repository's scopes. Use `context update --pending --format json` only when its
-   pending set is exactly this stage's repository. Only `--pending` downloads:
+   review and delivery before the next. For each repository of the batch, move
+   only its existing registration: rerun `context source add repo` with the
+   registered namespace, `--module`, remote or local path and subpath, changing
+   only `--ref <sha>`. Then start the update with one `context update --input`
+   naming the batch's repository and document scopes. Use `context update
+   --pending --format json` only when the batch is every pending repository and
+   has no documents. Only `--pending` downloads:
    `--input` reads what the checkout already has, so for it first fetch and check
    out the new commit in a shallow or partial clone. Before writing, restore every
    source the candidate pages cite, not only this repository: a page that cites
@@ -134,7 +137,9 @@ workspace targets or the delivery configuration.
    `instruction`; when it needs a page, add it to `new_topics` and let the Indexer
    Skills write it with the revisions. Write at most 5 new pages per run; put the
    rest, or a whole new subsystem, into the PLAN as a later `context-plan` stage,
-   and give each assessed group you do not write a one-line reason.
+   and give each assessed group you do not write a one-line reason. When the
+   trigger or the workspace `AGENTS.md` asks for corrections only, add no
+   `new_topics`; state the left-out additions in `scope_summary` and the result.
 8. **Write the current state.** Revise each affected article so it reads as the
    current knowledge, one coherent article: work the change into the existing
    text instead of appending patch notes, "updated", "new" or "no longer"

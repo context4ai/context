@@ -174,7 +174,7 @@ the next production stage. Plan these bounds:
 | Stage kind | Default scope |
 | --- | --- |
 | Document research and writing | Recommend 30 source documents; dynamically choose smaller or larger groups based on subject, length, complexity and dependencies, never exceeding 50. Explain groups above 30 in the PLAN. |
-| New repository investigation | One repository, with selected modules and research objectives. Split additional repositories into later stages. |
+| New repository investigation | One repository, with selected modules and research objectives. Split additional repositories into later stages. A refresh of already registered repositories is not new investigation; see below. |
 | Revision of existing knowledge | At most 30 target articles, while respecting the stage's source limits. |
 
 Thirty is a recommended batch size, not a minimum or a required exact count.
@@ -222,6 +222,14 @@ evidence of deletion. Use available revisions and saved bodies for comparison;
 without an old snapshot, explain the observable current state and do not claim
 a line-by-line historical diff. Treat unsupported resource representations as
 coverage limits rather than silently considering the document fully read.
+
+When the comparison covers repositories that are already registered, batch the
+update as the knowledge-updates guide describes in "Refresh several registered
+sources": size every source read-only first, give a large repository or a
+monorepo its own stage, and group the rest by requirement. Its changed-file
+hint (about 500 code and Markdown files) only decides whether a repository gets
+its own stage; it is unrelated to the mandatory human scope gate above 500 source
+documents.
 
 Summarize the proposed article changes, unchanged coverage and uncertain cases
 in the PLAN. If the user asked only to inspect changes or provide a comparison,
