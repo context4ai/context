@@ -223,13 +223,21 @@ export function registerDocumentRevisionCommand(program: Command): void {
     .description("Inspect acquired source changes against approved knowledge in confirmed requirement scopes")
     .option("--input <file>", "YAML/JSON scopes and optional change summary; - for stdin")
     .option("--pending", "process registered repository commits that moved past their processed versions")
+    .option("--schema", "show the update input schema")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { input?: string; pending?: boolean; format: string }) => {
+    .action(async (options: { input?: string; pending?: boolean; schema?: boolean; format: string }) => {
+      if (options.schema) {
+        const { knowledgeUpdateInputSchema } = await import("../project/knowledgeUpdate.js");
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
+        writeSchemaOutput(zodToJsonSchema(knowledgeUpdateInputSchema, { effectStrategy: "input" }), schemaOutputFormat(options.format));
+        return;
+      }
       if (options.format !== "json") throw new ContextError(ExitCode.UserError, "--format must be json", {
         category: ErrorCategory.UserInputInvalid,
       });
-      if (!options.pending === !options.input) throw new ContextError(ExitCode.UserError, "Pass exactly one of --input or --pending", {
-        category: ErrorCategory.UserInputInvalid,
+      if (!options.pending === !options.input) throw new ContextError(ExitCode.UserError, "Pass exactly one of --input or --pending, or --schema", {
+        category: ErrorCategory.UserInputInvalid, next_action: { command: "context update --schema --format json" },
       });
       if (options.pending) {
         process.stdout.write(`${JSON.stringify(await beginKnowledgeUpdate(requireProjectRoot(), undefined, { pending: true }), null, 2)}\n`);

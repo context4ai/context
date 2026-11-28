@@ -463,25 +463,40 @@ first and update them in batches, so each review covers related pages:
    <target> -- <registered subpath>`, which compares trees without downloading
    file contents and prints full paths; do not use `--stat`, which downloads
    both versions of every changed file. Count official code and Markdown files,
-   not tests, lock files, generated output or third-party directories. For
-   documents, check their current revision.
+   not tests, lock files, generated output (including run records such as
+   workflow artifacts) or third-party directories. For documents, check their
+   current revision; a `file` source whose local directory no longer exists
+   cannot be refreshed, so report it instead of counting it as unchanged.
 2. **Separate large repositories.** A monorepo, a large repository, or one with
-   many relevant changed files (about 500 as a guide, or new directories to
-   assess) gets its own batch. This is a judgment, not a limit.
+   many relevant changed files (about 500 as a guide, or many new directories
+   whose features need assessing) gets its own batch. This is a judgment, not a
+   limit: a few new directories are assessed as uncited changes in their batch.
 3. **Group the rest by requirement.** Each requirement in `src/indexers.yaml`
-   whose sources changed forms one batch. A small group (only citation changes,
-   or one to three pages) joins the batch with the same requirement, otherwise
-   the smallest batch; mention it separately in the batch report. Across
-   sources, split a batch above 30 pages by source; a single source above 30
-   pages uses `context run --deliver` to deliver checked pages in groups.
+   whose sources changed forms one batch. A source shared by several
+   requirements moves once, in one batch: put it with the requirement whose
+   pages cite it most (`knowledge/structure.yaml` lists each page's citations),
+   and list it in that update once per
+   requirement that includes it. The update covers every page citing it
+   whatever its requirement, but advances only the listed requirements; one
+   left out stays pending and returns the same citations in another update. A
+   requirement whose sources bring only citation changes or one to three pages
+   joins the smallest batch instead of forming its own; mention it separately
+   in the batch report. Across
+   sources, split a batch above 30 pages by source: `module_refs` do not narrow
+   the candidate pages of one source, so a smaller batch needs fewer sources. A
+   single source above 30 pages uses `context run --deliver` to deliver checked
+   pages in groups.
 4. **Run one batch at a time.** Context keeps one active update. When a batch
    starts, fetch and check out its repositories at the target commits with the
    cited files' contents available (`--input` reads only what the checkout has;
    keep the processed commit available for history), move only this batch's
-   registrations (`context source add repo` changing only `--ref`), refresh its
-   documents and versioned file sources the usual way, then start one
-   `context update --input` listing all of the batch's `repo:`, `lark:` and
-   `file:` scopes. Do not move later batches' registrations early.
+   registrations (`context source add repo` changing only `--ref`; register a
+   checkout kept outside the workspace through a workspace-relative alias such
+   as `.tmp/repo/<name>`, as `context source restore` does, not an absolute
+   path that only exists on this machine), recapture its documents and upgrade
+   its versioned file sources (see "Versioned external content and archived
+   collections"), then start one `context update --input` listing all of the batch's `repo:`, `lark:` and `file:` scopes, each
+   with its `requirement_ref`. Do not move later batches' registrations early.
 5. **`--pending` only for one repository-only batch.** `context update
    --pending` covers repositories only and is a write: once it runs, the batch
    cannot be split with `--input` without rolling back. Use it only when the

@@ -235,7 +235,10 @@ async function previewApprovedRevisionSubmission(input: { projectRoot: string; r
       };
       const semantic = parseIndexerCurrentActionSubmission(value);
       if (semantic.stage !== "approved-revision") throw new TypeError(`Task ${task.task} is not an approved revision.`);
-      const request = JSON.parse((await readProductionFile({ projectRoot: input.projectRoot, stage: manifest.stage, path: `${task.task}.input.json` })).text);
+      // The task input is the writer's view and omits the processed scopes; check against
+      // the same scopes the submission uses, so stale citations block here too.
+      const request = { ...JSON.parse((await readProductionFile({ projectRoot: input.projectRoot, stage: manifest.stage, path: `${task.task}.input.json` })).text),
+        ...(current.requests[index]?.processed_scopes ? { processed_scopes: current.requests[index]!.processed_scopes } : {}) };
       const content = "markdown" in semantic ? { markdown: semantic.markdown, ...(semantic.sections === undefined ? {} : { sections: semantic.sections }) }
         : { sections: semantic.sections };
       const { markdown, references, reference_warnings } = await composeRevisionCandidate(input.projectRoot, request, content, { remember: false });

@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
-import { assertNoCaptureGap, resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
+import { assertNoCaptureGap, exactQuoteLocator, resolveSubmittedSourceLocator } from "./submittedSourceLocator.js";
 import { SubmissionInputError, SubmissionInputErrors } from "./productionFeedback.js";
-import { articleFragmentReferences, articleSourceRegion, createArticleSourceReference,
+import { articleFragmentReferences, createArticleSourceReference,
   repoContentScopeMatches, type ArticleSourceReference, type ArticleStructureEntry } from "@c4a/context";
 import { rememberArticleRegion } from "./articleRegionBaselines.js";
 import { relocateUnchangedReference } from "./settledReferenceRelocation.js";
@@ -20,17 +20,9 @@ const citesScope = (scopes: readonly string[], ref: string) => scopes.some(scope
 
 interface ReferenceContext {
   projectRoot: string; remember: boolean; previous: ArticleStructureEntry["sections"]; sourceRefs: readonly string[];
+  processedScopes: readonly string[];
   inScope(source: string): boolean;
   readSource: SourceRead;
-}
-
-/** The current text at a citation's lines as a quote locator, when it occurs once in the file. */
-async function currentQuote(context: ReferenceContext, sourceRef: string, locator: { path: string; start_line: number; end_line: number }) {
-  try {
-    const text = (await context.readSource(sourceRef, locator.path, true)).replace(/\r\n/gu, "\n");
-    const region = articleSourceRegion(text, locator);
-    return region.trim() !== "" && region.length <= 2_000 && text.indexOf(region) === text.lastIndexOf(region) ? region : undefined;
-  } catch { return undefined; }
 }
 
 /** One submitted citation; input problems throw SubmissionInputError. */
@@ -38,7 +30,9 @@ async function resolveSubmittedReference(context: ReferenceContext, id: string, 
   reference: NonNullable<NonNullable<RevisionContentInput["sections"]>[number]["references"]>[number]): Promise<ArticleSourceReference> {
   if (!context.inScope(reference.source_ref)) throw new SubmissionInputError(
     `Fragment ${id} cites ${reference.source_ref}, which is outside this revision; allowed sources: ${context.sourceRefs.join(", ")}. `
-    + "To cite new independent evidence, register it as a source, associate it with the selected requirement in src/indexers.yaml, then run context task adjust for this revision.",
+    + (citesScope(context.processedScopes, reference.source_ref)
+      ? "It belongs to the source update this page comes from, but not to this page: run context task adjust for this revision with that scope (in a later source update, list it in the page decision's supporting_sources instead)."
+      : "To cite new independent evidence, register it as a source, associate it with the selected requirement in src/indexers.yaml, then run context task adjust for this revision."),
     [...at, "source_ref"], "source-outside-revision");
   // Resubmitting an earlier citation unchanged keeps its earlier evidence;
   // quote and heading locators select current text and never take this path.
@@ -50,11 +44,21 @@ async function resolveSubmittedReference(context: ReferenceContext, id: string, 
   if (kept) {
     const observed = await relocateUnchangedReference(context.projectRoot, context.readSource, kept);
     if (observed.state === "current" || observed.state === "moved") return observed.reference;
-    const quote = await currentQuote(context, reference.source_ref, kept.locator);
-    throw new SubmissionInputError(`Fragment ${id}: ${reference.source_ref} ${kept.locator.path}:${kept.locator.start_line}-${kept.locator.end_line} `
-      + `repeats an earlier citation's line numbers, so it keeps that citation's text, which is ${observed.state} in the current source; `
+    const cited = `Fragment ${id}: ${reference.source_ref} ${kept.locator.path}:${kept.locator.start_line}-${kept.locator.end_line} `
+      + "repeats an earlier citation's line numbers, so it keeps that citation's text";
+    const current = observed.state === "unavailable" ? undefined
+      : await context.readSource(reference.source_ref, kept.locator.path, true).catch(() => undefined);
+    if (current === undefined) throw new SubmissionInputError(`${cited}, but the current source cannot be read`
+      + ` (${observed.reason ?? "source-unavailable"}). Restore or refresh the source and submit again; another locator does not help while it is unreadable.`,
+    [...at, "locator"], "kept-reference-unresolved");
+    const lines = current.replace(/\r\n/gu, "\n").split("\n").length;
+    if (kept.locator.end_line > lines) throw new SubmissionInputError(`${cited}, which is ${observed.state} in the current source; `
+      + `the file now has ${lines} lines, so these lines no longer exist. Cite the earlier evidence at its current position, or cite current text with a quote or heading locator.`,
+    [...at, "locator"], "kept-reference-unresolved");
+    const quote = exactQuoteLocator(kept.locator, current, 2_000);
+    throw new SubmissionInputError(`${cited}, which is ${observed.state} in the current source; `
       + "the text now at these lines is different. To keep the earlier evidence, cite its current position. To cite the text now at these lines "
-      + (quote ? `(it may be the correct new content), submit this locator instead: ${JSON.stringify({ path: kept.locator.path, quote })}.`
+      + (quote ? `(it may be the correct new content), submit this locator instead: ${JSON.stringify(quote)}.`
         : "(it may be the correct new content), use a quote or heading locator."),
     [...at, "locator"], "kept-reference-unresolved");
   }
@@ -104,7 +108,7 @@ export async function prepareRevisionReferences(input: {
   let read: Awaited<ReturnType<typeof registeredArticleSourceReader>> | undefined;
   const inScope = (source: string) => input.sourceRefs.some(scope => repoContentScopeMatches(scope, source));
   const context: ReferenceContext = { projectRoot: input.projectRoot, remember: input.remember !== false, previous: input.previous,
-    sourceRefs: input.sourceRefs, inScope,
+    sourceRefs: input.sourceRefs, processedScopes: input.processedScopes ?? [], inScope,
     // Carries the reader's capture-completeness check, so an incomplete capture is reported as such.
     readSource: Object.assign(async (source: string, path: string) => {
       if (!inScope(source)) throw new TypeError(`Source is outside this revision: ${source}`);

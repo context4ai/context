@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { rememberArticleRegion } from "./articleRegionBaselines.js";
 import {
   articleFragmentReferences, articleSourceLocatorSchema, createArticleSourceReference,
@@ -43,8 +43,14 @@ export function articleReferenceResolver(input: {
         if (!document && !access) {
           throw new TypeError(`Source region is outside this task's read scope: ${reference.source_ref}/${locator.path}`);
         }
-        const root = realpathSync(document ? input.projectRoot : String(access!.captured_root));
-        if (!document) inside(realpathSync(input.projectRoot), root);
+        const root = realpathSync(document ? input.projectRoot : resolve(input.projectRoot, String(access!.captured_root)));
+        // A repository's registered location lives in the workspace; its last component may
+        // link to a checkout elsewhere, as source restore binds it. Reads stay inside that checkout.
+        if (!document) {
+          const workspace = realpathSync(input.projectRoot);
+          const parent = realpathSync(dirname(resolve(workspace, String(access!.captured_root))));
+          if (parent !== workspace) inside(workspace, parent);
+        }
         const lexical = document
           ? resolve(root, String(document.content_path))
           : resolve(root, locator.path);
